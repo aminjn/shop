@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
-import { num, priceFmt, grad } from "@/lib/format";
+import { num, priceFmt, grad, formatDate } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ProductCard } from "@/components/ProductCard";
@@ -73,8 +73,7 @@ export default function AccountPage() {
     }
   };
 
-  const dt = (iso: string) =>
-    new Date(iso).toLocaleDateString(fa ? "fa-IR" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+  const dt = (iso: string) => formatDate(iso, locale);
 
   const fullName = data?.profile.firstName || data?.profile.lastName
     ? `${data?.profile.firstName ?? ""} ${data?.profile.lastName ?? ""}`.trim()
