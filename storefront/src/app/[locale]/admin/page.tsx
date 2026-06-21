@@ -1541,6 +1541,9 @@ function Settings() {
   const [aiForm, setAiForm] = useState({ apiKey: "", baseUrl: "https://api.gapgpt.app/v1", model: "gpt-4o" });
   const [aiSaving, setAiSaving] = useState(false);
   const [aiTesting, setAiTesting] = useState(false);
+  const [aiModels, setAiModels] = useState<string[]>([]);
+  const [aiModelsLive, setAiModelsLive] = useState(false);
+  const [aiModelsLoading, setAiModelsLoading] = useState(false);
 
   const loadAi = () =>
     fetch("/api/ai/config")
@@ -1552,12 +1555,33 @@ function Settings() {
       })
       .catch(() => {});
 
+  const loadAiModels = () => {
+    setAiModelsLoading(true);
+    fetch("/api/ai/models")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (Array.isArray(d?.models)) {
+          setAiModels(d.models);
+          setAiModelsLive(d.source === "live");
+        }
+      })
+      .catch(() => {})
+      .finally(() => setAiModelsLoading(false));
+  };
+
   useEffect(() => {
     loadAi();
+    loadAiModels();
   }, []);
 
-  const setAiF = (k: keyof typeof aiForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const setAiF = (k: keyof typeof aiForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setAiForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const baseModels = aiModels.length ? aiModels : AI_MODELS.flatMap((g) => g.models);
+  const modelOptions =
+    aiForm.model && aiForm.model !== "__custom" && !baseModels.includes(aiForm.model)
+      ? [aiForm.model, ...baseModels]
+      : baseModels;
 
   const saveAi = async () => {
     setAiSaving(true);
@@ -1572,6 +1596,7 @@ function Settings() {
         toast(t.saved);
         setAiForm((f) => ({ ...f, apiKey: "" }));
         await loadAi();
+        loadAiModels();
       } else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
     } catch {
       toast(fa ? "خطای شبکه" : "Network error");
@@ -1789,17 +1814,23 @@ function Settings() {
               </div>
               <div>
                 {lbl(fa ? "مدل" : "Model")}
-                <input className={inputCls} style={inputStyle} value={aiForm.model} onChange={setAiF("model")} dir="ltr" list="ai-models" placeholder="gpt-4o" />
-                <datalist id="ai-models">
-                  {AI_MODELS.flatMap((g) => g.models).map((m) => (
-                    <option key={m} value={m} />
+                <select className={inputCls} style={inputStyle} value={modelOptions.includes(aiForm.model) ? aiForm.model : "__custom"} onChange={setAiF("model")} dir="ltr">
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>{m}</option>
                   ))}
-                </datalist>
+                  <option value="__custom">{fa ? "مدل سفارشی…" : "Custom model…"}</option>
+                </select>
+                {!modelOptions.includes(aiForm.model) && (
+                  <input className={`${inputCls} mt-2`} style={inputStyle} value={aiForm.model === "__custom" ? "" : aiForm.model} onChange={setAiF("model")} dir="ltr" placeholder={fa ? "نام مدل را تایپ کن" : "type model name"} />
+                )}
               </div>
             </div>
             <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-              {fa ? "مدل‌های پیشنهادی:" : "Suggested models:"}{" "}
-              {AI_MODELS.map((g) => g.group).join(" • ")}
+              {aiModelsLoading
+                ? (fa ? "در حال دریافت لیست مدل‌ها…" : "Loading models…")
+                : aiModelsLive
+                  ? (fa ? `✓ ${num(aiModels.length, locale)} مدل از حساب گپ‌جی‌پی‌تی شما` : `✓ ${aiModels.length} models from your GapGPT account`)
+                  : (fa ? "لیست پیش‌فرض — برای دریافت لیست واقعی، کلید API را ذخیره کن" : "Default list — save your API key to fetch the live list")}
             </div>
             <div className="flex gap-3">
               <button
