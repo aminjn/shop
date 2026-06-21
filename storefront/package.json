@@ -19,5 +19,8 @@
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "author": "Amin Naeini <naeiniamini@gmail.com>",
+  "description": "مارکت‌لند — فروشگاه چندمنظوره راست‌چین با Next.js، AI و دو زبانه",
+  "license": "MIT"
 }
