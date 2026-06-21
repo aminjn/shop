@@ -9,6 +9,7 @@ import { grad, priceFmt, num } from "@/lib/format";
 import { AI_MODELS } from "@/data/aiModels";
 import { ProductModal } from "@/components/admin/ProductModal";
 import { LogoutButton } from "@/components/LogoutButton";
+import { UploadButton } from "@/components/UploadButton";
 import {
   Grid,
   List,
@@ -67,10 +68,15 @@ type AdminCoupon = {
 
 type StoreSettings = {
   storeName: string;
+  tagline: string;
   currencyFa: string;
   currencyEn: string;
   logoUrl: string;
   faviconUrl: string;
+  metaTitle: string;
+  metaDescription: string;
+  metaKeywords: string;
+  ogImage: string;
   shipFee: number;
   freeShipThreshold: number;
   taxRate: number;
@@ -1258,6 +1264,32 @@ function AiStudio() {
   const [result, setResult] = useState<AiResult | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // image generator
+  const [imgPrompt, setImgPrompt] = useState("");
+  const [imgSize, setImgSize] = useState("1024x1024");
+  const [imgUrl, setImgUrl] = useState("");
+  const [imgBusy, setImgBusy] = useState(false);
+  const genImage = async () => {
+    if (!imgPrompt.trim()) { toast(fa ? "توضیح تصویر را وارد کنید" : "Enter an image prompt"); return; }
+    setImgBusy(true);
+    setImgUrl("");
+    try {
+      const r = await fetch("/api/ai/image", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: imgPrompt.trim(), size: imgSize }),
+      });
+      const d = await r.json();
+      if (d.ok && d.url) { setImgUrl(d.url); toast(fa ? "تصویر تولید شد ✓" : "Image generated ✓"); }
+      else if (d.error === "ai-not-configured") toast(fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured");
+      else toast(fa ? "تولید تصویر ناموفق بود: " + (d.error || "") : "Image generation failed: " + (d.error || ""));
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setImgBusy(false);
+    }
+  };
+
   const generate = async () => {
     if (!name.trim()) {
       toast(fa ? "نام محصول را وارد کنید" : "Enter a product name");
@@ -1395,6 +1427,40 @@ function AiStudio() {
           </div>
         )}
       </Card>
+
+      {/* image generator (gpt-image-2 via GapGPT) */}
+      <Card className="p-5">
+        <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
+          <Sparkle size={16} /> {fa ? "تولید تصویر با هوش مصنوعی" : "AI image generator"}
+        </h2>
+        <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
+          {fa ? "تصویر محصول یا بنر بساز (مدل gpt-image-2 از طریق گپ‌جی‌پی‌تی)." : "Generate product images or banners (gpt-image-2 via GapGPT)."}
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[220px] flex-1">
+            {lbl(fa ? "توضیح تصویر (Prompt)" : "Image prompt")}
+            <input className={inputCls} style={inputStyle} value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} placeholder={fa ? "مثلاً: عکس محصول روی پس‌زمینه سفید" : "e.g. product photo on white background"} />
+          </div>
+          <div className="min-w-[130px]">
+            {lbl(fa ? "اندازه" : "Size")}
+            <select className={inputCls} style={inputStyle} value={imgSize} onChange={(e) => setImgSize(e.target.value)}>
+              <option value="1024x1024">1024×1024</option>
+              <option value="1024x1536">1024×1536</option>
+              <option value="1536x1024">1536×1024</option>
+            </select>
+          </div>
+          <button onClick={genImage} disabled={imgBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+            <Sparkle size={15} /> {imgBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید تصویر" : "Generate"}
+          </button>
+        </div>
+        {imgUrl && (
+          <div className="mt-4 flex flex-col items-start gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={imgUrl} alt="generated" className="max-h-[360px] rounded-[12px]" style={{ border: "1px solid var(--border)" }} />
+            <a href={imgUrl} target="_blank" rel="noreferrer" className="text-[12.5px] font-bold no-underline" style={{ color: "var(--accent)" }}>{fa ? "باز کردن تصویر" : "Open image"}</a>
+          </div>
+        )}
+      </Card>
     </>
   );
 }
@@ -1421,10 +1487,15 @@ function Settings() {
   // Store settings — loaded from & persisted to the backend.
   const [store, setStore] = useState<StoreSettings>({
     storeName: "",
+    tagline: "",
     currencyFa: "",
     currencyEn: "",
     logoUrl: "",
     faviconUrl: "",
+    metaTitle: "",
+    metaDescription: "",
+    metaKeywords: "",
+    ogImage: "",
     shipFee: 0,
     freeShipThreshold: 0,
     taxRate: 0,
@@ -1662,6 +1733,16 @@ function Settings() {
                 onChange={(e) => setS("storeName", e.target.value)}
               />
             </div>
+            <div>
+              {lbl(fa ? "شعار سایت" : "Site slogan")}
+              <input
+                className={inputCls}
+                style={inputStyle}
+                value={store.tagline}
+                onChange={(e) => setS("tagline", e.target.value)}
+                placeholder={fa ? "مثلاً: هر چیزی که نیاز داری، یک‌جا" : "e.g. Everything you need, in one place"}
+              />
+            </div>
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div>
                 {lbl(fa ? "واحد پول (فارسی)" : "Currency (Persian)")}
@@ -1685,30 +1766,28 @@ function Settings() {
                 />
               </div>
               <div className="sm:col-span-2">
-                {lbl(fa ? "آدرس لوگو (URL تصویر)" : "Logo image URL")}
-                <input
-                  className={inputCls}
-                  style={inputStyle}
-                  value={store.logoUrl}
-                  onChange={(e) => setS("logoUrl", e.target.value)}
-                  placeholder="https://…/logo.png"
-                  dir="ltr"
-                />
+                {lbl(fa ? "لوگوی فروشگاه" : "Store logo")}
+                <div className="flex items-center gap-3">
+                  {store.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={store.logoUrl} alt="logo" className="h-12 w-12 rounded-[10px] object-cover" style={{ border: "1px solid var(--border)" }} />
+                  ) : (
+                    <span className="flex h-12 w-12 items-center justify-center rounded-[10px] text-[20px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{(store.storeName || "م").charAt(0)}</span>
+                  )}
+                  <UploadButton accept="image/*" label={fa ? "آپلود لوگو" : "Upload logo"} onUploaded={(url) => setS("logoUrl", url)} />
+                  {store.logoUrl && <button type="button" onClick={() => setS("logoUrl", "")} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>}
+                </div>
               </div>
               <div className="sm:col-span-2">
-                {lbl(fa ? "آدرس فاوآیکون (favicon URL)" : "Favicon URL")}
-                <input
-                  className={inputCls}
-                  style={inputStyle}
-                  value={store.faviconUrl}
-                  onChange={(e) => setS("faviconUrl", e.target.value)}
-                  placeholder="https://…/favicon.ico"
-                  dir="ltr"
-                />
-                {store.faviconUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={store.faviconUrl} alt="favicon" className="mt-2 h-8 w-8 rounded" />
-                ) : null}
+                {lbl(fa ? "فاوآیکون (آیکون تب مرورگر)" : "Favicon")}
+                <div className="flex items-center gap-3">
+                  {store.faviconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={store.faviconUrl} alt="favicon" className="h-9 w-9 rounded" style={{ border: "1px solid var(--border)" }} />
+                  ) : null}
+                  <UploadButton accept="image/png,image/x-icon,image/svg+xml,image/jpeg" label={fa ? "آپلود فاوآیکون" : "Upload favicon"} onUploaded={(url) => setS("faviconUrl", url)} />
+                  {store.faviconUrl && <button type="button" onClick={() => setS("faviconUrl", "")} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>}
+                </div>
               </div>
               <div>
                 {lbl(fa ? "هزینه ارسال پایه" : "Base shipping fee")}
@@ -1768,6 +1847,42 @@ function Settings() {
               style={{ background: "var(--accent)" }}
             >
               {storeSaving ? (fa ? "در حال ذخیره…" : "Saving…") : fa ? "ذخیره تنظیمات" : "Save settings"}
+            </button>
+          </div>
+        </Card>
+
+        {/* SEO settings */}
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="mb-1 text-[15px] font-extrabold">{fa ? "بهینه‌سازی موتور جستجو (SEO)" : "Search engine optimization (SEO)"}</h2>
+          <p className="mb-4 text-[12.5px]" style={{ color: "var(--muted)" }}>
+            {fa ? "عنوان و توضیحات متا، کلمات کلیدی و تصویر اشتراک‌گذاری سایت در گوگل و شبکه‌های اجتماعی." : "Meta title/description, keywords and social share image."}
+          </p>
+          <div className="flex flex-col gap-3.5">
+            <div>
+              {lbl(fa ? "عنوان متا (Meta Title)" : "Meta title")}
+              <input className={inputCls} style={inputStyle} value={store.metaTitle} onChange={(e) => setS("metaTitle", e.target.value)} placeholder={fa ? "حداکثر ۶۰ کاراکتر" : "max 60 chars"} maxLength={70} />
+            </div>
+            <div>
+              {lbl(fa ? "توضیحات متا (Meta Description)" : "Meta description")}
+              <textarea className="w-full rounded-[10px] px-3 py-2.5 text-[13.5px] outline-none" style={{ ...inputStyle, minHeight: 70, resize: "vertical" }} value={store.metaDescription} onChange={(e) => setS("metaDescription", e.target.value)} placeholder={fa ? "حداکثر ۱۵۵ کاراکتر" : "max 155 chars"} maxLength={320} />
+            </div>
+            <div>
+              {lbl(fa ? "کلمات کلیدی (با ویرگول جدا کن)" : "Keywords (comma separated)")}
+              <input className={inputCls} style={inputStyle} value={store.metaKeywords} onChange={(e) => setS("metaKeywords", e.target.value)} placeholder={fa ? "فروشگاه، خرید آنلاین، …" : "shop, online, …"} />
+            </div>
+            <div>
+              {lbl(fa ? "تصویر اشتراک‌گذاری (OG Image)" : "Open Graph image")}
+              <div className="flex items-center gap-3">
+                {store.ogImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={store.ogImage} alt="og" className="h-14 w-24 rounded-[8px] object-cover" style={{ border: "1px solid var(--border)" }} />
+                ) : null}
+                <UploadButton accept="image/*" label={fa ? "آپلود تصویر" : "Upload image"} onUploaded={(url) => setS("ogImage", url)} />
+                {store.ogImage && <button type="button" onClick={() => setS("ogImage", "")} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>}
+              </div>
+            </div>
+            <button onClick={saveStore} disabled={storeSaving} className="mt-1 cursor-pointer rounded-[12px] border-none py-3 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+              {storeSaving ? (fa ? "در حال ذخیره…" : "Saving…") : fa ? "ذخیره سئو" : "Save SEO"}
             </button>
           </div>
         </Card>

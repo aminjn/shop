@@ -32,6 +32,8 @@ function sanitize(input: Record<string, unknown>, id: number): Product {
     sizes: Array.isArray(input.sizes) ? (input.sizes as string[]) : undefined,
     badge: Array.isArray(input.badge) ? (input.badge as [string, string]) : undefined,
     variations: Array.isArray(input.variations) ? (input.variations as Product["variations"]) : undefined,
+    images: Array.isArray(input.images) ? (input.images as string[]).filter((x) => typeof x === "string") : undefined,
+    video: typeof input.video === "string" && input.video ? input.video : undefined,
   };
 }
 

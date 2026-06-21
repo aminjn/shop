@@ -34,14 +34,19 @@ export async function generateMetadata({
   const t = getDict(loc);
   const store = readStore();
   const name = store.storeName || t.storeName;
+  const titleDefault = store.metaTitle || `${name} — ${store.tagline || t.heroTitle}`;
+  const description = store.metaDescription || t.heroSub;
   return {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://example.com"),
-    title: {
-      default: `${name} — ${t.heroTitle}`,
-      template: `%s | ${name}`,
+    title: { default: titleDefault, template: `%s | ${name}` },
+    description,
+    keywords: store.metaKeywords ? store.metaKeywords.split(/[,،]/).map((k) => k.trim()).filter(Boolean) : undefined,
+    openGraph: {
+      title: store.metaTitle || name,
+      description,
+      type: "website",
+      ...(store.ogImage ? { images: [store.ogImage] } : {}),
     },
-    description: t.heroSub,
-    openGraph: { title: name, description: t.heroSub, type: "website" },
     alternates: { languages: { fa: "/fa", en: "/en" } },
     ...(store.faviconUrl ? { icons: { icon: store.faviconUrl } } : {}),
   };

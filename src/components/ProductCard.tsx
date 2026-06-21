@@ -33,10 +33,15 @@ export function ProductCard({
       <div className="relative">
         <LocaleLink
           href={`/product/${p.id}`}
-          className="flex h-[170px] items-center justify-center text-[46px] font-extrabold no-underline"
+          className="flex h-[170px] items-center justify-center overflow-hidden text-[46px] font-extrabold no-underline"
           style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
         >
-          {name.charAt(0)}
+          {p.images && p.images[0] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.images[0]} alt={name} className="h-full w-full object-cover" />
+          ) : (
+            name.charAt(0)
+          )}
         </LocaleLink>
         {aiMatch != null && (
           <span

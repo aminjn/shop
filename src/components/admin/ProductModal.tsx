@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useShop } from "@/lib/store";
 import { CATEGORIES, BRANDS } from "@/data/categories";
 import type { Product, Variation } from "@/lib/types";
-import { Plus, Trash, Close } from "@/components/Icons";
+import { Plus, Trash, Close, Play } from "@/components/Icons";
+import { UploadButton } from "@/components/UploadButton";
 
 const inputCls = "w-full rounded-[10px] px-3 py-2.5 text-[13.5px] outline-none";
 const inputStyle = {
@@ -37,6 +38,8 @@ export function ProductModal({
   const [shortFa, setShortFa] = useState(initial?.shortFa ?? "");
   const [shortEn, setShortEn] = useState(initial?.shortEn ?? "");
   const [vars, setVars] = useState<Variation[]>(initial?.variations ?? []);
+  const [images, setImages] = useState<string[]>(initial?.images ?? []);
+  const [video, setVideo] = useState(initial?.video ?? "");
 
   const lbl = (s: string) => (
     <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>
@@ -79,6 +82,8 @@ export function ProductModal({
       shortEn: shortEn.trim() || undefined,
       sku: sku.trim() || undefined,
       variations: vars.length ? vars : undefined,
+      images: images.length ? images : undefined,
+      video: video || undefined,
     };
     // The parent persists to the API and shows the success/failure toast.
     onSave(product);
@@ -176,6 +181,36 @@ export function ProductModal({
           <div className="sm:col-span-2">
             {lbl(locale === "fa" ? "توضیح کوتاه (انگلیسی)" : "Short description (English)")}
             <input className={inputCls} style={inputStyle} value={shortEn} onChange={(e) => setShortEn(e.target.value)} />
+          </div>
+        </div>
+
+        {/* media */}
+        <div className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-[14px] font-extrabold">{locale === "fa" ? "تصاویر و ویدئو" : "Images & video"}</h3>
+            <UploadButton accept="image/*" multiple label={locale === "fa" ? "آپلود تصویر" : "Upload images"} onUploaded={(url) => setImages((arr) => [...arr, url])} />
+          </div>
+          {images.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2.5">
+              {images.map((src, i) => (
+                <div key={i} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="" className="h-20 w-20 rounded-[10px] object-cover" style={{ border: "1px solid var(--border)" }} />
+                  <button onClick={() => setImages((a) => a.filter((_, idx) => idx !== i))} aria-label={t.del} className="absolute flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border-none text-white" style={{ insetInlineEnd: -6, top: -6, background: "#e11d48" }}>
+                    <Close size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <UploadButton accept="video/mp4,video/webm" label={locale === "fa" ? "آپلود ویدئو" : "Upload video"} onUploaded={(url) => setVideo(url)} />
+            {video && (
+              <span className="inline-flex items-center gap-1.5 text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>
+                <Play size={14} /> {locale === "fa" ? "ویدئو بارگذاری شد" : "Video uploaded"}
+                <button onClick={() => setVideo("")} className="cursor-pointer border-none bg-transparent" style={{ color: "#e11d48" }}>✕</button>
+              </span>
+            )}
           </div>
         </div>
 

@@ -19,6 +19,7 @@ export function ProductDetail({ id }: { id: number }) {
   const [size, setSize] = useState(0);
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState<"desc" | "specs" | "reviews">("desc");
+  const [showVideo, setShowVideo] = useState(false);
 
   if (!p) {
     return (
@@ -66,17 +67,39 @@ export function ProductDetail({ id }: { id: number }) {
       <div className="grid gap-8 md:grid-cols-2">
         {/* gallery */}
         <div>
-          <div className="flex aspect-square items-center justify-center rounded-[18px] text-[90px] font-extrabold" style={{ background: grad(p.hue + gallery * 12, dark), color: "rgba(255,255,255,.5)" }}>{name.charAt(0)}</div>
-          <div className="mt-3 flex gap-2.5">
-            {[0, 1, 2, 3].map((i) => (
-              <button key={i} onClick={() => setGallery(i)} className="h-[70px] w-[70px] cursor-pointer rounded-[12px]" style={{ background: grad(p.hue + i * 12, dark), border: gallery === i ? "2px solid var(--accent)" : "2px solid transparent" }} />
+          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-[18px] text-[90px] font-extrabold" style={{ background: grad(p.hue + gallery * 12, dark), color: "rgba(255,255,255,.5)" }}>
+            {p.images && p.images.length ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.images[Math.min(gallery, p.images.length - 1)]} alt={name} className="h-full w-full object-cover" />
+            ) : (
+              name.charAt(0)
+            )}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2.5">
+            {(p.images && p.images.length ? p.images : [0, 1, 2, 3]).map((src, i) => (
+              <button key={i} onClick={() => setGallery(i)} className="h-[70px] w-[70px] cursor-pointer overflow-hidden rounded-[12px]" style={{ background: grad(p.hue + i * 12, dark), border: gallery === i ? "2px solid var(--accent)" : "2px solid transparent" }}>
+                {typeof src === "string" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={src} alt="" className="h-full w-full object-cover" />
+                ) : null}
+              </button>
             ))}
           </div>
           <div className="mt-3 flex gap-2.5">
-            <button className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-[10px] py-2.5 text-[13px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}><Play size={15} /> {t.watchVideo}</button>
+            {p.video ? (
+              <button onClick={() => setShowVideo(true)} className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-[10px] py-2.5 text-[13px] font-bold text-white" style={{ background: "var(--accent)" }}><Play size={15} /> {t.watchVideo}</button>
+            ) : (
+              <button disabled className="inline-flex flex-1 items-center justify-center gap-2 rounded-[10px] py-2.5 text-[13px] font-bold opacity-50" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}><Play size={15} /> {t.watchVideo}</button>
+            )}
             <button className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-[10px] py-2.5 text-[13px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}><Download size={15} /> {t.downloadCatalog}</button>
           </div>
         </div>
+
+        {showVideo && p.video && (
+          <div className="fixed inset-0 z-[95] flex items-center justify-center p-5" style={{ background: "rgba(0,0,0,.7)" }} onClick={() => setShowVideo(false)}>
+            <video src={p.video} controls autoPlay className="max-h-[80vh] w-full max-w-[820px] rounded-[14px]" onClick={(e) => e.stopPropagation()} />
+          </div>
+        )}
 
         {/* info */}
         <div>

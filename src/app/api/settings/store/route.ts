@@ -18,10 +18,15 @@ export async function POST(req: Request) {
   const cur = readStore();
   const settings = writeStore({
     storeName: String(b.storeName ?? cur.storeName).slice(0, 80),
+    tagline: String(b.tagline ?? cur.tagline).slice(0, 160),
     currencyFa: String(b.currencyFa ?? cur.currencyFa).slice(0, 20),
     currencyEn: String(b.currencyEn ?? cur.currencyEn).slice(0, 20),
     logoUrl: String(b.logoUrl ?? cur.logoUrl).slice(0, 500),
     faviconUrl: String(b.faviconUrl ?? cur.faviconUrl).slice(0, 500),
+    metaTitle: String(b.metaTitle ?? cur.metaTitle).slice(0, 70),
+    metaDescription: String(b.metaDescription ?? cur.metaDescription).slice(0, 320),
+    metaKeywords: String(b.metaKeywords ?? cur.metaKeywords).slice(0, 300),
+    ogImage: String(b.ogImage ?? cur.ogImage).slice(0, 500),
     shipFee: num(b.shipFee, cur.shipFee),
     freeShipThreshold: num(b.freeShipThreshold, cur.freeShipThreshold),
     taxRate: num(b.taxRate, cur.taxRate),
