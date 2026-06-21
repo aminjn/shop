@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { useShop } from "@/lib/store";
 import { CATEGORIES } from "@/data/categories";
+import { jalaliYearNow } from "@/lib/jalali";
 import { LocaleLink } from "./LocaleLink";
 
 export function Footer() {
   const { t, locale, toast } = useShop();
   const [email, setEmail] = useState("");
-  const year = new Intl.NumberFormat(locale === "fa" ? "fa-IR" : "en-US", {
-    useGrouping: false,
-  }).format(new Date().getFullYear());
+  const year =
+    locale === "fa"
+      ? jalaliYearNow().toLocaleString("fa-IR", { useGrouping: false })
+      : String(new Date().getFullYear());
 
   const col = (title: string, links: string[]) => (
     <div>

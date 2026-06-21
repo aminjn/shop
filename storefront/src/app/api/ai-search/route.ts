@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { callAI, catalog, localSearch, parseJson } from "@/lib/ai";
+import { callAI, catalog, localSearch, parseJson, modelFor } from "@/lib/ai";
 import type { Locale } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       ? `کاتالوگ محصولات (JSON): ${JSON.stringify(catalog(locale))}\n\nدرخواست کاربر: "${query}"\n\nمرتبط‌ترین محصولات را پیدا کن و فقط یک JSON معتبر برگردان به این شکل:\n{"ids":[حداکثر ۸ id به ترتیب اولویت],"note":"یک جمله کوتاه فارسی که توضیح می‌دهد چرا این محصولات پیشنهاد شدند"}`
       : `Product catalog (JSON): ${JSON.stringify(catalog(locale))}\n\nUser request: "${query}"\n\nFind the most relevant products and return only valid JSON:\n{"ids":[up to 8 ids by priority],"note":"one short sentence explaining why these were suggested"}`;
 
-  const raw = await callAI(system, [{ role: "user", content: prompt }]);
+  const raw = await callAI(system, [{ role: "user", content: prompt }], modelFor("search"));
   if (raw) {
     const j = parseJson<{ ids: number[]; note: string }>(raw);
     if (j && Array.isArray(j.ids))

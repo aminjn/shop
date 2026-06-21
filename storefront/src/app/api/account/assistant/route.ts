@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getUser } from "@/lib/userstore";
-import { callAI, catalog, type ChatMessage } from "@/lib/ai";
+import { callAI, catalog, modelFor, type ChatMessage } from "@/lib/ai";
 
 export async function POST(req: Request) {
   const s = await getSession();
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 وقتی دربارهٔ وضعیت سفارش می‌پرسد از همین اطلاعات استفاده کن. در صورت نیاز محصول مناسب از کاتالوگ پیشنهاد بده و قیمت را به تومان بگو.
 کاتالوگ (JSON): ${JSON.stringify(catalog("fa"))}`;
 
-  const reply = await callAI(system, messages);
+  const reply = await callAI(system, messages, modelFor("chat"));
   if (reply) return NextResponse.json({ ok: true, reply });
 
   // graceful local fallback (order tracking + simple help)

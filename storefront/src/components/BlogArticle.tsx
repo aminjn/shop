@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
 import { postBySlug, POSTS, type Post } from "@/data/posts";
 import { grad, formatDate } from "@/lib/format";
+import { renderMarkdown } from "@/lib/markdown";
 import { LocaleLink } from "./LocaleLink";
 import { Sparkle, Send, ArrowBack, ArrowForward } from "./Icons";
 
@@ -37,7 +38,7 @@ export function BlogArticle({ slug }: { slug: string }) {
 
   const title = locale === "fa" ? p.fa : p.en;
   const cat = locale === "fa" ? p.catFa : p.catEn;
-  const body = (locale === "fa" ? p.bodyFa : p.bodyEn).split("\n\n");
+  const bodyHtml = renderMarkdown(locale === "fa" ? p.bodyFa : p.bodyEn);
 
   const fmtDate = (d: string) => formatDate(d, locale, { year: "numeric", month: "short", day: "numeric" });
 
@@ -81,10 +82,15 @@ export function BlogArticle({ slug }: { slug: string }) {
 
       {/* cover */}
       <div
-        className="flex h-[260px] items-center justify-center rounded-[16px] text-[90px] font-extrabold"
+        className="flex h-[260px] items-center justify-center overflow-hidden rounded-[16px] text-[90px] font-extrabold"
         style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
       >
-        {title.charAt(0)}
+        {p.cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.cover} alt={title} className="h-full w-full object-cover" />
+        ) : (
+          title.charAt(0)
+        )}
       </div>
 
       {/* title + meta */}
@@ -135,13 +141,11 @@ export function BlogArticle({ slug }: { slug: string }) {
       </div>
 
       {/* body */}
-      <div className="mt-7 flex flex-col gap-4">
-        {body.map((para, i) => (
-          <p key={i} className="text-[15.5px] leading-[1.9]" style={{ color: "var(--text)", textAlign: "start" }}>
-            {para}
-          </p>
-        ))}
-      </div>
+      <div
+        className="prose-mini mt-7 text-[15.5px] leading-[1.9]"
+        style={{ color: "var(--text)", textAlign: "start" }}
+        dangerouslySetInnerHTML={{ __html: bodyHtml }}
+      />
 
       {/* back to blog */}
       <div className="mt-8">

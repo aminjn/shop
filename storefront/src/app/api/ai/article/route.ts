@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { callAI, parseJson } from "@/lib/ai";
+import { callAI, parseJson, modelFor } from "@/lib/ai";
 
 interface Article {
   title: string;
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   const system = "تو یک نویسندهٔ حرفه‌ای بلاگ فارسی و متخصص سئو هستی. خروجی را به‌صورت Markdown بنویس. فقط یک JSON معتبر برگردان، بدون متن اضافه.";
   const prompt = `یک مقالهٔ کامل و بهینه برای سئو دربارهٔ موضوع زیر بنویس.\nموضوع: «${topic}»${lenRule}${toneRule}\n\nدقیقاً با این کلیدها (مقدار body به‌صورت Markdown با \\n\\n بین پاراگراف‌ها):\n{"title":"عنوان جذاب","excerpt":"خلاصهٔ یک تا دو جمله‌ای","body":"متن کامل مقاله به Markdown","category":"دستهٔ مقاله","tags":["۴ تا ۶ برچسب"]}`;
 
-  const raw = await callAI(system, [{ role: "user", content: prompt }]);
+  const raw = await callAI(system, [{ role: "user", content: prompt }], modelFor("article"));
   if (!raw) return NextResponse.json({ ok: false, error: "ai-unavailable" }, { status: 502 });
   const j = parseJson<Article>(raw);
   if (!j || !j.title || !j.body) return NextResponse.json({ ok: false, error: "ai-unavailable" }, { status: 502 });
@@ -60,6 +60,6 @@ export async function POST(req: Request) {
 async function expand(body: string, minChars: number): Promise<string | null> {
   const system = "تو ویراستار و نویسندهٔ حرفه‌ای فارسی هستی. فقط متن نهایی Markdown را برگردان، بدون توضیح اضافه.";
   const prompt = `متن مقالهٔ زیر را گسترش بده و کامل‌تر کن تا حداقل ${minChars} کاراکتر شود. ساختار و موضوع را حفظ کن، اما جزئیات، مثال، زیرعنوان (##) و نکات کاربردی بیشتری اضافه کن. تکرار نکن.\n\n---\n${body}`;
-  const out = await callAI(system, [{ role: "user", content: prompt }]);
+  const out = await callAI(system, [{ role: "user", content: prompt }], modelFor("article"));
   return out ? out.trim() : null;
 }

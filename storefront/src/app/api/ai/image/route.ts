@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { aiConfig } from "@/lib/ai";
+import { aiConfig, modelFor } from "@/lib/ai";
 
 export async function POST(req: Request) {
   const s = await getSession();
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const prompt = String(b.prompt || "").trim();
   if (!prompt) return NextResponse.json({ ok: false, error: "prompt-required" }, { status: 400 });
   const size = ["1024x1024", "1024x1536", "1536x1024"].includes(b.size) ? b.size : "1024x1024";
-  const model = String(b.model || "gpt-image-2");
+  const model = String(b.model || modelFor("image", "gpt-image-2"));
 
   try {
     const res = await fetch(`${c.baseUrl}/images/generations`, {

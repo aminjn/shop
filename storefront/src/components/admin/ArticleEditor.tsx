@@ -5,6 +5,7 @@ import { useShop } from "@/lib/store";
 import { formatDate } from "@/lib/format";
 import { renderMarkdown } from "@/lib/markdown";
 import { UploadButton } from "@/components/UploadButton";
+import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
 import { Sparkle, Plus, Trash } from "@/components/Icons";
 
 interface PostRow {
@@ -40,7 +41,6 @@ export function ArticleEditor() {
   const [expandBusy, setExpandBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishAt, setPublishAt] = useState("");
-  const [showPreview, setShowPreview] = useState(true);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = () =>
@@ -57,7 +57,7 @@ export function ArticleEditor() {
   const editPost = (p: PostRow) => {
     setForm({ id: p.id, title: p.fa, slug: p.slug, catFa: p.catFa, tags: (p.tags || []).join("، "), cover: p.cover || "", excerpt: p.excerptFa, body: p.bodyFa });
     setEditing(true);
-    setPublishAt(p.publishAt ? p.publishAt.slice(0, 16) : "");
+    setPublishAt(p.publishAt || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -74,7 +74,7 @@ export function ArticleEditor() {
         const a = d.article;
         setForm((f) => ({ ...f, title: a.title || f.title, slug: f.slug || slugify(a.title || ""), excerpt: a.excerpt || "", body: a.body || "", catFa: a.category || f.catFa, tags: Array.isArray(a.tags) ? a.tags.join("، ") : f.tags }));
         toast(fa ? "مقاله تولید شد ✓" : "Article generated ✓");
-      } else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured");
+      } else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید گپ‌جی‌پی‌تی و مدل را ذخیره کن" : "AI not configured — save your GapGPT key & model in Settings → AI");
       else toast(fa ? "تولید ناموفق بود" : "Generation failed");
     } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setAiBusy(false); }
   };
@@ -89,7 +89,7 @@ export function ArticleEditor() {
       });
       const d = await r.json();
       if (d.ok && d.body) { set("body", d.body); toast(fa ? "متن گسترش یافت ✓" : "Expanded ✓"); }
-      else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured");
+      else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید گپ‌جی‌پی‌تی و مدل را ذخیره کن" : "AI not configured — save your GapGPT key & model in Settings → AI");
       else toast(fa ? "گسترش ناموفق بود" : "Expand failed");
     } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setExpandBusy(false); }
   };
@@ -102,6 +102,21 @@ export function ArticleEditor() {
     const next = form.body.slice(0, s) + ins + form.body.slice(e);
     set("body", next);
     requestAnimationFrame(() => { el.focus(); el.selectionStart = s + before.length; el.selectionEnd = s + before.length + sel.length; });
+  };
+
+  const insertImage = (url: string) => {
+    const el = bodyRef.current;
+    const md = `\n\n![](${url})\n\n`;
+    if (!el) { set("body", form.body + md); toast(fa ? "تصویر درج شد ✓" : "Image inserted ✓"); return; }
+    const s = el.selectionStart;
+    set("body", form.body.slice(0, s) + md + form.body.slice(s));
+    toast(fa ? "تصویر درج شد ✓" : "Image inserted ✓");
+  };
+
+  const insertLink = () => {
+    const url = window.prompt(fa ? "آدرس لینک:" : "Link URL:");
+    if (!url) return;
+    wrap("[", `](${url})`);
   };
 
   const save = async (status: "draft" | "published" | "scheduled") => {
@@ -208,25 +223,29 @@ export function ArticleEditor() {
           <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "خلاصه" : "Excerpt"}</label>
           <textarea className={`${inputCls} mb-3`} style={{ ...inputStyle, minHeight: 56, resize: "vertical" }} value={form.excerpt} onChange={(e) => set("excerpt", e.target.value)} />
 
-          {/* body toolbar */}
+          {/* body toolbar (WordPress-like) */}
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <button onClick={() => wrap("# ", "", true)} className={tb} style={inputStyle} title={fa ? "تیتر بزرگ" : "Heading 1"}>تیتر</button>
             <button onClick={() => wrap("## ", "", true)} className={tb} style={inputStyle}>H2</button>
             <button onClick={() => wrap("### ", "", true)} className={tb} style={inputStyle}>H3</button>
             <button onClick={() => wrap("**")} className={tb} style={{ ...inputStyle, fontWeight: 800 }}>B</button>
             <button onClick={() => wrap("*")} className={tb} style={{ ...inputStyle, fontStyle: "italic" }}>I</button>
+            <button onClick={() => wrap("> ", "", true)} className={tb} style={inputStyle} title={fa ? "نقل‌قول" : "Quote"}>❝</button>
             <button onClick={() => wrap("- ", "", true)} className={tb} style={inputStyle}>• {fa ? "لیست" : "List"}</button>
+            <button onClick={() => wrap("1. ", "", true)} className={tb} style={inputStyle}>1. {fa ? "شماره‌دار" : "Numbered"}</button>
+            <button onClick={insertLink} className={tb} style={inputStyle} title={fa ? "لینک" : "Link"}>🔗 {fa ? "لینک" : "Link"}</button>
+            <UploadButton accept="image/*" label={fa ? "🖼 درج تصویر" : "🖼 Image"} onUploaded={(url) => insertImage(url)} />
             <span className="flex-1" />
             <button onClick={expandBody} disabled={expandBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[8px] border-none px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
-              <Sparkle size={13} /> {expandBusy ? (fa ? "…" : "…") : fa ? "گسترش متن" : "Expand"}
+              <Sparkle size={13} /> {expandBusy ? "…" : fa ? "گسترش متن" : "Expand"}
             </button>
-            <button onClick={() => setShowPreview((v) => !v)} className={tb} style={inputStyle}>{showPreview ? (fa ? "ویرایش" : "Edit") : (fa ? "پیش‌نمایش" : "Preview")}</button>
           </div>
 
-          {showPreview ? (
-            <div className="prose-mini rounded-[10px] p-4" style={{ ...inputStyle, minHeight: 320, maxHeight: 520, overflow: "auto" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(form.body || (fa ? "_پیش‌نمایش خالی_" : "_empty_")) }} />
-          ) : (
-            <textarea ref={bodyRef} className={inputCls} style={{ ...inputStyle, minHeight: 320, resize: "vertical", lineHeight: 1.9 }} value={form.body} onChange={(e) => set("body", e.target.value)} placeholder={fa ? "متن مقاله (Markdown)…" : "Article body (Markdown)…"} />
-          )}
+          {/* side-by-side: editor + live preview */}
+          <div className="grid gap-3 lg:grid-cols-2">
+            <textarea ref={bodyRef} className={inputCls} style={{ ...inputStyle, minHeight: 360, resize: "vertical", lineHeight: 1.9 }} value={form.body} onChange={(e) => set("body", e.target.value)} placeholder={fa ? "متن مقاله…" : "Article body…"} />
+            <div className="prose-mini rounded-[10px] p-4" style={{ ...inputStyle, minHeight: 360, maxHeight: 560, overflow: "auto" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(form.body || (fa ? "*پیش‌نمایش زنده اینجا نمایش داده می‌شود*" : "*live preview*")) }} />
+          </div>
 
           <div className="mt-2 flex items-center justify-between text-[12px]" style={{ color: charCount < minChars ? "#d97706" : "#1f8a5b" }}>
             <span>{fa ? `${charCount.toLocaleString("fa-IR")} کاراکتر • ${wordCount.toLocaleString("fa-IR")} کلمه` : `${charCount} chars • ${wordCount} words`}</span>
@@ -242,8 +261,8 @@ export function ArticleEditor() {
               <button onClick={() => save("published")} disabled={saving} className="cursor-pointer rounded-[10px] border-none py-2.5 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره و انتشار" : "Save & publish") : fa ? "انتشار فوری" : "Publish"}</button>
               <button onClick={() => save("draft")} disabled={saving} className="cursor-pointer rounded-[10px] py-2.5 text-[13.5px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{fa ? "ذخیره پیش‌نویس" : "Save draft"}</button>
               <div className="mt-1 border-t pt-2.5" style={{ borderColor: "var(--border)" }}>
-                <label className="mb-1 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "زمان‌بندی انتشار" : "Schedule"}</label>
-                <input type="datetime-local" className={`${inputCls} mb-2`} style={inputStyle} value={publishAt} onChange={(e) => setPublishAt(e.target.value)} dir="ltr" />
+                <label className="mb-1.5 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "زمان‌بندی انتشار (شمسی)" : "Schedule (Shamsi)"}</label>
+                <div className="mb-2"><JalaliDateTimePicker value={publishAt} onChange={setPublishAt} /></div>
                 <button onClick={() => save("scheduled")} disabled={saving} className="w-full cursor-pointer rounded-[10px] py-2.5 text-[13.5px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--accent)", color: "var(--accent)" }}>{fa ? "زمان‌بندی انتشار" : "Schedule"}</button>
               </div>
             </div>

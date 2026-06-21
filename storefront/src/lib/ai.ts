@@ -22,8 +22,16 @@ export function aiConfig(): AiConfig {
   return { apiKey, baseUrl, model, configured: Boolean(apiKey) };
 }
 
+/** Resolve which model a given Studio task should use. Falls back to the
+ *  global default model when no per-task override is set. */
+export function modelFor(task: string, fallback?: string): string {
+  const s = readAi();
+  return (s.models && s.models[task]) || fallback || aiConfig().model;
+}
+
 export function aiConfigPublic() {
   const c = aiConfig();
+  const s = readAi();
   const mask = (v: string) =>
     v ? v.slice(0, 3) + "•".repeat(Math.max(0, v.length - 6)) + v.slice(-3) : "";
   return {
@@ -32,6 +40,7 @@ export function aiConfigPublic() {
     baseUrl: c.baseUrl,
     model: c.model,
     apiKeyMasked: mask(c.apiKey),
+    models: s.models || {},
   };
 }
 
@@ -44,6 +53,7 @@ export interface ChatMessage {
 export async function callAI(
   system: string,
   messages: ChatMessage[],
+  model?: string,
 ): Promise<string | null> {
   const c = aiConfig();
   if (!c.configured) return null;
@@ -55,7 +65,7 @@ export async function callAI(
         Authorization: `Bearer ${c.apiKey}`,
       },
       body: JSON.stringify({
-        model: c.model,
+        model: model || c.model,
         messages: [{ role: "system", content: system }, ...messages],
         max_tokens: 700,
       }),

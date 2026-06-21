@@ -36,9 +36,22 @@ export interface StoredAi {
   apiKey?: string;
   baseUrl?: string;
   model?: string;
+  /** per-task model overrides: { article, product, tool, image, chat, search } */
+  models?: Record<string, string>;
 }
 export const readAi = () => readJson<StoredAi>("ai.json");
-export const writeAi = (patch: StoredAi) => writeJson<StoredAi>("ai.json", patch);
+export function writeAi(patch: StoredAi) {
+  const cur = readAi();
+  const models = patch.models ? { ...cur.models, ...patch.models } : cur.models;
+  // reuse object writer for scalar fields, then ensure models is preserved/merged
+  const next = writeJson<StoredAi>("ai.json", { ...patch, models: undefined });
+  if (models && Object.keys(models).length) {
+    next.models = models;
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(path.join(DATA_DIR, "ai.json"), JSON.stringify(next, null, 2), "utf8");
+  }
+  return next;
+}
 
 export interface StoreSettings {
   storeName?: string;

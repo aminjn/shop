@@ -1608,9 +1608,10 @@ function Settings() {
   };
 
   // AI (GapGPT) settings — editable & saved server-side
-  type AiCfg = { configured: boolean; hasKey: boolean; baseUrl: string; model: string; apiKeyMasked: string };
+  type AiCfg = { configured: boolean; hasKey: boolean; baseUrl: string; model: string; apiKeyMasked: string; models?: Record<string, string> };
   const [ai, setAi] = useState<AiCfg | null>(null);
   const [aiForm, setAiForm] = useState({ apiKey: "", baseUrl: "https://api.gapgpt.app/v1", model: "gpt-4o" });
+  const [aiTaskModels, setAiTaskModels] = useState<Record<string, string>>({});
   const [aiSaving, setAiSaving] = useState(false);
   const [aiTesting, setAiTesting] = useState(false);
   const [aiModels, setAiModels] = useState<string[]>([]);
@@ -1624,6 +1625,7 @@ function Settings() {
         if (!d?.config) return;
         setAi(d.config);
         setAiForm({ apiKey: "", baseUrl: d.config.baseUrl, model: d.config.model });
+        setAiTaskModels(d.config.models || {});
       })
       .catch(() => {});
 
@@ -1661,7 +1663,7 @@ function Settings() {
       const r = await fetch("/api/ai/config", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(aiForm),
+        body: JSON.stringify({ ...aiForm, models: aiTaskModels }),
       });
       const d = await r.json();
       if (d.ok) {
@@ -1948,6 +1950,58 @@ function Settings() {
                   ? (fa ? `✓ ${num(aiModels.length, locale)} مدل از حساب گپ‌جی‌پی‌تی شما` : `✓ ${aiModels.length} models from your GapGPT account`)
                   : (fa ? "لیست پیش‌فرض — برای دریافت لیست واقعی، کلید API را ذخیره کن" : "Default list — save your API key to fetch the live list")}
             </div>
+            {/* per-section model selection */}
+            <div className="rounded-[12px] p-3.5" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+              <div className="mb-1 text-[13px] font-extrabold">{fa ? "مدل هر بخش استودیو" : "Model per Studio section"}</div>
+              <p className="mb-3 text-[11.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
+                {fa
+                  ? "برای هر بخش می‌توانی یک مدل جدا انتخاب کنی (مثلاً مدل متنی برای مقاله و مدل تصویری برای تولید عکس). اگر «پیش‌فرض» را بگذاری، از مدل اصلی بالا استفاده می‌شود."
+                  : "Pick a separate model for each section (e.g. a text model for articles, an image model for image generation). Leave “Default” to use the main model above."}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {([
+                  ["article", fa ? "مقاله و بلاگ" : "Article & blog"],
+                  ["product", fa ? "محتوای محصول" : "Product content"],
+                  ["tool", fa ? "ابزارهای متنی" : "Text tools"],
+                  ["image", fa ? "تولید تصویر" : "Image generation"],
+                  ["chat", fa ? "چت و دستیار" : "Chat & assistant"],
+                  ["search", fa ? "جستجوی هوشمند" : "Smart search"],
+                ] as const).map(([task, label]) => {
+                  const isImage = task === "image";
+                  const opts = isImage
+                    ? Array.from(new Set(["gpt-image-2", ...baseModels.filter((m) => /image|dall|flux|sd|midjourney/i.test(m))]))
+                    : baseModels;
+                  const cur = aiTaskModels[task] || "";
+                  return (
+                    <div key={task}>
+                      {lbl(label)}
+                      <select
+                        className={inputCls}
+                        style={inputStyle}
+                        dir="ltr"
+                        value={cur && opts.includes(cur) ? cur : cur ? "__keep" : ""}
+                        onChange={(e) =>
+                          setAiTaskModels((m) => {
+                            const v = e.target.value;
+                            const next = { ...m };
+                            if (v === "" || v === "__keep") delete next[task];
+                            else next[task] = v;
+                            return next;
+                          })
+                        }
+                      >
+                        <option value="">{fa ? "پیش‌فرض" : "Default"}</option>
+                        {cur && !opts.includes(cur) && <option value="__keep">{cur}</option>}
+                        {opts.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={saveAi}

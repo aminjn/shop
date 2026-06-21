@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { callAI } from "@/lib/ai";
+import { callAI, modelFor } from "@/lib/ai";
 
 export async function POST(req: Request) {
   const s = await getSession();
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const system = "تو یک دستیار هوش مصنوعی فروشگاهی فارسی‌زبان و متخصص سئو، بازاریابی و فروش هستی. خروجی تمیز، کوتاه و کاربردی به فارسی بده.";
   const prompt = `ابزار: «${tool}»\n${input ? `ورودی: ${input}\n` : ""}بر اساس این ابزار، خروجی مناسب و آماده‌استفاده تولید کن.`;
 
-  const reply = await callAI(system, [{ role: "user", content: prompt }]);
+  const reply = await callAI(system, [{ role: "user", content: prompt }], modelFor("tool"));
   if (reply) return NextResponse.json({ ok: true, output: reply });
   return NextResponse.json({ ok: false, error: "ai-unavailable" }, { status: 502 });
 }

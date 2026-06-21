@@ -76,6 +76,26 @@ input, textarea, select, button { font-family: inherit; }
 /* RTL-aware directional icon: flips horizontally in RTL */
 [dir="rtl"] .dir-flip { transform: scaleX(-1); }
 
+/* rendered markdown (article body + editor preview) */
+.prose-mini h2 { font-size: 1.4em; font-weight: 800; margin: 0.9em 0 0.4em; }
+.prose-mini h3 { font-size: 1.2em; font-weight: 800; margin: 0.8em 0 0.35em; }
+.prose-mini h4 { font-size: 1.05em; font-weight: 700; margin: 0.7em 0 0.3em; }
+.prose-mini p { margin: 0 0 0.9em; }
+.prose-mini ul,
+.prose-mini ol { margin: 0 0 0.9em; padding-inline-start: 1.5em; }
+.prose-mini ul { list-style: disc; }
+.prose-mini ol { list-style: decimal; }
+.prose-mini li { margin: 0.2em 0; }
+.prose-mini a { color: var(--accent); }
+.prose-mini img { max-width: 100%; border-radius: 12px; }
+.prose-mini code {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 4px;
+  font-size: 0.9em;
+}
+
 /* shared hover behaviours that depend on theme CSS vars */
 .add-btn:hover {
   background: var(--accent) !important;
