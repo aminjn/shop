@@ -56,6 +56,7 @@ export function ArticleEditor() {
   const [saving, setSaving] = useState(false);
   const [publishAt, setPublishAt] = useState("");
   const [titleSug, setTitleSug] = useState<string[]>([]);
+  const [cats, setCats] = useState<string[]>([]);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = () =>
@@ -63,7 +64,25 @@ export function ArticleEditor() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => Array.isArray(d?.posts) && setPosts(d.posts))
       .catch(() => {});
-  useEffect(() => { load(); }, []);
+  const loadCats = () =>
+    fetch("/api/blog/categories")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.categories) && setCats(d.categories))
+      .catch(() => {});
+  useEffect(() => { load(); loadCats(); }, []);
+
+  const addCat = async () => {
+    const name = window.prompt(fa ? "نام دستهٔ جدید:" : "New category name:");
+    if (!name || !name.trim()) return;
+    const r = await fetch("/api/blog/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "add", name: name.trim() }) });
+    const d = await r.json().catch(() => ({}));
+    if (d.ok) { setCats(d.categories); set("catFa", name.trim()); toast(fa ? "دسته اضافه شد ✓" : "Added ✓"); }
+  };
+  const delCat = async (name: string) => {
+    const r = await fetch("/api/blog/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "delete", name }) });
+    const d = await r.json().catch(() => ({}));
+    if (d.ok) setCats(d.categories);
+  };
 
   const set = (k: keyof typeof blank, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const slugify = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}-]/gu, "").slice(0, 80);
@@ -249,7 +268,7 @@ export function ArticleEditor() {
       </div>
 
       {tab === "bulk" ? (
-        <BulkScheduler fa={fa} locale={locale} card={card} inputCls={inputCls} inputStyle={inputStyle} toast={toast} onChanged={load} />
+        <BulkScheduler fa={fa} locale={locale} card={card} inputCls={inputCls} inputStyle={inputStyle} toast={toast} onChanged={load} cats={cats} onAddCat={addCat} />
       ) : (
         <>
           {/* header actions */}
@@ -357,8 +376,25 @@ export function ArticleEditor() {
             <div className="flex flex-col gap-4">
               {/* category */}
               <div className="p-4" style={card}>
-                <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته‌بندی" : "Category"}</label>
-                <input className={inputCls} style={inputStyle} value={form.catFa} onChange={(e) => set("catFa", e.target.value)} placeholder={fa ? "مثلاً راهنمای خرید" : "Category"} />
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته‌بندی" : "Category"}</label>
+                  <button onClick={addCat} className="cursor-pointer border-none bg-transparent text-[11.5px] font-bold" style={{ color: "var(--accent)" }}>+ {fa ? "دستهٔ جدید" : "New"}</button>
+                </div>
+                <select className={inputCls} style={inputStyle} value={cats.includes(form.catFa) ? form.catFa : ""} onChange={(e) => { if (e.target.value === "__add") addCat(); else set("catFa", e.target.value); }}>
+                  <option value="">{fa ? "— انتخاب دسته —" : "— Select —"}</option>
+                  {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <option value="__add">{fa ? "+ افزودن دستهٔ جدید…" : "+ Add new…"}</option>
+                </select>
+                {cats.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {cats.map((c) => (
+                      <span key={c} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                        {c}
+                        <button onClick={() => delCat(c)} aria-label="remove" className="cursor-pointer border-none bg-transparent text-[12px] leading-none" style={{ color: "#e11d48" }}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* cover */}
@@ -451,11 +487,12 @@ export function ArticleEditor() {
 /* ---------------- Bulk generation + scheduling ---------------- */
 
 function BulkScheduler({
-  fa, locale, card, inputCls, inputStyle, toast, onChanged,
+  fa, locale, card, inputCls, inputStyle, toast, onChanged, cats, onAddCat,
 }: {
   fa: boolean; locale: string;
   card: React.CSSProperties; inputCls: string; inputStyle: React.CSSProperties;
   toast: (m: string) => void; onChanged: () => void;
+  cats: string[]; onAddCat: () => void;
 }) {
   const [mode, setMode] = useState<"manual" | "auto">("auto");
   const [theme, setTheme] = useState("");
@@ -566,8 +603,12 @@ function BulkScheduler({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته (اختیاری)" : "Category"}</label>
-            <input className={inputCls} style={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)} />
+            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته" : "Category"}</label>
+            <select className={inputCls} style={inputStyle} value={cats.includes(category) ? category : ""} onChange={(e) => { if (e.target.value === "__add") onAddCat(); else setCategory(e.target.value); }}>
+              <option value="">{fa ? "— انتخاب دسته —" : "— Select —"}</option>
+              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+              <option value="__add">{fa ? "+ افزودن دستهٔ جدید…" : "+ Add new…"}</option>
+            </select>
           </div>
         </div>
 
