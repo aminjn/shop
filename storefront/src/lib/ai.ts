@@ -7,6 +7,16 @@ import type { Locale } from "./types";
 export const DEFAULT_AI_BASE_URL = "https://api.gapgpt.app/v1";
 export const DEFAULT_AI_MODEL = "gpt-4o";
 
+/** Remove a wrapping ```lang … ``` code fence that models often add around
+ *  Markdown/JSON output, plus stray leading/trailing fence lines. */
+export function stripFence(s: string): string {
+  let t = (s || "").trim();
+  const m = t.match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```$/);
+  if (m) t = m[1];
+  t = t.replace(/^```[a-zA-Z]*[ \t]*\n?/, "").replace(/\n?```[ \t]*$/, "");
+  return t.trim();
+}
+
 export interface AiConfig {
   apiKey: string;
   baseUrl: string;
@@ -144,6 +154,22 @@ export function localSearch(
       ? "این محصولات بر اساس نزدیک‌ترین تطابق با درخواست شما مرتب شده‌اند."
       : "These products are ranked by closest match to your request.";
   return { ids: scored.length ? scored : PRODUCTS.slice(0, 6).map((p) => p.id), note };
+}
+
+/** Products most relevant to a topic, with internal URLs for in-article links. */
+export function relevantProducts(topic: string, locale: Locale, limit = 8) {
+  const { ids } = localSearch(topic, locale);
+  return ids
+    .map((id) => PRODUCTS.find((p) => p.id === id))
+    .filter((p): p is (typeof PRODUCTS)[number] => Boolean(p))
+    .slice(0, limit)
+    .map((p) => ({
+      name: locale === "fa" ? p.fa : p.en,
+      url: `/${locale}/product/${p.id}`,
+      brand: p.brand,
+      price: p.price,
+      cat: catById(p.cat)?.[locale] ?? p.cat,
+    }));
 }
 
 export function localChat(query: string, locale: Locale): string {

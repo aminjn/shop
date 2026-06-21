@@ -39,7 +39,12 @@ export function renderMarkdown(src: string): string {
     return out;
   };
 
-  const blocks = src.replace(/\r/g, "").split(/\n{2,}/);
+  // defensively unwrap a whole-document ```lang … ``` fence that AI models add
+  let cleaned = (src || "").trim();
+  const fence = cleaned.match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```$/);
+  if (fence) cleaned = fence[1].trim();
+
+  const blocks = cleaned.replace(/\r/g, "").split(/\n{2,}/);
   const html: string[] = [];
 
   for (const block of blocks) {

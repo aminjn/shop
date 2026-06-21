@@ -82,15 +82,20 @@ export async function processQueue(): Promise<boolean> {
 
   queueBusy = true;
   try {
-    const { callAIDetailed, parseJson, modelFor } = await import("./ai");
+    const { callAIDetailed, parseJson, modelFor, stripFence, relevantProducts } = await import("./ai");
     const words = next.genWords || 1200;
     const targetChars = words * 6;
     const tone = next.genTone ? `\nلحن متن: ${next.genTone}.` : "";
     const kw = next.genKeyword ? `\nکلمهٔ کلیدی اصلی «${next.genKeyword}» را طبیعی به کار ببر.` : "";
-    const system = "تو نویسندهٔ حرفه‌ای بلاگ فارسی و متخصص سئو هستی. body را Markdown بنویس. فقط یک JSON معتبر برگردان، بدون متن اضافه.";
-    const prompt = `یک مقالهٔ کامل و سئوشده دربارهٔ «${next.genTopic}» بنویس (حدود ${words} کلمه، حداقل ${targetChars} کاراکتر، با زیرعنوان ## و فهرست‌ها).${tone}${kw}\n\n{"title":"عنوان جذاب","excerpt":"خلاصه","body":"متن Markdown","category":"دسته","tags":["۴ تا ۶ برچسب"],"seoTitle":"عنوان سئو","metaDesc":"متا","keyword":"کلمهٔ کلیدی"}`;
+    const prods = relevantProducts(next.genTopic || "", "fa", 8);
+    const linkRule = prods.length
+      ? `\nدر متن، ۳ تا ۵ لینک داخلی به محصولات مرتبط زیر را به‌صورت طبیعی با Markdown [نام](آدرس) اضافه کن و در انتها بخش «محصولات پیشنهادی» بیاور. فقط از همین آدرس‌ها استفاده کن:\n${prods.map((p) => `- ${p.name} (${p.brand}) → ${p.url}`).join("\n")}`
+      : "";
+    const system = "تو نویسندهٔ حرفه‌ای بلاگ فارسی و متخصص سئو هستی. body را به‌صورت متن Markdown خام بنویس و هرگز داخل بلوک کد (```) قرار نده. فقط یک JSON معتبر برگردان، بدون متن اضافه.";
+    const prompt = `یک مقالهٔ کامل و سئوشده دربارهٔ «${next.genTopic}» بنویس (حدود ${words} کلمه، حداقل ${targetChars} کاراکتر، با زیرعنوان ## و فهرست‌ها).${tone}${kw}${linkRule}\n\n{"title":"عنوان جذاب","excerpt":"خلاصه","body":"متن Markdown","category":"دسته","tags":["۴ تا ۶ برچسب"],"seoTitle":"عنوان سئو","metaDesc":"متا","keyword":"کلمهٔ کلیدی"}`;
     const r = await callAIDetailed(system, [{ role: "user", content: prompt }], modelFor("article"), Math.min(16000, Math.ceil(targetChars / 1.5) + 1500));
     const j = r.text ? parseJson<{ title: string; excerpt: string; body: string; category: string; tags: string[]; seoTitle?: string; metaDesc?: string; keyword?: string }>(r.text) : null;
+    if (j && j.body) j.body = stripFence(j.body);
 
     const fresh = getAllPosts();
     const idx = fresh.findIndex((p) => p.id === next.id);

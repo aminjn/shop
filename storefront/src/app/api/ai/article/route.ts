@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { callAIDetailed, parseJson, modelFor } from "@/lib/ai";
+import { callAIDetailed, parseJson, modelFor, stripFence, relevantProducts } from "@/lib/ai";
 
 interface Article {
   title: string;
@@ -40,14 +40,16 @@ export async function POST(req: Request) {
     const lenRule = `\nمتن بدنه (body) باید حداقل ${targetChars} کاراکتر${words ? ` (حدود ${words} کلمه)` : ""} و کامل، عمیق و کاربردی باشد. حتماً از چند زیرعنوان (با ##)، فهرست‌ها، مثال و در صورت لزوم بخش «سؤالات متداول» استفاده کن.`;
     const toneRule = tone ? `\nلحن متن: ${tone}.` : "";
     const kwRule = keyword ? `\nکلمهٔ کلیدی اصلی «${keyword}» را به‌صورت طبیعی در عنوان، اولین پاراگراف، زیرعنوان‌ها و متن به کار ببر.` : "";
+    const linkRule = linkInstruction(topic);
 
-    const system = "تو یک نویسندهٔ حرفه‌ای بلاگ فارسی و متخصص سئو هستی که محتوای انسانی، روان و بهینه برای گوگل می‌نویسی. خروجی body را به‌صورت Markdown بنویس. فقط یک JSON معتبر برگردان، بدون متن اضافه و بدون بک‌تیک.";
-    const prompt = `یک مقالهٔ کامل و بهینه برای سئو دربارهٔ موضوع زیر بنویس.\nموضوع: «${topic}»${lenRule}${toneRule}${kwRule}\n\nدقیقاً با این کلیدها (body به Markdown با \\n\\n بین پاراگراف‌ها):\n{"title":"عنوان جذاب و سئوشده","excerpt":"خلاصهٔ یک تا دو جمله‌ای","body":"متن کامل مقاله به Markdown","category":"دستهٔ مقاله","tags":["۴ تا ۶ برچسب"],"seoTitle":"عنوان سئو حداکثر ۶۰ کاراکتر","metaDesc":"متا دیسکریپشن ۷۰ تا ۱۶۰ کاراکتر","keyword":"کلمهٔ کلیدی اصلی"}`;
+    const system = "تو یک نویسندهٔ حرفه‌ای بلاگ فارسی و متخصص سئو هستی که محتوای انسانی، روان و بهینه برای گوگل می‌نویسی. مقدار body را به‌صورت متن Markdown خام بنویس و هرگز آن را داخل بلوک کد (```) یا بک‌تیک قرار نده. فقط یک JSON معتبر برگردان، بدون هیچ متن اضافه.";
+    const prompt = `یک مقالهٔ کامل و بهینه برای سئو دربارهٔ موضوع زیر بنویس.\nموضوع: «${topic}»${lenRule}${toneRule}${kwRule}${linkRule}\n\nدقیقاً با این کلیدها (body به Markdown با \\n\\n بین پاراگراف‌ها):\n{"title":"عنوان جذاب و سئوشده","excerpt":"خلاصهٔ یک تا دو جمله‌ای","body":"متن کامل مقاله به Markdown","category":"دستهٔ مقاله","tags":["۴ تا ۶ برچسب"],"seoTitle":"عنوان سئو حداکثر ۶۰ کاراکتر","metaDesc":"متا دیسکریپشن ۷۰ تا ۱۶۰ کاراکتر","keyword":"کلمهٔ کلیدی اصلی"}`;
 
     const r = await callAIDetailed(system, [{ role: "user", content: prompt }], MODEL(), tokensFor(targetChars + 1500));
     if (!r.text) return fail(r.error);
     const j = parseJson<Article>(r.text);
     if (!j || !j.title || !j.body) return fail(r.error || "parse");
+    j.body = stripFence(j.body);
 
     // enforce minimum length: expand up to twice if short
     let out = j.body;
@@ -73,18 +75,18 @@ export async function POST(req: Request) {
   // ---- rewrite / improve --------------------------------------------------
   if (action === "rewrite") {
     if (!body) return NextResponse.json({ ok: false, error: "body-required" }, { status: 400 });
-    const system = "تو ویراستار و نویسندهٔ حرفهٔ فارسی هستی. فقط متن نهایی Markdown را برگردان، بدون توضیح.";
+    const system = "تو ویراستار و نویسندهٔ حرفهٔ فارسی هستی. فقط متن نهایی Markdown خام را برگردان، بدون توضیح و بدون بلوک کد (```).";
     const prompt = `متن زیر را بازنویسی و روان‌تر کن؛ ساختار و معنا را حفظ کن اما جمله‌ها را طبیعی‌تر، انسانی‌تر و سئوپسندتر کن.\n\n---\n${body}`;
     const r = await callAIDetailed(system, [{ role: "user", content: prompt }], MODEL(), tokensFor(body.length + 1000));
-    return r.text ? NextResponse.json({ ok: true, body: r.text }) : fail(r.error);
+    return r.text ? NextResponse.json({ ok: true, body: stripFence(r.text) }) : fail(r.error);
   }
 
   // ---- proofread (grammar) ------------------------------------------------
   if (action === "proofread") {
     if (!body) return NextResponse.json({ ok: false, error: "body-required" }, { status: 400 });
-    const system = "تو ویراستار نگارشی فارسی هستی. غلط‌های املایی، نیم‌فاصله، نشانه‌گذاری و دستوری را اصلاح کن. فقط متن اصلاح‌شده Markdown را برگردان.";
+    const system = "تو ویراستار نگارشی فارسی هستی. غلط‌های املایی، نیم‌فاصله، نشانه‌گذاری و دستوری را اصلاح کن. فقط متن اصلاح‌شدهٔ Markdown خام را برگردان، بدون بلوک کد (```).";
     const r = await callAIDetailed(system, [{ role: "user", content: body }], MODEL(), tokensFor(body.length + 500));
-    return r.text ? NextResponse.json({ ok: true, body: r.text }) : fail(r.error);
+    return r.text ? NextResponse.json({ ok: true, body: stripFence(r.text) }) : fail(r.error);
   }
 
   // ---- snippet helpers that return text to insert -------------------------
@@ -109,7 +111,7 @@ export async function POST(req: Request) {
   if (snippet[action]) {
     const sp = snippet[action];
     const r = await callAIDetailed(sp.sys, [{ role: "user", content: sp.usr }], MODEL(), 1500);
-    return r.text ? NextResponse.json({ ok: true, snippet: r.text }) : fail(r.error);
+    return r.text ? NextResponse.json({ ok: true, snippet: stripFence(r.text) }) : fail(r.error);
   }
 
   // ---- title suggestions --------------------------------------------------
@@ -143,7 +145,7 @@ export async function POST(req: Request) {
     const kw = keyword || title;
     const system = "تو متخصص سئوی فارسی هستی. متن را طوری بازنویسی کن که کلمهٔ کلیدی به‌صورت طبیعی در عنوان‌ها، ابتدای متن و چگالی مناسب به کار رود؛ بدون اسپم. فقط متن نهایی Markdown را برگردان.";
     const r = await callAIDetailed(system, [{ role: "user", content: `کلمهٔ کلیدی: «${kw}»\n---\n${body}` }], MODEL(), tokensFor(body.length + 800));
-    return r.text ? NextResponse.json({ ok: true, body: r.text }) : fail(r.error);
+    return r.text ? NextResponse.json({ ok: true, body: stripFence(r.text) }) : fail(r.error);
   }
 
   // ---- topic ideas (for bulk) --------------------------------------------
@@ -166,8 +168,16 @@ function fail(reason?: string) {
 }
 
 async function expand(body: string, minChars: number): Promise<string | null> {
-  const system = "تو ویراستار و نویسندهٔ حرفه‌ای فارسی هستی. فقط متن نهایی Markdown را برگردان، بدون توضیح اضافه.";
+  const system = "تو ویراستار و نویسندهٔ حرفه‌ای فارسی هستی. فقط متن نهایی Markdown خام را برگردان، بدون توضیح و بدون بلوک کد (```).";
   const prompt = `متن مقالهٔ زیر را گسترش بده و کامل‌تر کن تا حداقل ${minChars} کاراکتر شود. ساختار و موضوع را حفظ کن، اما جزئیات، مثال، زیرعنوان (##) و نکات کاربردی بیشتری اضافه کن. تکرار نکن.\n\n---\n${body}`;
   const r = await callAIDetailed(system, [{ role: "user", content: prompt }], MODEL(), tokensFor(minChars + 2000));
-  return r.text ? r.text.trim() : null;
+  return r.text ? stripFence(r.text) : null;
+}
+
+/** Build an instruction listing relevant products so the model adds internal links. */
+function linkInstruction(topic: string): string {
+  const prods = relevantProducts(topic, "fa", 8);
+  if (!prods.length) return "";
+  const list = prods.map((p) => `- ${p.name} (${p.brand}) → ${p.url}`).join("\n");
+  return `\n\nدر متن مقاله، ۳ تا ۵ لینک داخلی به محصولات مرتبط زیر را به‌صورت کاملاً طبیعی و در جای مناسب با فرمت Markdown مثل [نام محصول](آدرس) اضافه کن. فقط از همین آدرس‌ها استفاده کن و آدرس جعلی نساز. در صورت امکان یک بخش «محصولات پیشنهادی» هم در انتهای مقاله با لینک به این محصولات بیاور:\n${list}`;
 }
