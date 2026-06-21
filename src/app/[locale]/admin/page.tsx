@@ -8,6 +8,7 @@ import type { Product } from "@/lib/types";
 import { grad, priceFmt, num } from "@/lib/format";
 import { AI_MODELS } from "@/data/aiModels";
 import { ProductModal } from "@/components/admin/ProductModal";
+import { LogoutButton } from "@/components/LogoutButton";
 import {
   Grid,
   List,
@@ -126,6 +127,8 @@ export default function AdminPage() {
                 </button>
               );
             })}
+            <div className="my-2 h-px" style={{ background: "var(--border)" }} />
+            <LogoutButton to="/login" />
           </nav>
         </aside>
 

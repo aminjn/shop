@@ -12,7 +12,7 @@ const field =
   "rounded-[10px] px-3 py-3 text-[14px] outline-none w-full";
 
 export default function CheckoutPage() {
-  const { locale, t, dark, cart, clearCart, coupon } = useShop();
+  const { locale, t, dark, cart, clearCart, coupon, toast } = useShop();
   const totals = computeTotals(cart, coupon);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -20,15 +20,43 @@ export default function CheckoutPage() {
   });
   const [ship, setShip] = useState("standard");
   const [pay, setPay] = useState("online");
+  const [placing, setPlacing] = useState(false);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const place = () => {
-    const id = (locale === "fa" ? "سفارش #" : "#") + Math.floor(100000 + Math.random() * 900000);
-    setOrderId(id);
-    clearCart();
-    window.scrollTo(0, 0);
+  const place = async () => {
+    if (placing || cart.length === 0) return;
+    setPlacing(true);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          items: cart.map((c) => ({ id: c.id, qty: c.qty })),
+          payment: pay,
+          shipping: ship,
+          coupon: coupon?.code,
+        }),
+      });
+      if (res.status === 401) {
+        // not logged in → send to login, come back to checkout
+        window.location.href = `/${locale}/login`;
+        return;
+      }
+      const d = await res.json();
+      if (!d.ok) {
+        toast(d.error === "insufficient-wallet" ? (locale === "fa" ? "موجودی کیف پول کافی نیست" : "Insufficient wallet balance") : (locale === "fa" ? "ثبت سفارش ناموفق بود" : "Order failed"));
+        return;
+      }
+      setOrderId((locale === "fa" ? "سفارش #" : "#") + d.orderId);
+      clearCart();
+      window.scrollTo(0, 0);
+    } catch {
+      toast(locale === "fa" ? "خطای شبکه" : "Network error");
+    } finally {
+      setPlacing(false);
+    }
   };
 
   if (orderId) {
@@ -153,7 +181,7 @@ export default function CheckoutPage() {
             <span className="text-[15px] font-bold">{t.grandTotal}</span>
             <span className="text-[20px] font-black" style={{ color: "var(--accent)" }}>{priceFmt(totals.grand, locale, t.currency)}</span>
           </div>
-          <button onClick={place} className="mt-5 w-full cursor-pointer rounded-[12px] border-none py-3.5 text-[15px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.placeOrder}</button>
+          <button onClick={place} disabled={placing} className="mt-5 w-full cursor-pointer rounded-[12px] border-none py-3.5 text-[15px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>{placing ? (locale === "fa" ? "در حال ثبت…" : "Placing…") : t.placeOrder}</button>
         </div>
       </div>
     </div>

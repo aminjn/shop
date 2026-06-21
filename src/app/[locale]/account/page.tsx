@@ -1,730 +1,492 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
-import { PRODUCTS } from "@/data/products";
-import { grad, num, priceFmt } from "@/lib/format";
-import { ProductCard } from "@/components/ProductCard";
+import { productById } from "@/data/products";
+import { num, priceFmt, grad } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
-import { Card, GhostButton, SectionHead, StatusBadge } from "@/components/account/ui";
+import { LogoutButton } from "@/components/LogoutButton";
 import {
-  User,
-  Cart,
-  Heart,
-  Sparkle,
-  Send,
-  Download,
-  Plus,
-  Check,
-  Chat,
+  User, Cart, Heart, Download, Plus, Check, Send, Sparkle, Close,
 } from "@/components/Icons";
 
-type SectionKey =
-  | "dashboard"
-  | "orders"
-  | "invoices"
-  | "downloads"
-  | "wallet"
-  | "addresses"
-  | "messages"
-  | "notifications"
-  | "tickets"
-  | "loyalty"
-  | "profile";
-
-/* ------------------------------------------------------------------ */
-/* demo data (bilingual)                                               */
-/* ------------------------------------------------------------------ */
-
-type OrderStatus = "processing" | "shipped" | "delivered" | "cancelled";
-interface DemoOrder {
-  id: string;
-  date: [string, string];
-  status: OrderStatus;
-  total: number;
-  items: number;
+/* ---- types mirrored from the API ---- */
+interface Address { id: string; title: string; receiver: string; phone: string; province: string; city: string; postal: string; address: string; isDefault: boolean }
+interface Txn { id: string; type: string; amount: number; date: string; note?: string }
+interface OrderItem { id: number; name: string; qty: number; price: number }
+interface Order { id: string; date: string; status: string; total: number; items: OrderItem[]; payment: string; shipping: string }
+interface Ticket { id: string; subject: string; body: string; status: string; date: string; replies: { from: string; body: string; date: string }[] }
+interface Notif { id: string; text: string; date: string; read: boolean }
+interface UserData {
+  mobile: string;
+  profile: { firstName: string; lastName: string; email: string };
+  addresses: Address[];
+  wallet: { balance: number; txns: Txn[] };
+  orders: Order[];
+  tickets: Ticket[];
+  notifications: Notif[];
+  points: number;
 }
-const ORDERS: DemoOrder[] = [
-  { id: "MKT-10428", date: ["۱۴۰۳/۰۳/۲۸", "Jun 17, 2026"], status: "processing", total: 6480000, items: 3 },
-  { id: "MKT-10391", date: ["۱۴۰۳/۰۳/۲۱", "Jun 10, 2026"], status: "shipped", total: 12500000, items: 1 },
-  { id: "MKT-10355", date: ["۱۴۰۳/۰۳/۱۲", "Jun 1, 2026"], status: "delivered", total: 2840000, items: 2 },
-  { id: "MKT-10298", date: ["۱۴۰۳/۰۲/۳۰", "May 19, 2026"], status: "cancelled", total: 980000, items: 1 },
+
+type Section =
+  | "dashboard" | "orders" | "wallet" | "addresses"
+  | "wishlist" | "tickets" | "notifications" | "loyalty" | "profile";
+
+const TIERS = [
+  { key: "bronze", fa: "برنزی", en: "Bronze", min: 0 },
+  { key: "silver", fa: "نقره‌ای", en: "Silver", min: 50 },
+  { key: "gold", fa: "طلایی", en: "Gold", min: 150 },
+  { key: "platinum", fa: "پلاتینیوم", en: "Platinum", min: 400 },
 ];
-
-const INVOICES: { id: string; date: [string, string]; total: number; paid: boolean }[] = [
-  { id: "INV-2026-0428", date: ["۱۴۰۳/۰۳/۲۸", "Jun 17, 2026"], total: 6480000, paid: true },
-  { id: "INV-2026-0391", date: ["۱۴۰۳/۰۳/۲۱", "Jun 10, 2026"], total: 12500000, paid: true },
-  { id: "INV-2026-0355", date: ["۱۴۰۳/۰۳/۱۲", "Jun 1, 2026"], total: 2840000, paid: false },
-];
-
-const DOWNLOADS: { name: [string, string]; size: string; type: string }[] = [
-  { name: ["کاتالوگ هدفون پرو.pdf", "Pro Headphones Catalog.pdf"], size: "2.4 MB", type: "PDF" },
-  { name: ["راهنمای ساعت هوشمند.pdf", "Smartwatch User Guide.pdf"], size: "1.1 MB", type: "PDF" },
-  { name: ["فاکتور رسمی فروردین.pdf", "Official Invoice March.pdf"], size: "320 KB", type: "PDF" },
-  { name: ["لایسنس نرم‌افزار همراه.txt", "Companion App License.txt"], size: "4 KB", type: "TXT" },
-];
-
-const TXNS: { label: [string, string]; date: [string, string]; amount: number; credit: boolean }[] = [
-  { label: ["افزایش موجودی", "Wallet top-up"], date: ["۱۴۰۳/۰۳/۲۵", "Jun 14, 2026"], amount: 5000000, credit: true },
-  { label: ["پرداخت سفارش MKT-10428", "Payment for MKT-10428"], date: ["۱۴۰۳/۰۳/۲۸", "Jun 17, 2026"], amount: 6480000, credit: false },
-  { label: ["استرداد سفارش لغوشده", "Refund for cancelled order"], date: ["۱۴۰۳/۰۲/۳۰", "May 19, 2026"], amount: 980000, credit: true },
-  { label: ["تبدیل امتیاز به اعتبار", "Points converted to credit"], date: ["۱۴۰۳/۰۲/۲۰", "May 9, 2026"], amount: 250000, credit: true },
-];
-
-const ADDRESSES: { title: [string, string]; line: [string, string]; phone: string; def: boolean }[] = [
-  { title: ["خانه", "Home"], line: ["تهران، سعادت‌آباد، خیابان علامه، پلاک ۱۲، واحد ۴", "Tehran, Saadat Abad, Allameh St, No. 12, Unit 4"], phone: "۰۹۱۲۱۲۳۴۵۶۷", def: true },
-  { title: ["محل کار", "Office"], line: ["تهران، ونک، برج نگار، طبقه ۸", "Tehran, Vanak, Negar Tower, 8th Floor"], phone: "۰۹۳۵۹۸۷۶۵۴۳", def: false },
-];
-
-const THREADS: { from: [string, string]; preview: [string, string]; time: [string, string]; unread: boolean }[] = [
-  { from: ["پشتیبانی مارکت‌لند", "MarketLand Support"], preview: ["سفارش شما ارسال شد و کد رهگیری برایتان پیامک شد.", "Your order has shipped — tracking code sent by SMS."], time: ["۱۰:۲۴", "10:24"], unread: true },
-  { from: ["تیم فروش", "Sales Team"], preview: ["پیشنهاد ویژه‌ای برای محصولات مورد علاقه شما داریم.", "We have a special offer on your favourite products."], time: ["دیروز", "Yesterday"], unread: false },
-  { from: ["واحد مالی", "Billing"], preview: ["فاکتور رسمی سفارش اخیر شما صادر شد.", "The official invoice for your recent order is ready."], time: ["۲ روز پیش", "2 days ago"], unread: false },
-];
-
-const NOTIFS: { icon: string; text: [string, string]; time: [string, string]; unread: boolean }[] = [
-  { icon: "📧", text: ["فاکتور سفارش MKT-10428 به ایمیل شما ارسال شد.", "Invoice for MKT-10428 was emailed to you."], time: ["۵ دقیقه پیش", "5 min ago"], unread: true },
-  { icon: "📱", text: ["کد رهگیری مرسوله با پیامک ارسال شد.", "Tracking code sent via SMS."], time: ["۱ ساعت پیش", "1 hour ago"], unread: true },
-  { icon: "🔔", text: ["محصول علاقه‌مندی شما دوباره موجود شد.", "A product in your wishlist is back in stock."], time: ["دیروز", "Yesterday"], unread: false },
-  { icon: "🏷️", text: ["کد تخفیف ۱۰٪ برای خرید بعدی شما فعال شد.", "A 10% discount code is now active for you."], time: ["۲ روز پیش", "2 days ago"], unread: false },
-];
-
-type TicketStatus = "open" | "answered" | "closed";
-const TICKETS: { id: string; subject: [string, string]; status: TicketStatus; date: [string, string] }[] = [
-  { id: "TKT-882", subject: ["مشکل در فعال‌سازی گارانتی", "Issue activating warranty"], status: "open", date: ["۱۴۰۳/۰۳/۲۷", "Jun 16, 2026"] },
-  { id: "TKT-871", subject: ["پیگیری مرجوعی سفارش", "Return follow-up"], status: "answered", date: ["۱۴۰۳/۰۳/۲۰", "Jun 9, 2026"] },
-  { id: "TKT-840", subject: ["سوال درباره روش پرداخت", "Question about payment method"], status: "closed", date: ["۱۴۰۳/۰۳/۰۵", "May 25, 2026"] },
-];
-
-const POINTS = 2450;
-const WALLET = 3270000;
-const TOTAL_SPENT = 48700000;
-
-/* ------------------------------------------------------------------ */
 
 export default function AccountPage() {
   const { locale, t, dark, toast, wishlist } = useShop();
-  const [active, setActive] = useState<SectionKey>("dashboard");
-  const [orderFilter, setOrderFilter] = useState<"all" | OrderStatus>("all");
-  const [twoFactor, setTwoFactor] = useState(false);
+  const fa = locale === "fa";
+  const [data, setData] = useState<UserData | null>(null);
+  const [section, setSection] = useState<Section>("dashboard");
 
-  const userName = locale === "fa" ? "آرمین امینی" : "Armin Amini";
-  const userEmail = "naeiniamini@gmail.com";
-  const tx = (fa: string, en: string) => (locale === "fa" ? fa : en);
+  const load = () =>
+    fetch("/api/account")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.user && setData(d.user))
+      .catch(() => {});
 
-  const orderStatusLabel = (s: OrderStatus) =>
-    ({
-      processing: tx("در حال پردازش", "Processing"),
-      shipped: tx("ارسال شده", "Shipped"),
-      delivered: tx("تحویل شده", "Delivered"),
-      cancelled: tx("لغو شده", "Cancelled"),
-    })[s];
+  useEffect(() => { load(); }, []);
 
-  const NAV: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
-    { key: "dashboard", label: t.dashboard, icon: <User size={18} /> },
-    { key: "orders", label: t.orders, icon: <Cart size={18} /> },
-    { key: "invoices", label: t.invoices, icon: <Download size={18} /> },
-    { key: "downloads", label: t.downloads, icon: <Download size={18} /> },
-    { key: "wallet", label: t.wallet, icon: <Sparkle size={18} /> },
-    { key: "addresses", label: t.addresses, icon: <Plus size={18} /> },
-    { key: "messages", label: t.messages, icon: <Chat size={18} /> },
-    { key: "notifications", label: t.notifications, icon: <Send size={18} /> },
-    { key: "tickets", label: t.tickets, icon: <Chat size={18} /> },
-    { key: "loyalty", label: t.loyalty, icon: <Sparkle size={18} /> },
-    { key: "profile", label: t.profile, icon: <User size={18} /> },
+  const post = async (url: string, body?: unknown, okMsg?: string) => {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const d = await r.json();
+      if (d.ok && d.user) { setData(d.user); if (okMsg) toast(okMsg); return d; }
+      toast(fa ? "خطا: " + (d.error || "") : "Error: " + (d.error || ""));
+      return d;
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+      return null;
+    }
+  };
+
+  const dt = (iso: string) =>
+    new Date(iso).toLocaleDateString(fa ? "fa-IR" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const fullName = data?.profile.firstName || data?.profile.lastName
+    ? `${data?.profile.firstName ?? ""} ${data?.profile.lastName ?? ""}`.trim()
+    : data?.mobile ?? "";
+
+  const card = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16 };
+  const inputStyle = { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" };
+  const inputCls = "w-full rounded-[10px] px-3 py-2.5 text-[14px] outline-none";
+
+  if (!data) {
+    return <div className="mx-auto max-w-[1280px] px-[22px] py-16 text-center" style={{ color: "var(--muted)" }}>{fa ? "در حال بارگذاری…" : "Loading…"}</div>;
+  }
+
+  const NAV: { id: Section; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { id: "dashboard", label: t.dashboard, icon: <User size={17} /> },
+    { id: "orders", label: t.orders, icon: <Cart size={17} />, badge: data.orders.length },
+    { id: "wallet", label: t.wallet, icon: <Download size={17} /> },
+    { id: "addresses", label: t.addresses, icon: <Plus size={17} /> },
+    { id: "wishlist", label: t.wishlist, icon: <Heart size={17} />, badge: wishlist.length },
+    { id: "tickets", label: t.tickets, icon: <Send size={17} />, badge: data.tickets.length },
+    { id: "notifications", label: t.notifications, icon: <Sparkle size={17} />, badge: data.notifications.filter((n) => !n.read).length },
+    { id: "loyalty", label: t.loyalty, icon: <Sparkle size={17} /> },
+    { id: "profile", label: t.profile, icon: <User size={17} /> },
   ];
 
-  /* -------- shared bits -------- */
-  const statCard = (icon: React.ReactNode, label: string, value: string) => (
-    <Card pad={16} className="flex items-center gap-3.5">
-      <span
-        className="flex h-11 w-11 flex-none items-center justify-center rounded-[12px]"
-        style={{ background: "var(--surface2)", color: "var(--accent)" }}
-      >
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>
-          {label}
-        </div>
-        <div className="text-[17px] font-extrabold" style={{ color: "var(--text)" }}>
-          {value}
-        </div>
+  function H({ children }: { children: React.ReactNode }) {
+    return <h1 className="mb-5 text-[22px] font-extrabold tracking-tight">{children}</h1>;
+  }
+  function Stat({ label, value }: { label: string; value: string }) {
+    return (
+      <div className="p-4" style={card}>
+        <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>{label}</div>
+        <div className="mt-1 text-[20px] font-extrabold">{value}</div>
       </div>
-    </Card>
-  );
+    );
+  }
+  function statusBadge(status: string) {
+    const map: Record<string, [string, string, string]> = {
+      processing: ["#d97706", "rgba(217,119,6,.12)", fa ? "در حال پردازش" : "Processing"],
+      shipped: ["#0ea5e9", "rgba(14,165,233,.12)", fa ? "ارسال شده" : "Shipped"],
+      delivered: ["#1f8a5b", "rgba(31,138,91,.15)", fa ? "تحویل شده" : "Delivered"],
+      cancelled: ["#e11d48", "rgba(225,29,72,.12)", fa ? "لغو شده" : "Cancelled"],
+    };
+    const [c, bg, label] = map[status] || map.processing;
+    return <span className="rounded-full px-2.5 py-1 text-[11.5px] font-extrabold" style={{ color: c, background: bg }}>{label}</span>;
+  }
+  function Empty({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <span className="flex h-20 w-20 items-center justify-center rounded-full" style={{ background: "var(--surface2)", color: "var(--muted)" }}>{icon}</span>
+        <div className="mt-4 text-[17px] font-extrabold">{title}</div>
+        {sub && <div className="mt-1 text-[13.5px]" style={{ color: "var(--muted)" }}>{sub}</div>}
+        <LocaleLink href="/shop" className="mt-5 rounded-[12px] px-6 py-3 text-[14px] font-bold text-white no-underline" style={{ background: "var(--accent)" }}>{t.continueShopping}</LocaleLink>
+      </div>
+    );
+  }
+  function EmptyMini({ text }: { text: string }) {
+    return <div className="py-6 text-center text-[13.5px]" style={{ color: "var(--muted)" }}>{text}</div>;
+  }
 
-  const filteredOrders =
-    orderFilter === "all" ? ORDERS : ORDERS.filter((o) => o.status === orderFilter);
-
-  /* ---------------------------------------------------------------- */
-  /* sections                                                         */
-  /* ---------------------------------------------------------------- */
-
-  const Dashboard = (
-    <>
-      <SectionHead title={t.dashboard} sub={`${t.welcome}، ${userName}`} />
-
-      {/* welcome banner */}
-      <div
-        className="relative mb-6 overflow-hidden rounded-[16px] p-6 text-white"
-        style={{ background: grad(255, dark) }}
-      >
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-extrabold" style={{ background: "rgba(0,0,0,.28)" }}>
-              <Sparkle size={13} /> {t.levelLabel}
-            </div>
-            <h2 className="mt-3 text-[22px] font-black">
-              {t.welcome}، {userName}
-            </h2>
-            <p className="mt-1 text-[13.5px]" style={{ color: "rgba(255,255,255,.85)" }}>
-              {tx("از پنل کاربری خود همه چیز را مدیریت کن.", "Manage everything from your account panel.")}
-            </p>
-          </div>
-          <div className="flex gap-6">
-            <div>
-              <div className="text-[12px]" style={{ color: "rgba(255,255,255,.8)" }}>{t.yourPoints}</div>
-              <div className="text-[20px] font-black">{num(POINTS, locale)}</div>
-            </div>
-            <div>
-              <div className="text-[12px]" style={{ color: "rgba(255,255,255,.8)" }}>{t.walletBalance}</div>
-              <div className="text-[20px] font-black">{priceFmt(WALLET, locale, t.currency)}</div>
-            </div>
+  function Dashboard() {
+    const tier = [...TIERS].reverse().find((x) => data!.points >= x.min) || TIERS[0];
+    return (
+      <>
+        <div className="mb-5 overflow-hidden rounded-[18px] p-6 text-white" style={{ background: grad(255, dark) }}>
+          <div className="text-[13px] opacity-90">{t.welcome} 👋</div>
+          <div className="mt-1 text-[24px] font-extrabold">{fullName}</div>
+          <div className="mt-3 flex flex-wrap gap-4 text-[13px]">
+            <span>{fa ? `سطح: ${tier.fa}` : `Tier: ${tier.en}`}</span>
+            <span>• {t.yourPoints}: {num(data!.points, locale)}</span>
+            <span>• {t.walletBalance}: {priceFmt(data!.wallet.balance, locale, t.currency)}</span>
           </div>
         </div>
-      </div>
-
-      {/* stats */}
-      <div className="mb-6 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        {statCard(<Cart size={20} />, t.orders, num(ORDERS.length, locale))}
-        {statCard(<Sparkle size={20} />, tx("مجموع خرید", "Total spent"), priceFmt(TOTAL_SPENT, locale, t.currency))}
-        {statCard(<Sparkle size={20} />, t.yourPoints, num(POINTS, locale))}
-        {statCard(<User size={20} />, t.walletBalance, priceFmt(WALLET, locale, t.currency))}
-      </div>
-
-      {/* recent orders */}
-      <Card className="mb-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-[16px] font-extrabold">{t.recentOrders}</h3>
-          <button onClick={() => setActive("orders")} className="cursor-pointer border-none bg-transparent text-[13px] font-bold" style={{ color: "var(--accent)" }}>
-            {t.viewAll}
-          </button>
+        <div className="mb-5 grid grid-cols-2 gap-3.5 md:grid-cols-4">
+          <Stat label={t.orders} value={num(data!.orders.length, locale)} />
+          <Stat label={t.walletBalance} value={priceFmt(data!.wallet.balance, locale, t.currency)} />
+          <Stat label={t.yourPoints} value={num(data!.points, locale)} />
+          <Stat label={t.addresses} value={num(data!.addresses.length, locale)} />
         </div>
-        <div className="flex flex-col gap-3">
-          {ORDERS.slice(0, 3).map((o) => (
-            <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] p-3" style={{ background: "var(--surface2)" }}>
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-[10px]" style={{ background: "var(--surface)", color: "var(--accent)" }}>
-                  <Cart size={18} />
-                </span>
-                <div>
-                  <div className="text-[13.5px] font-bold">{o.id}</div>
-                  <div className="text-[12px]" style={{ color: "var(--muted)" }}>{o.date[locale === "fa" ? 0 : 1]}</div>
+        <div className="p-5" style={card}>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-[15px] font-extrabold">{t.recentOrders}</h2>
+            <button onClick={() => setSection("orders")} className="cursor-pointer border-none bg-transparent text-[13px] font-bold" style={{ color: "var(--accent)" }}>{t.viewAll}</button>
+          </div>
+          {data!.orders.length === 0 ? (
+            <EmptyMini text={fa ? "هنوز سفارشی ثبت نکرده‌اید" : "No orders yet"} />
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {data!.orders.slice(0, 4).map((o) => (
+                <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] px-3 py-2.5" style={{ background: "var(--surface2)" }}>
+                  <span className="text-[13.5px] font-bold" dir="ltr">#{o.id}</span>
+                  <span className="text-[12.5px]" style={{ color: "var(--muted)" }}>{dt(o.date)}</span>
+                  <span className="text-[13.5px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(o.total, locale, t.currency)}</span>
+                  {statusBadge(o.status)}
                 </div>
-              </div>
-              <StatusBadge tone={o.status} label={orderStatusLabel(o.status)} />
-              <span className="text-[14px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(o.total, locale, t.currency)}</span>
+              ))}
             </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  function Orders() {
+    const [filter, setFilter] = useState("all");
+    const filters = [["all", fa ? "همه" : "All"], ["processing", fa ? "در حال پردازش" : "Processing"], ["shipped", fa ? "ارسال شده" : "Shipped"], ["delivered", fa ? "تحویل شده" : "Delivered"], ["cancelled", fa ? "لغو شده" : "Cancelled"]];
+    const list = data!.orders.filter((o) => filter === "all" || o.status === filter);
+    return (
+      <>
+        <H>{t.orders}</H>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {filters.map(([id, label]) => (
+            <button key={id} onClick={() => setFilter(id)} className="cursor-pointer rounded-full px-3.5 py-1.5 text-[12.5px] font-bold"
+              style={{ background: filter === id ? "var(--accent)" : "var(--surface)", color: filter === id ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}>{label}</button>
           ))}
         </div>
-      </Card>
-
-      {/* smart picks */}
-      <div className="mb-3 flex items-center gap-2">
-        <Sparkle size={18} />
-        <h3 className="text-[16px] font-extrabold">{t.smartPicksTitle}</h3>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {PRODUCTS.slice(0, 4).map((p) => (
-          <ProductCard key={p.id} p={p} />
-        ))}
-      </div>
-    </>
-  );
-
-  const Orders = (
-    <>
-      <SectionHead title={t.orders} sub={tx("تاریخچه و وضعیت سفارش‌های شما", "Your order history and status")} />
-      <div className="mb-5 flex flex-wrap gap-2">
-        {(["all", "processing", "shipped", "delivered", "cancelled"] as const).map((f) => {
-          const on = orderFilter === f;
-          const label =
-            f === "all" ? tx("همه", "All") : orderStatusLabel(f);
-          return (
-            <button
-              key={f}
-              onClick={() => setOrderFilter(f)}
-              className="cursor-pointer rounded-full px-3.5 py-2 text-[12.5px] font-bold transition"
-              style={{
-                background: on ? "var(--accent)" : "var(--surface)",
-                color: on ? "#fff" : "var(--text)",
-                border: "1px solid " + (on ? "var(--accent)" : "var(--border)"),
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-      <div className="flex flex-col gap-3.5">
-        {filteredOrders.map((o) => (
-          <Card key={o.id} pad={16}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-[15px] font-extrabold">{o.id}</span>
-                  <StatusBadge tone={o.status} label={orderStatusLabel(o.status)} />
+        {list.length === 0 ? (
+          <Empty icon={<Cart size={34} />} title={fa ? "سفارشی یافت نشد" : "No orders"} sub={fa ? "اولین خریدت را انجام بده" : "Place your first order"} />
+        ) : (
+          <div className="flex flex-col gap-3.5">
+            {list.map((o) => (
+              <div key={o.id} className="p-4" style={card}>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[14px] font-extrabold" dir="ltr">#{o.id}</span>
+                  <span className="text-[12.5px]" style={{ color: "var(--muted)" }}>{dt(o.date)}</span>
+                  {statusBadge(o.status)}
                 </div>
-                <div className="mt-1 text-[12.5px]" style={{ color: "var(--muted)" }}>
-                  {o.date[locale === "fa" ? 0 : 1]} · {num(o.items, locale)} {tx("کالا", "items")}
+                <div className="flex flex-col gap-1.5">
+                  {o.items.map((it, i) => (
+                    <div key={i} className="flex justify-between text-[13px]">
+                      <span>{it.name} <span style={{ color: "var(--muted)" }}>×{num(it.qty, locale)}</span></span>
+                      <span className="font-bold">{priceFmt(it.price * it.qty, locale, t.currency)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t pt-3" style={{ borderColor: "var(--border)" }}>
+                  <span className="text-[13px]" style={{ color: "var(--muted)" }}>{t.grandTotal}</span>
+                  <span className="text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(o.total, locale, t.currency)}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2.5">
-                <span className="text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(o.total, locale, t.currency)}</span>
-                <GhostButton accent onClick={() => toast(tx("به صفحه پیگیری منتقل شدید", "Opening order tracking"))}>
-                  {t.trackOrder}
-                </GhostButton>
-                {o.status !== "cancelled" && (
-                  <GhostButton onClick={() => toast(tx("درخواست مرجوعی ثبت شد", "Return request submitted"))}>
-                    {t.returnRequest}
-                  </GhostButton>
-                )}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const Invoices = (
-    <>
-      <SectionHead title={t.invoices} sub={tx("فاکتورهای رسمی سفارش‌های شما", "Official invoices for your orders")} />
-      <Card pad={0} className="overflow-hidden">
-        <div className="grid grid-cols-[1.4fr_1fr_1fr_auto] gap-3 px-4 py-3 text-[12.5px] font-bold" style={{ background: "var(--surface2)", color: "var(--muted)" }}>
-          <span>{tx("شماره فاکتور", "Invoice no.")}</span>
-          <span>{tx("تاریخ", "Date")}</span>
-          <span>{t.status}</span>
-          <span className="text-end">{tx("مبلغ", "Amount")}</span>
-        </div>
-        {INVOICES.map((inv) => (
-          <div key={inv.id} className="grid grid-cols-[1.4fr_1fr_1fr_auto] items-center gap-3 px-4 py-3.5 text-[13px]" style={{ borderTop: "1px solid var(--border)" }}>
-            <span className="font-bold">{inv.id}</span>
-            <span style={{ color: "var(--muted)" }}>{inv.date[locale === "fa" ? 0 : 1]}</span>
-            <span>
-              <StatusBadge tone={inv.paid ? "paid" : "unpaid"} label={inv.paid ? tx("پرداخت شده", "Paid") : tx("پرداخت نشده", "Unpaid")} />
-            </span>
-            <span className="flex items-center justify-end gap-3">
-              <span className="font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(inv.total, locale, t.currency)}</span>
-              <GhostButton onClick={() => toast(tx("دانلود فاکتور آغاز شد", "Invoice download started"))}>
-                <Download size={14} /> {t.downloads}
-              </GhostButton>
-            </span>
+            ))}
           </div>
-        ))}
-      </Card>
-    </>
-  );
+        )}
+      </>
+    );
+  }
 
-  const Downloads = (
-    <>
-      <SectionHead title={t.downloads} sub={tx("فایل‌های قابل دانلود خریدهای شما", "Downloadable files from your purchases")} />
-      <div className="flex flex-col gap-3">
-        {DOWNLOADS.map((d, i) => (
-          <Card key={i} pad={14} className="flex items-center gap-3.5">
-            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-[10px] text-[11px] font-extrabold" style={{ background: "var(--surface2)", color: "var(--accent)" }}>
-              {d.type}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13.5px] font-bold">{d.name[locale === "fa" ? 0 : 1]}</div>
-              <div className="text-[12px]" style={{ color: "var(--muted)" }}>{d.size}</div>
-            </div>
-            <GhostButton accent onClick={() => toast(tx("دانلود آغاز شد", "Download started"))}>
-              <Download size={14} /> {t.downloads}
-            </GhostButton>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const Wallet = (
-    <>
-      <SectionHead title={t.wallet} sub={tx("اعتبار و تراکنش‌های کیف پول", "Your wallet credit and transactions")} />
-      <div className="mb-6 rounded-[16px] p-6 text-white" style={{ background: grad(255, dark) }}>
-        <div className="text-[13px]" style={{ color: "rgba(255,255,255,.85)" }}>{t.walletBalance}</div>
-        <div className="mt-1 text-[28px] font-black">{priceFmt(WALLET, locale, t.currency)}</div>
-        <div className="mt-5 flex flex-wrap gap-2.5">
-          <button onClick={() => toast(tx("درگاه افزایش موجودی باز شد", "Top-up gateway opened"))} className="cursor-pointer rounded-[10px] border-none px-4 py-2.5 text-[13px] font-bold" style={{ background: "#fff", color: "var(--accent)" }}>
-            <span className="inline-flex items-center gap-1.5"><Plus size={14} /> {t.topup}</span>
-          </button>
-          <button onClick={() => toast(tx("درخواست برداشت ثبت شد", "Withdrawal request submitted"))} className="cursor-pointer rounded-[10px] px-4 py-2.5 text-[13px] font-bold text-white" style={{ background: "rgba(0,0,0,.22)", border: "1px solid rgba(255,255,255,.3)" }}>
-            {tx("برداشت", "Withdraw")}
-          </button>
+  function Wallet() {
+    const [amount, setAmount] = useState("");
+    const amt = () => Math.max(0, parseInt((amount || "").replace(/\D/g, "")) || 0);
+    return (
+      <>
+        <H>{t.wallet}</H>
+        <div className="mb-5 overflow-hidden rounded-[18px] p-6 text-white" style={{ background: grad(255, dark) }}>
+          <div className="text-[13px] opacity-90">{t.walletBalance}</div>
+          <div className="mt-1 text-[30px] font-black">{priceFmt(data!.wallet.balance, locale, t.currency)}</div>
         </div>
-      </div>
-      <Card>
-        <h3 className="mb-4 text-[16px] font-extrabold">{tx("تراکنش‌ها", "Transactions")}</h3>
-        <div className="flex flex-col gap-3">
-          {TXNS.map((txn, i) => (
-            <div key={i} className="flex items-center justify-between gap-3 rounded-[12px] p-3" style={{ background: "var(--surface2)" }}>
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full text-[15px] font-black" style={{ background: "var(--surface)", color: txn.credit ? "#1f8a5b" : "#e11d48" }}>
-                  {txn.credit ? "+" : "−"}
-                </span>
-                <div>
-                  <div className="text-[13.5px] font-bold">{txn.label[locale === "fa" ? 0 : 1]}</div>
-                  <div className="text-[12px]" style={{ color: "var(--muted)" }}>{txn.date[locale === "fa" ? 0 : 1]}</div>
+        <div className="mb-5 p-5" style={card}>
+          <div className="mb-3 text-[14px] font-bold">{t.topup} / {fa ? "برداشت" : "Withdraw"}</div>
+          <div className="flex flex-wrap items-center gap-3">
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={fa ? "مبلغ (تومان)" : "Amount (Toman)"} dir="ltr" className={inputCls} style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+            <button onClick={() => { if (amt()) { post("/api/account/wallet", { action: "topup", amount: amt() }, fa ? "کیف پول شارژ شد ✓" : "Topped up ✓"); setAmount(""); } }} className="cursor-pointer rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.topup}</button>
+            <button onClick={() => { if (amt()) { post("/api/account/wallet", { action: "withdraw", amount: amt() }, fa ? "برداشت انجام شد ✓" : "Withdrawn ✓"); setAmount(""); } }} className="cursor-pointer rounded-[10px] px-5 py-2.5 text-[13.5px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{fa ? "برداشت" : "Withdraw"}</button>
+          </div>
+        </div>
+        <div className="p-5" style={card}>
+          <div className="mb-3 text-[14px] font-bold">{fa ? "تراکنش‌ها" : "Transactions"}</div>
+          {data!.wallet.txns.length === 0 ? <EmptyMini text={fa ? "تراکنشی ثبت نشده" : "No transactions"} /> : (
+            <div className="flex flex-col gap-2">
+              {data!.wallet.txns.map((tx) => (
+                <div key={tx.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] px-3 py-2.5 text-[13px]" style={{ background: "var(--surface2)" }}>
+                  <span className="font-bold">{tx.type === "topup" ? (fa ? "شارژ" : "Top-up") : tx.type === "order" ? (fa ? "خرید" : "Order") : (fa ? "برداشت" : "Withdraw")}</span>
+                  <span style={{ color: "var(--muted)" }}>{dt(tx.date)}</span>
+                  <span className="font-extrabold" style={{ color: tx.type === "topup" ? "#1f8a5b" : "#e11d48" }}>{tx.type === "topup" ? "+" : "−"}{priceFmt(tx.amount, locale, t.currency)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  function Addresses() {
+    const empty = { title: "", receiver: "", phone: "", province: "", city: "", postal: "", address: "" };
+    const [form, setForm] = useState(empty);
+    const [editId, setEditId] = useState<string | null>(null);
+    const [open, setOpen] = useState(false);
+    const set = (k: keyof typeof empty) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+    const save = async () => {
+      if (!form.receiver || !form.address) { toast(fa ? "گیرنده و آدرس الزامی است" : "Receiver and address required"); return; }
+      await post("/api/account/address", { action: editId ? "update" : "add", id: editId, ...form }, t.saved);
+      setOpen(false); setForm(empty); setEditId(null);
+    };
+    return (
+      <>
+        <div className="mb-5 flex items-center justify-between">
+          <h1 className="text-[22px] font-extrabold tracking-tight">{t.addresses}</h1>
+          <button onClick={() => { setForm(empty); setEditId(null); setOpen(true); }} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-4 py-2.5 text-[13px] font-extrabold text-white" style={{ background: "var(--accent)" }}><Plus size={15} /> {fa ? "افزودن آدرس" : "Add address"}</button>
+        </div>
+        {data!.addresses.length === 0 && !open ? (
+          <Empty icon={<Plus size={34} />} title={fa ? "آدرسی ثبت نشده" : "No addresses"} sub={fa ? "یک آدرس اضافه کن" : "Add an address"} />
+        ) : (
+          <div className="grid gap-3.5 md:grid-cols-2">
+            {data!.addresses.map((a) => (
+              <div key={a.id} className="p-4" style={card}>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-[14px] font-extrabold">{a.title || a.receiver}</span>
+                  {a.isDefault && <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: "rgba(31,138,91,.15)", color: "#1f8a5b" }}>{fa ? "پیش‌فرض" : "Default"}</span>}
+                </div>
+                <div className="text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>{a.receiver} • {a.phone}<br />{a.province}، {a.city} — {a.address} {a.postal && `(${a.postal})`}</div>
+                <div className="mt-3 flex gap-3 text-[12.5px] font-bold">
+                  {!a.isDefault && <button onClick={() => post("/api/account/address", { action: "default", id: a.id })} className="cursor-pointer border-none bg-transparent" style={{ color: "var(--accent)" }}>{fa ? "پیش‌فرض کن" : "Set default"}</button>}
+                  <button onClick={() => { setForm({ title: a.title, receiver: a.receiver, phone: a.phone, province: a.province, city: a.city, postal: a.postal, address: a.address }); setEditId(a.id); setOpen(true); }} className="cursor-pointer border-none bg-transparent" style={{ color: "var(--accent)" }}>{t.edit}</button>
+                  <button onClick={() => post("/api/account/address", { action: "delete", id: a.id })} className="cursor-pointer border-none bg-transparent" style={{ color: "#e11d48" }}>{t.del}</button>
                 </div>
               </div>
-              <span className="text-[14px] font-extrabold" style={{ color: txn.credit ? "#1f8a5b" : "var(--text)" }}>
-                {txn.credit ? "+" : "−"}{priceFmt(txn.amount, locale, t.currency)}
-              </span>
+            ))}
+          </div>
+        )}
+        {open && (
+          <div className="fixed inset-0 z-[95] flex items-center justify-center p-5" style={{ background: "rgba(0,0,0,.5)" }} onClick={() => setOpen(false)}>
+            <div className="anim-pop w-full max-w-[480px] rounded-[18px] p-6" style={card} onClick={(e) => e.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-[16px] font-extrabold">{editId ? t.edit : fa ? "افزودن آدرس" : "Add address"}</h2>
+                <button onClick={() => setOpen(false)} className="cursor-pointer border-none bg-transparent" style={{ color: "var(--muted)" }}><Close size={18} /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {([["title", fa ? "عنوان (خانه/کار)" : "Title"], ["receiver", fa ? "گیرنده" : "Receiver"], ["phone", fa ? "تلفن" : "Phone"], ["province", t.province], ["city", t.city], ["postal", t.postal]] as const).map(([k, label]) => (
+                  <label key={k} className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{label}<input value={form[k]} onChange={set(k)} className={inputCls} style={inputStyle} /></label>
+                ))}
+                <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.addressLabel}<input value={form.address} onChange={set("address")} className={inputCls} style={inputStyle} /></label>
+              </div>
+              <button onClick={save} className="mt-4 w-full cursor-pointer rounded-[12px] border-none py-3 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.saveChanges}</button>
             </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  function Wishlist() {
+    const items = wishlist.map((id) => productById(id)).filter(Boolean);
+    if (items.length === 0) return <><H>{t.wishlist}</H><Empty icon={<Heart size={34} />} title={t.emptyWish} sub={t.emptyWishSub} /></>;
+    return (
+      <>
+        <H>{t.wishlist}</H>
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3">
+          {items.map((p) => p && (
+            <LocaleLink key={p.id} href={`/product/${p.id}`} className="p-3 no-underline" style={{ ...card, color: "var(--text)" }}>
+              <span className="flex h-[120px] items-center justify-center rounded-[12px] text-[36px] font-extrabold" style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}>{(fa ? p.fa : p.en).charAt(0)}</span>
+              <div className="mt-2 text-[13.5px] font-bold leading-snug">{fa ? p.fa : p.en}</div>
+              <div className="mt-1 text-[14px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(p.price, locale, t.currency)}</div>
+            </LocaleLink>
           ))}
         </div>
-      </Card>
-    </>
-  );
+      </>
+    );
+  }
 
-  const Addresses = (
-    <>
-      <SectionHead
-        title={t.addresses}
-        sub={tx("آدرس‌های ارسال سفارش", "Your delivery addresses")}
-        action={
-          <button onClick={() => toast(tx("فرم افزودن آدرس باز شد", "Add address form opened"))} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-4 py-2.5 text-[13px] font-bold text-white" style={{ background: "var(--accent)" }}>
-            <Plus size={15} /> {tx("افزودن آدرس", "Add address")}
-          </button>
-        }
-      />
-      <div className="grid gap-3.5 md:grid-cols-2">
-        {ADDRESSES.map((a, i) => (
-          <Card key={i}>
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-[15px] font-extrabold">{a.title[locale === "fa" ? 0 : 1]}</span>
-              {a.def && (
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-extrabold" style={{ background: "rgba(31,138,91,.16)", color: "#1f8a5b" }}>
-                  <Check size={12} /> {tx("پیش‌فرض", "Default")}
-                </span>
-              )}
-            </div>
-            <p className="text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>{a.line[locale === "fa" ? 0 : 1]}</p>
-            <div className="mt-2 text-[12.5px]" style={{ color: "var(--muted)" }}>{a.phone}</div>
-            <div className="mt-4">
-              <GhostButton accent onClick={() => toast(t.saved)}>{t.edit ?? tx("ویرایش", "Edit")}</GhostButton>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const Messages = (
-    <>
-      <SectionHead title={t.messages} sub={tx("گفتگوهای شما با تیم فروشگاه", "Your conversations with the store team")} />
-      <div className="flex flex-col gap-3">
-        {THREADS.map((m, i) => (
-          <Card key={i} pad={16} className="flex items-start gap-3.5">
-            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full" style={{ background: "var(--surface2)", color: "var(--accent)" }}>
-              <Chat size={18} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[14px] font-bold" style={{ color: m.unread ? "var(--text)" : "var(--muted)" }}>
-                  {m.from[locale === "fa" ? 0 : 1]}
-                </span>
-                <span className="flex items-center gap-2 text-[12px]" style={{ color: "var(--muted)" }}>
-                  {m.time[locale === "fa" ? 0 : 1]}
-                  {m.unread && <span className="h-2 w-2 rounded-full" style={{ background: "var(--accent)" }} />}
-                </span>
-              </div>
-              <p className="mt-1 text-[13px]" style={{ color: "var(--muted)" }}>{m.preview[locale === "fa" ? 0 : 1]}</p>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const Notifications = (
-    <>
-      <SectionHead title={t.notifications} sub={tx("اعلان‌های ایمیل، پیامک و سایت", "Email, SMS and on-site alerts")} />
-      <div className="flex flex-col gap-3">
-        {NOTIFS.map((n, i) => (
-          <Card
-            key={i}
-            pad={14}
-            className="flex items-center gap-3.5"
-          >
-            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full text-[20px]" style={{ background: "var(--surface2)" }}>
-              {n.icon}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[13.5px]" style={{ color: n.unread ? "var(--text)" : "var(--muted)", fontWeight: n.unread ? 700 : 400 }}>
-                {n.text[locale === "fa" ? 0 : 1]}
-              </p>
-              <div className="mt-0.5 text-[12px]" style={{ color: "var(--muted)" }}>{n.time[locale === "fa" ? 0 : 1]}</div>
-            </div>
-            {n.unread && <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: "var(--accent)" }} />}
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const Tickets = (
-    <>
-      <SectionHead
-        title={t.tickets}
-        sub={tx("درخواست‌های پشتیبانی شما", "Your support requests")}
-        action={
-          <button onClick={() => toast(tx("فرم تیکت جدید باز شد", "New ticket form opened"))} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-4 py-2.5 text-[13px] font-bold text-white" style={{ background: "var(--accent)" }}>
-            <Plus size={15} /> {tx("تیکت جدید", "New ticket")}
-          </button>
-        }
-      />
-      <div className="flex flex-col gap-3">
-        {TICKETS.map((k) => (
-          <Card key={k.id} pad={16} className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <span className="text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{k.id}</span>
-                <StatusBadge
-                  tone={k.status}
-                  label={
-                    k.status === "open" ? tx("باز", "Open") : k.status === "answered" ? tx("پاسخ داده شد", "Answered") : tx("بسته", "Closed")
-                  }
-                />
-              </div>
-              <div className="mt-1 text-[14px] font-bold">{k.subject[locale === "fa" ? 0 : 1]}</div>
-              <div className="mt-0.5 text-[12px]" style={{ color: "var(--muted)" }}>{k.date[locale === "fa" ? 0 : 1]}</div>
-            </div>
-            <GhostButton accent onClick={() => toast(tx("پیام شما ارسال شد", "Your reply was sent"))}>
-              <Send size={14} /> {t.send}
-            </GhostButton>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const tiers: { fa: string; en: string; min: number }[] = [
-    { fa: "برنزی", en: "Bronze", min: 0 },
-    { fa: "نقره‌ای", en: "Silver", min: 1000 },
-    { fa: "طلایی", en: "Gold", min: 2000 },
-    { fa: "پلاتینیوم", en: "Platinum", min: 4000 },
-  ];
-  const currentTierIdx = 2; // Gold
-
-  const Loyalty = (
-    <>
-      <SectionHead title={t.loyalty} sub={tx("امتیازها و سطح وفاداری شما", "Your points and loyalty tier")} />
-      <div className="mb-6 rounded-[16px] p-6 text-white" style={{ background: grad(255, dark) }}>
-        <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-extrabold" style={{ background: "rgba(0,0,0,.28)" }}>
-          <Sparkle size={13} /> {t.levelLabel}
+  function Tickets() {
+    const [subject, setSubject] = useState("");
+    const [body, setBody] = useState("");
+    const submit = async () => {
+      if (!subject.trim() || !body.trim()) { toast(fa ? "موضوع و متن الزامی است" : "Subject and message required"); return; }
+      await post("/api/account/ticket", { subject, body }, fa ? "تیکت ثبت شد ✓" : "Ticket submitted ✓");
+      setSubject(""); setBody("");
+    };
+    return (
+      <>
+        <H>{t.tickets}</H>
+        <div className="mb-5 p-5" style={card}>
+          <div className="mb-3 text-[14px] font-bold">{fa ? "تیکت جدید" : "New ticket"}</div>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={fa ? "موضوع" : "Subject"} className={`${inputCls} mb-3`} style={inputStyle} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder={fa ? "متن پیام…" : "Message…"} className={inputCls} style={{ ...inputStyle, resize: "vertical" }} />
+          <button onClick={submit} className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white" style={{ background: "var(--accent)" }}><Send size={15} /> {fa ? "ارسال تیکت" : "Submit"}</button>
         </div>
-        <div className="mt-3 text-[13px]" style={{ color: "rgba(255,255,255,.85)" }}>{t.yourPoints}</div>
-        <div className="text-[30px] font-black">{num(POINTS, locale)}</div>
-        <button onClick={() => toast(tx("امتیازها به اعتبار تبدیل شد", "Points converted to credit"))} className="mt-4 cursor-pointer rounded-[10px] border-none px-4 py-2.5 text-[13px] font-bold" style={{ background: "#fff", color: "var(--accent)" }}>
-          {tx("تبدیل امتیاز به اعتبار", "Convert points to credit")}
-        </button>
-      </div>
+        {data!.tickets.length === 0 ? <EmptyMini text={fa ? "تیکتی ثبت نشده" : "No tickets"} /> : (
+          <div className="flex flex-col gap-3">
+            {data!.tickets.map((tk) => (
+              <div key={tk.id} className="p-4" style={card}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[14px] font-extrabold">{tk.subject}</span>
+                  <span className="rounded-full px-2.5 py-1 text-[11.5px] font-bold" style={{ background: "var(--surface2)", color: "var(--muted)" }}>{tk.status === "open" ? (fa ? "باز" : "Open") : tk.status === "answered" ? (fa ? "پاسخ داده شده" : "Answered") : (fa ? "بسته" : "Closed")}</span>
+                </div>
+                <div className="mt-1.5 text-[13px]" style={{ color: "var(--muted)" }}>{tk.body}</div>
+                <div className="mt-1.5 text-[12px]" style={{ color: "var(--muted)" }}>{dt(tk.date)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  }
 
-      <Card className="mb-6">
-        <h3 className="mb-4 text-[16px] font-extrabold">{tx("نردبان سطح‌ها", "Tier ladder")}</h3>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {tiers.map((tier, i) => {
-            const on = i === currentTierIdx;
+  function Notifications() {
+    return (
+      <>
+        <div className="mb-5 flex items-center justify-between">
+          <h1 className="text-[22px] font-extrabold tracking-tight">{t.notifications}</h1>
+          <button onClick={() => post("/api/account/notifications", undefined, fa ? "همه خوانده شد" : "Marked read")} className="cursor-pointer border-none bg-transparent text-[13px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "خواندن همه" : "Mark all read"}</button>
+        </div>
+        {data!.notifications.length === 0 ? <Empty icon={<Sparkle size={34} />} title={fa ? "اعلانی نیست" : "No notifications"} sub="" /> : (
+          <div className="flex flex-col gap-2.5">
+            {data!.notifications.map((n) => (
+              <div key={n.id} className="flex items-start gap-3 p-4" style={{ ...card, borderInlineStartWidth: 3, borderInlineStartColor: n.read ? "var(--border)" : "var(--accent)" }}>
+                <span className="mt-0.5">🔔</span>
+                <div className="flex-1">
+                  <div className="text-[13.5px]">{n.text}</div>
+                  <div className="mt-1 text-[12px]" style={{ color: "var(--muted)" }}>{dt(n.date)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  function Loyalty() {
+    const cur = [...TIERS].reverse().find((x) => data!.points >= x.min) || TIERS[0];
+    const next = TIERS.find((x) => x.min > data!.points);
+    return (
+      <>
+        <H>{t.loyalty}</H>
+        <div className="mb-5 overflow-hidden rounded-[18px] p-6 text-white" style={{ background: grad(45, dark) }}>
+          <div className="text-[13px] opacity-90">{t.yourPoints}</div>
+          <div className="mt-1 text-[32px] font-black">{num(data!.points, locale)}</div>
+          <div className="mt-1 text-[13px] opacity-90">{fa ? `سطح فعلی: ${cur.fa}` : `Current tier: ${cur.en}`}{next && (fa ? ` — ${num(next.min - data!.points, locale)} امتیاز تا ${next.fa}` : ` — ${num(next.min - data!.points, locale)} pts to ${next.en}`)}</div>
+        </div>
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
+          {TIERS.map((tr) => {
+            const active = cur.key === tr.key;
             return (
-              <div
-                key={tier.en}
-                className="rounded-[12px] p-4 text-center"
-                style={{
-                  background: on ? "var(--accent)" : "var(--surface2)",
-                  color: on ? "#fff" : "var(--text)",
-                  border: "1px solid " + (on ? "var(--accent)" : "var(--border)"),
-                }}
-              >
-                <div className="text-[14px] font-extrabold">{tier[locale === "fa" ? "fa" : "en"]}</div>
-                <div className="mt-1 text-[12px]" style={{ color: on ? "rgba(255,255,255,.85)" : "var(--muted)" }}>
-                  {num(tier.min, locale)}+ {tx("امتیاز", "pts")}
-                </div>
-                {on && (
-                  <div className="mt-2 inline-flex items-center gap-1 text-[11.5px] font-bold">
-                    <Check size={13} /> {tx("سطح فعلی", "Current")}
-                  </div>
-                )}
+              <div key={tr.key} className="p-4 text-center" style={{ ...card, outline: active ? "2px solid var(--accent)" : "none" }}>
+                <div className="text-[15px] font-extrabold">{fa ? tr.fa : tr.en}</div>
+                <div className="mt-1 text-[12.5px]" style={{ color: "var(--muted)" }}>{num(tr.min, locale)}+ {fa ? "امتیاز" : "pts"}</div>
+                {active && <div className="mt-2 inline-flex items-center gap-1 text-[12px] font-bold" style={{ color: "var(--accent)" }}><Check size={13} /> {fa ? "سطح شما" : "Your tier"}</div>}
               </div>
             );
           })}
         </div>
-      </Card>
+      </>
+    );
+  }
 
-      <Card>
-        <h3 className="mb-4 text-[16px] font-extrabold">{tx("تاریخچه فعالیت", "Activity history")}</h3>
-        <div className="flex flex-col gap-3">
-          {[
-            { fa: "خرید سفارش MKT-10428", en: "Purchase MKT-10428", pts: 320 },
-            { fa: "ثبت نظر برای محصول", en: "Wrote a product review", pts: 50 },
-            { fa: "معرفی به دوستان", en: "Referred a friend", pts: 200 },
-            { fa: "تبدیل امتیاز به اعتبار", en: "Converted points", pts: -250 },
-          ].map((a, i) => (
-            <div key={i} className="flex items-center justify-between gap-3 rounded-[12px] p-3" style={{ background: "var(--surface2)" }}>
-              <span className="text-[13.5px] font-bold">{a[locale === "fa" ? "fa" : "en"]}</span>
-              <span className="text-[14px] font-extrabold" style={{ color: a.pts >= 0 ? "#1f8a5b" : "#e11d48" }}>
-                {a.pts >= 0 ? "+" : "−"}{num(Math.abs(a.pts), locale)}
-              </span>
+  function Profile() {
+    const [f, setF] = useState({ firstName: data!.profile.firstName, lastName: data!.profile.lastName, email: data!.profile.email });
+    const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
+    return (
+      <>
+        <H>{t.profile}</H>
+        <div className="max-w-[520px] p-5" style={card}>
+          <div className="mb-4 flex items-center gap-3">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full text-[24px] font-extrabold text-white" style={{ background: grad(255, dark) }}>{(f.firstName || data!.mobile).charAt(0)}</span>
+            <div>
+              <div className="text-[15px] font-extrabold">{`${f.firstName} ${f.lastName}`.trim() || (fa ? "کاربر" : "User")}</div>
+              <div className="text-[12.5px]" dir="ltr" style={{ color: "var(--muted)" }}>{data!.mobile}</div>
             </div>
-          ))}
-        </div>
-      </Card>
-    </>
-  );
-
-  const inputCls = "w-full rounded-[10px] px-3 py-2.5 text-[13.5px] outline-none";
-  const inputStyle = { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" } as const;
-  const field = (label: string, defaultValue: string, type = "text") => (
-    <label className="block">
-      <span className="mb-1.5 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{label}</span>
-      <input type={type} defaultValue={defaultValue} className={inputCls} style={inputStyle} />
-    </label>
-  );
-
-  const Profile = (
-    <>
-      <SectionHead title={t.profile} sub={tx("اطلاعات حساب و امنیت", "Account details and security")} />
-      <Card className="mb-6">
-        <div className="mb-6 flex items-center gap-4">
-          <span className="flex h-16 w-16 flex-none items-center justify-center rounded-full text-[24px] font-black text-white" style={{ background: grad(255, dark) }}>
-            {userName.charAt(0)}
-          </span>
-          <div>
-            <div className="text-[16px] font-extrabold">{userName}</div>
-            <button onClick={() => toast(tx("انتخاب تصویر جدید", "Choose a new photo"))} className="mt-1.5 cursor-pointer rounded-[10px] px-3 py-1.5 text-[12.5px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--accent)" }}>
-              {tx("تغییر تصویر", "Change photo")}
-            </button>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام" : "First name"}<input value={f.firstName} onChange={set("firstName")} className={inputCls} style={inputStyle} /></label>
+            <label className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام خانوادگی" : "Last name"}<input value={f.lastName} onChange={set("lastName")} className={inputCls} style={inputStyle} /></label>
+            <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.emailLabel}<input value={f.email} onChange={set("email")} className={inputCls} style={inputStyle} dir="ltr" /></label>
+            <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.phone}<input value={data!.mobile} readOnly className={inputCls} style={{ ...inputStyle, opacity: 0.7 }} dir="ltr" /></label>
+          </div>
+          <button onClick={() => post("/api/account/profile", f, t.saved)} className="mt-4 cursor-pointer rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.saveChanges}</button>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {field(tx("نام", "First name"), locale === "fa" ? "آرمین" : "Armin")}
-          {field(tx("نام خانوادگی", "Last name"), locale === "fa" ? "امینی" : "Amini")}
-          {field(t.phone, "۰۹۱۲۱۲۳۴۵۶۷", "tel")}
-          {field(t.emailLabel, userEmail, "email")}
-        </div>
-        <div className="mt-6 flex flex-wrap gap-2.5">
-          <button onClick={() => toast(t.saved)} className="cursor-pointer rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-bold text-white" style={{ background: "var(--accent)" }}>
-            {t.saveChanges}
-          </button>
-          <button onClick={() => toast(tx("لینک تغییر رمز ارسال شد", "Password reset link sent"))} className="cursor-pointer rounded-[10px] px-5 py-2.5 text-[13.5px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>
-            {t.changePassword}
-          </button>
-        </div>
-      </Card>
-
-      <Card>
-        <h3 className="mb-1 text-[16px] font-extrabold">{t.securityTitle}</h3>
-        <p className="mb-4 text-[13px]" style={{ color: "var(--muted)" }}>
-          {tx("برای محافظت بیشتر، تأیید دو مرحله‌ای را فعال کن.", "Enable two-factor for extra protection.")}
-        </p>
-        <div className="flex items-center justify-between gap-3 rounded-[12px] p-3.5" style={{ background: "var(--surface2)" }}>
-          <span className="text-[13.5px] font-bold">{t.twoFactor}</span>
-          <button
-            onClick={() => {
-              setTwoFactor((v) => !v);
-              toast(twoFactor ? tx("تأیید دو مرحله‌ای غیرفعال شد", "Two-factor disabled") : tx("تأیید دو مرحله‌ای فعال شد", "Two-factor enabled"));
-            }}
-            aria-label={t.twoFactor}
-            className="relative h-[26px] w-[46px] flex-none cursor-pointer rounded-full border-none transition"
-            style={{ background: twoFactor ? "var(--accent)" : "var(--border)" }}
-          >
-            <span
-              className="absolute top-[3px] h-5 w-5 rounded-full bg-white transition-all"
-              style={{ insetInlineStart: twoFactor ? 23 : 3 }}
-            />
-          </button>
-        </div>
-      </Card>
-    </>
-  );
-
-  const content: Record<SectionKey, React.ReactNode> = {
-    dashboard: Dashboard,
-    orders: Orders,
-    invoices: Invoices,
-    downloads: Downloads,
-    wallet: Wallet,
-    addresses: Addresses,
-    messages: Messages,
-    notifications: Notifications,
-    tickets: Tickets,
-    loyalty: Loyalty,
-    profile: Profile,
-  };
-
-  /* ---------------------------------------------------------------- */
+      </>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-[1280px] px-[22px] py-7">
-      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        {/* sidebar */}
-        <aside className="h-fit lg:sticky lg:top-6">
-          <Card className="mb-4">
-            <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full text-[18px] font-black text-white" style={{ background: grad(255, dark) }}>
-                {userName.charAt(0)}
-              </span>
-              <div className="min-w-0">
-                <div className="truncate text-[14.5px] font-extrabold">{userName}</div>
-                <span className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold" style={{ background: "rgba(212,175,55,.18)", color: "#b8860b" }}>
-                  <Sparkle size={11} /> {t.levelLabel}
-                </span>
-              </div>
-            </div>
-          </Card>
-
-          <Card pad={8}>
-            <nav className="flex flex-col gap-0.5">
-              {NAV.map((n) => {
-                const on = active === n.key;
-                return (
-                  <button
-                    key={n.key}
-                    onClick={() => setActive(n.key)}
-                    className="flex cursor-pointer items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13.5px] font-bold transition"
-                    style={{
-                      background: on ? "var(--accent)" : "transparent",
-                      color: on ? "#fff" : "var(--text)",
-                      textAlign: "start",
-                    }}
-                  >
-                    <span className="flex-none">{n.icon}</span>
-                    <span className="truncate">{n.label}</span>
-                  </button>
-                );
-              })}
-              <div className="my-1 h-px" style={{ background: "var(--border)" }} />
-              <LocaleLink href="/wishlist" className="flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13.5px] font-bold no-underline" style={{ color: "var(--text)" }}>
-                <Heart size={18} />
-                <span className="truncate">{t.wishlistTitle}</span>
-                {wishlist.length > 0 && (
-                  <span className="ms-auto rounded-full px-1.5 py-0.5 text-[10.5px] font-extrabold" style={{ background: "var(--surface2)", color: "var(--accent)" }}>
-                    {num(wishlist.length, locale)}
-                  </span>
-                )}
-              </LocaleLink>
-              <button onClick={() => toast(tx("از حساب خود خارج شدید", "You have been logged out"))} className="flex cursor-pointer items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13.5px] font-bold transition" style={{ background: "transparent", color: "#e11d48", textAlign: "start" }}>
-                <User size={18} />
-                <span className="truncate">{t.logout}</span>
+    <div className="mx-auto grid max-w-[1280px] grid-cols-1 gap-6 px-[22px] py-7 lg:grid-cols-[260px_1fr]">
+      {/* sidebar */}
+      <aside className="h-fit p-4" style={card}>
+        <div className="mb-4 flex items-center gap-3">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full text-[18px] font-extrabold text-white" style={{ background: grad(255, dark) }}>
+            {(fullName || "?").charAt(0)}
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-[14px] font-extrabold">{fullName}</div>
+            <div className="text-[12px]" dir="ltr" style={{ color: "var(--muted)" }}>{data.mobile}</div>
+          </div>
+        </div>
+        <nav className="flex flex-col gap-1">
+          {NAV.map((n) => {
+            const active = section === n.id;
+            return (
+              <button key={n.id} onClick={() => { setSection(n.id); if (n.id === "notifications") post("/api/account/notifications"); }}
+                className="flex cursor-pointer items-center gap-2.5 rounded-[10px] border-none px-3 py-2.5 text-[13.5px] font-bold"
+                style={{ textAlign: "start", background: active ? "var(--accent)" : "transparent", color: active ? "#fff" : "var(--text)" }}>
+                <span style={{ opacity: active ? 1 : 0.7 }}>{n.icon}</span>
+                <span className="flex-1">{n.label}</span>
+                {!!n.badge && <span className="rounded-full px-1.5 text-[11px] font-extrabold" style={{ background: active ? "rgba(255,255,255,.25)" : "var(--surface2)", color: active ? "#fff" : "var(--muted)" }}>{num(n.badge, locale)}</span>}
               </button>
-            </nav>
-          </Card>
-        </aside>
+            );
+          })}
+          <div className="my-2 h-px" style={{ background: "var(--border)" }} />
+          <LogoutButton to="/" />
+        </nav>
+      </aside>
 
-        {/* content */}
-        <section className="min-w-0">{content[active]}</section>
-      </div>
+      {/* content */}
+      <section className="min-w-0">
+        {section === "dashboard" && <Dashboard />}
+        {section === "orders" && <Orders />}
+        {section === "wallet" && <Wallet />}
+        {section === "addresses" && <Addresses />}
+        {section === "wishlist" && <Wishlist />}
+        {section === "tickets" && <Tickets />}
+        {section === "notifications" && <Notifications />}
+        {section === "loyalty" && <Loyalty />}
+        {section === "profile" && <Profile />}
+      </section>
     </div>
   );
 }

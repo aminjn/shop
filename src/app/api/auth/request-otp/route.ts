@@ -21,8 +21,7 @@ export async function POST(req: Request) {
 
   const cfg = smsConfig();
   if (!cfg.configured) {
-    // Dev / not configured: return the code so login can be tested without SMS.
-    return NextResponse.json({ ok: true, sent: false, devCode: code });
+    return NextResponse.json({ ok: false, error: "sms-not-configured" }, { status: 503 });
   }
   const r = await sendOtp(mobile, code);
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error || "send-failed" }, { status: 502 });

@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
-  const [devCode, setDevCode] = useState("");
 
   const tr = (f: string, e: string) => (fa ? f : e);
 
@@ -28,10 +27,15 @@ export default function LoginPage() {
       });
       const d = await r.json();
       if (!d.ok) {
-        setMsg(d.error === "invalid-mobile" ? tr("شماره موبایل معتبر نیست", "Invalid mobile number") : tr("ارسال کد ناموفق بود", "Failed to send code"));
+        const m =
+          d.error === "invalid-mobile"
+            ? tr("شماره موبایل معتبر نیست", "Invalid mobile number")
+            : d.error === "sms-not-configured"
+              ? tr("سرویس پیامک هنوز تنظیم نشده است", "SMS service is not configured yet")
+              : tr("ارسال کد ناموفق بود", "Failed to send code");
+        setMsg(m);
         return;
       }
-      if (d.devCode) setDevCode(d.devCode);
       setStep("otp");
       setMsg(tr("کد تأیید برای شما پیامک شد", "A verification code was sent to you"));
     } catch {
@@ -104,15 +108,10 @@ export default function LoginPage() {
               className="rounded-[12px] px-4 py-3.5 text-center text-[22px] font-bold tracking-[0.5em] outline-none"
               style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}
             />
-            {devCode && (
-              <div className="rounded-[10px] p-2.5 text-center text-[12.5px]" style={{ background: "var(--surface2)", color: "var(--muted)" }}>
-                {tr("حالت تست (پیامک تنظیم نشده): کد", "Test mode (SMS not configured): code")} <b style={{ color: "var(--accent)" }}>{devCode}</b>
-              </div>
-            )}
             <button onClick={verify} disabled={loading} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[12px] border-none py-3.5 text-[15px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
               <Check size={18} /> {loading ? tr("در حال بررسی…", "Verifying…") : tr("ورود", "Sign in")}
             </button>
-            <button onClick={() => { setStep("mobile"); setCode(""); setMsg(""); setDevCode(""); }} className="inline-flex cursor-pointer items-center justify-center gap-1.5 border-none bg-transparent text-[13px] font-bold" style={{ color: "var(--accent)" }}>
+            <button onClick={() => { setStep("mobile"); setCode(""); setMsg(""); }} className="inline-flex cursor-pointer items-center justify-center gap-1.5 border-none bg-transparent text-[13px] font-bold" style={{ color: "var(--accent)" }}>
               <ArrowBack size={15} /> {tr("ویرایش شماره", "Change number")}
             </button>
           </div>
