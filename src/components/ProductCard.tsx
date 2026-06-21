@@ -1,0 +1,130 @@
+"use client";
+
+import type { Product } from "@/lib/types";
+import { useShop } from "@/lib/store";
+import { grad, priceFmt, num } from "@/lib/format";
+import { LocaleLink } from "./LocaleLink";
+import { Heart } from "./Icons";
+
+export function ProductCard({
+  p,
+  aiMatch,
+  reason,
+}: {
+  p: Product;
+  aiMatch?: number;
+  reason?: string;
+}) {
+  const { locale, t, dark, addToCart, toggleWish, wishlist } = useShop();
+  const name = locale === "fa" ? p.fa : p.en;
+  const disc = p.old ? Math.round((1 - p.price / p.old) * 100) : 0;
+  const wished = wishlist.includes(p.id);
+  const badge = p.badge ? (locale === "fa" ? p.badge[0] : p.badge[1]) : null;
+
+  return (
+    <div
+      className="card-hover flex flex-col overflow-hidden"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius)",
+      }}
+    >
+      <div className="relative">
+        <LocaleLink
+          href={`/product/${p.id}`}
+          className="flex h-[170px] items-center justify-center text-[46px] font-extrabold no-underline"
+          style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
+        >
+          {name.charAt(0)}
+        </LocaleLink>
+        {aiMatch != null && (
+          <span
+            className="absolute top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold text-white"
+            style={{ insetInlineStart: 12, background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)" }}
+          >
+            ✨ {num(aiMatch, locale)}٪ {t.aiMatchWord}
+          </span>
+        )}
+        {badge && aiMatch == null && (
+          <span
+            className="absolute top-3 rounded-full px-2.5 py-1 text-[11px] font-extrabold"
+            style={{ insetInlineStart: 12, background: "var(--text)", color: "var(--surface)" }}
+          >
+            {badge}
+          </span>
+        )}
+        {disc > 0 && (
+          <span
+            className="absolute top-3 rounded-md px-2 py-1 text-[11.5px] font-extrabold text-white"
+            style={{ insetInlineEnd: 12, background: "#e11d48" }}
+          >
+            {num(disc, locale)}٪-
+          </span>
+        )}
+        <button
+          onClick={() => toggleWish(p.id)}
+          aria-label={t.addToWishlist}
+          className="absolute bottom-3 flex h-[38px] w-[38px] items-center justify-center rounded-full border-none"
+          style={{
+            insetInlineEnd: 12,
+            background: "var(--surface)",
+            color: wished ? "#e11d48" : "var(--muted)",
+            boxShadow: "0 4px 12px rgba(0,0,0,.12)",
+            cursor: "pointer",
+          }}
+        >
+          <Heart size={18} fill={wished ? "#e11d48" : "none"} />
+        </button>
+      </div>
+
+      <div className="flex flex-1 flex-col p-[15px]">
+        {reason && (
+          <div
+            className="mb-2.5 flex items-center gap-1.5 rounded-lg px-2.5 py-[7px]"
+            style={{ background: "var(--surface2)" }}
+          >
+            <span>🤖</span>
+            <span className="text-[11.5px] font-semibold leading-snug" style={{ color: "var(--muted)" }}>
+              {reason}
+            </span>
+          </div>
+        )}
+        <div className="text-[12px]" style={{ color: "var(--accent)" }}>
+          {p.brand}
+        </div>
+        <LocaleLink
+          href={`/product/${p.id}`}
+          className="mt-1 min-h-[38px] text-[14px] font-bold leading-snug no-underline"
+          style={{ color: "var(--text)" }}
+        >
+          {name}
+        </LocaleLink>
+        <div className="mt-1 text-[13px]" style={{ color: "#f59e0b", letterSpacing: 2 }}>
+          {"★★★★★".slice(0, Math.round(p.rating))}
+          <span style={{ color: "var(--muted)" }} className="text-[12px]">
+            {" "}
+            ({num(p.reviews, locale)})
+          </span>
+        </div>
+        <div className="mb-3 mt-1.5 flex items-center gap-2">
+          <span className="text-[16px] font-extrabold" style={{ color: "var(--accent)" }}>
+            {priceFmt(p.price, locale, t.currency)}
+          </span>
+          {p.old && (
+            <span className="text-[13px] line-through" style={{ color: "var(--muted)" }}>
+              {num(p.old, locale)}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => addToCart(p.id)}
+          className="add-btn mt-auto w-full cursor-pointer rounded-[10px] border p-2.5 text-[13px] font-bold transition"
+          style={{ background: "var(--surface2)", color: "var(--text)", borderColor: "var(--border)" }}
+        >
+          {t.addToCart}
+        </button>
+      </div>
+    </div>
+  );
+}
