@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
 import { PRODUCTS } from "@/data/products";
 import { CATEGORIES, catById } from "@/data/categories";
@@ -913,6 +913,36 @@ function Settings() {
 
   const [maintenance, setMaintenance] = useState(false);
 
+  // IPPanel SMS settings (read from server env, masked)
+  type SmsCfg = { configured: boolean; from: string; patternCode: string; otpVar: string; apiKeyMasked: string };
+  const [sms, setSms] = useState<SmsCfg | null>(null);
+  const [testMobile, setTestMobile] = useState("");
+  const [smsBusy, setSmsBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/sms/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.config && setSms(d.config))
+      .catch(() => {});
+  }, []);
+
+  const sendTest = async () => {
+    setSmsBusy(true);
+    try {
+      const r = await fetch("/api/sms/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mobile: testMobile }),
+      });
+      const d = await r.json();
+      toast(d.ok ? (fa ? "پیامک تست ارسال شد ✓" : "Test SMS sent ✓") : (fa ? "ارسال ناموفق: " : "Failed: ") + (d.error || ""));
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setSmsBusy(false);
+    }
+  };
+
   return (
     <>
       <H1>{t.aSettings}</H1>
@@ -1031,6 +1061,74 @@ function Settings() {
             >
               {fa ? "ذخیره تنظیمات" : "Save settings"}
             </button>
+          </div>
+        </Card>
+
+        {/* SMS settings (IPPanel) */}
+        <Card className="p-5 lg:col-span-2">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[15px] font-extrabold">{fa ? "تنظیمات پیامک (IPPanel)" : "SMS settings (IPPanel)"}</h2>
+            <span
+              className="rounded-full px-3 py-1 text-[11.5px] font-extrabold"
+              style={{
+                background: sms?.configured ? "rgba(31,138,91,.15)" : "rgba(225,29,72,.12)",
+                color: sms?.configured ? "#1f8a5b" : "#e11d48",
+              }}
+            >
+              {sms?.configured ? (fa ? "متصل و فعال" : "Connected") : fa ? "تنظیم نشده" : "Not configured"}
+            </span>
+          </div>
+
+          <p className="mb-4 text-[12.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
+            {fa
+              ? "اعتبارهای IPPanel از متغیرهای محیطی سرور خوانده می‌شوند (IPPANEL_API_KEY، IPPANEL_FROM، IPPANEL_PATTERN_CODE، IPPANEL_OTP_VAR). از طریق الگوی پیامکی، کد تأیید ورود برای کاربران ارسال می‌شود."
+              : "IPPanel credentials are read from server environment variables (IPPANEL_API_KEY, IPPANEL_FROM, IPPANEL_PATTERN_CODE, IPPANEL_OTP_VAR). Login OTP codes are sent via the SMS pattern."}
+          </p>
+
+          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              {lbl(fa ? "کلید API" : "API key")}
+              <input className={inputCls} style={inputStyle} value={sms?.apiKeyMasked || "—"} readOnly dir="ltr" />
+            </div>
+            <div>
+              {lbl(fa ? "شماره فرستنده" : "Sender (from)")}
+              <input className={inputCls} style={inputStyle} value={sms?.from || "—"} readOnly dir="ltr" />
+            </div>
+            <div>
+              {lbl(fa ? "کد الگو (Pattern)" : "Pattern code")}
+              <input className={inputCls} style={inputStyle} value={sms?.patternCode || "—"} readOnly dir="ltr" />
+            </div>
+            <div>
+              {lbl(fa ? "نام متغیر کد" : "OTP variable")}
+              <input className={inputCls} style={inputStyle} value={sms?.otpVar || "code"} readOnly dir="ltr" />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <div className="flex-1" style={{ minWidth: 220 }}>
+              {lbl(fa ? "ارسال پیامک تست به شماره" : "Send test SMS to")}
+              <input
+                className={inputCls}
+                style={inputStyle}
+                value={testMobile}
+                onChange={(e) => setTestMobile(e.target.value)}
+                placeholder="0912xxxxxxx"
+                dir="ltr"
+              />
+            </div>
+            <button
+              onClick={sendTest}
+              disabled={smsBusy || !sms?.configured}
+              className="cursor-pointer rounded-[12px] border-none px-5 py-3 text-[14px] font-extrabold text-white disabled:opacity-50"
+              style={{ background: "var(--accent)" }}
+            >
+              {smsBusy ? (fa ? "در حال ارسال…" : "Sending…") : fa ? "ارسال تست" : "Send test"}
+            </button>
+          </div>
+
+          <div className="mt-4 rounded-[10px] px-3 py-2.5 text-[12.5px]" style={inputStyle}>
+            <span style={{ color: "var(--muted)" }}>{fa ? "شمارهٔ سوپرادمین: " : "Super admin: "}</span>
+            <span className="font-bold" dir="ltr">{process.env.NEXT_PUBLIC_SUPER_ADMIN || "0912•••2184"}</span>
           </div>
         </Card>
       </div>
