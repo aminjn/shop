@@ -44,6 +44,8 @@ export interface StoreSettings {
   storeName?: string;
   currencyFa?: string;
   currencyEn?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
   shipFee?: number;
   freeShipThreshold?: number;
   taxRate?: number; // percent
@@ -54,6 +56,8 @@ export const STORE_DEFAULTS: Required<StoreSettings> = {
   storeName: "",
   currencyFa: "",
   currencyEn: "",
+  logoUrl: "",
+  faviconUrl: "",
   shipFee: 50000,
   freeShipThreshold: 2000000,
   taxRate: 9,

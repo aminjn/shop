@@ -45,6 +45,7 @@ export function Header() {
     compare,
     setChatOpen,
     products,
+    logoUrl,
   } = useShop();
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
@@ -111,12 +112,17 @@ export function Header() {
       {/* main row */}
       <div className="mx-auto flex max-w-[1280px] items-center gap-[22px] px-[22px] py-3.5">
         <LocaleLink href="/" className="flex items-center gap-[11px] no-underline" style={{ color: "var(--text)" }}>
-          <span
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-[11px] text-[20px] font-extrabold text-white"
-            style={{ background: "var(--accent)" }}
-          >
-            {storeName.charAt(0)}
-          </span>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={storeName} className="h-[38px] w-[38px] rounded-[11px] object-cover" />
+          ) : (
+            <span
+              className="flex h-[38px] w-[38px] items-center justify-center rounded-[11px] text-[20px] font-extrabold text-white"
+              style={{ background: "var(--accent)" }}
+            >
+              {storeName.charAt(0)}
+            </span>
+          )}
           <span className="text-[21px] font-extrabold tracking-tight">{storeName}</span>
         </LocaleLink>
 

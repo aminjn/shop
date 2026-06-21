@@ -5,6 +5,7 @@ import { useShop } from "@/lib/store";
 import { num, priceFmt, grad } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { LogoutButton } from "@/components/LogoutButton";
+import { ProductCard } from "@/components/ProductCard";
 import {
   User, Cart, Heart, Download, Plus, Check, Send, Sparkle, Close,
 } from "@/components/Icons";
@@ -28,8 +29,10 @@ interface UserData {
 }
 
 type Section =
-  | "dashboard" | "orders" | "wallet" | "addresses"
+  | "dashboard" | "assistant" | "orders" | "wallet" | "addresses"
   | "wishlist" | "tickets" | "notifications" | "loyalty" | "profile";
+
+interface Rec { id: number; reason: string }
 
 const TIERS = [
   { key: "bronze", fa: "برنزی", en: "Bronze", min: 0 },
@@ -86,6 +89,7 @@ export default function AccountPage() {
 
   const NAV: { id: Section; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: "dashboard", label: t.dashboard, icon: <User size={17} /> },
+    { id: "assistant", label: fa ? "دستیار هوشمند" : "AI assistant", icon: <Sparkle size={17} /> },
     { id: "orders", label: t.orders, icon: <Cart size={17} />, badge: data.orders.length },
     { id: "wallet", label: t.wallet, icon: <Download size={17} /> },
     { id: "addresses", label: t.addresses, icon: <Plus size={17} /> },
@@ -144,6 +148,25 @@ export default function AccountPage() {
             <span>• {t.walletBalance}: {priceFmt(data!.wallet.balance, locale, t.currency)}</span>
           </div>
         </div>
+
+        {/* AI assistant CTA — prominent */}
+        <button
+          onClick={() => setSection("assistant")}
+          className="mb-5 flex w-full cursor-pointer items-center gap-4 rounded-[16px] border-none p-5 text-start text-white"
+          style={{ background: grad(265, dark) }}
+        >
+          <span className="flex h-12 w-12 flex-none items-center justify-center rounded-[14px]" style={{ background: "rgba(255,255,255,.2)" }}>
+            <Sparkle size={24} />
+          </span>
+          <span className="flex-1">
+            <span className="block text-[16px] font-extrabold">{fa ? "دستیار هوشمند خرید شما" : "Your AI shopping assistant"}</span>
+            <span className="block text-[13px] opacity-90">{fa ? "بپرس «سفارشم کجاست؟» یا «چی برام پیشنهاد می‌دی؟»" : "Ask “where is my order?” or “what do you recommend?”"}</span>
+          </span>
+          <span className="rounded-full px-4 py-2 text-[13px] font-extrabold" style={{ background: "#fff", color: "#111" }}>{fa ? "گفتگو" : "Chat"}</span>
+        </button>
+
+        <SmartPicks />
+
         <div className="mb-5 grid grid-cols-2 gap-3.5 md:grid-cols-4">
           <Stat label={t.orders} value={num(data!.orders.length, locale)} />
           <Stat label={t.walletBalance} value={priceFmt(data!.wallet.balance, locale, t.currency)} />
@@ -169,6 +192,99 @@ export default function AccountPage() {
               ))}
             </div>
           )}
+        </div>
+      </>
+    );
+  }
+
+  function SmartPicks() {
+    const [recs, setRecs] = useState<Rec[]>([]);
+    useEffect(() => {
+      fetch("/api/account/recommend")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => Array.isArray(d?.recommendations) && setRecs(d.recommendations))
+        .catch(() => {});
+    }, []);
+    if (recs.length === 0) return null;
+    return (
+      <div className="mb-5">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg text-white" style={{ background: "var(--accent)" }}><Sparkle size={15} /></span>
+          <h2 className="text-[15px] font-extrabold">{fa ? "پیشنهادهای هوشمند برای شما" : "AI picks for you"}</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
+          {recs.map((r, i) => {
+            const p = productById(r.id);
+            return p ? <ProductCard key={r.id} p={p} reason={r.reason} aiMatch={94 - i * 2} /> : null;
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function Assistant() {
+    const [msgs, setMsgs] = useState<{ role: "user" | "assistant"; content: string }[]>([
+      { role: "assistant", content: fa ? `سلام ${fullName}! من دستیار هوشمند خرید تو هستم. می‌تونم وضعیت سفارش‌ها رو بگم، محصول پیشنهاد بدم و به سوال‌هات جواب بدم.` : `Hi ${fullName}! I'm your AI shopping assistant.` },
+    ]);
+    const [input, setInput] = useState("");
+    const [loading, setLoading] = useState(false);
+    const chips = fa
+      ? ["سفارشم کجاست؟", "چی برام پیشنهاد می‌دی؟", "موجودی کیف پولم چقدره؟", "بهترین تخفیف‌ها"]
+      : ["Where is my order?", "What do you recommend?", "My wallet balance?", "Best deals"];
+
+    const send = async (text?: string) => {
+      const content = (text ?? input).trim();
+      if (!content || loading) return;
+      const next = [...msgs, { role: "user" as const, content }];
+      setMsgs(next);
+      setInput("");
+      setLoading(true);
+      try {
+        const r = await fetch("/api/account/assistant", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ messages: next }),
+        });
+        const d = await r.json();
+        setMsgs((m) => [...m, { role: "assistant", content: d.reply || (fa ? "متاسفم، دوباره تلاش کن." : "Sorry, try again.") }]);
+      } catch {
+        setMsgs((m) => [...m, { role: "assistant", content: fa ? "خطای شبکه" : "Network error" }]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <>
+        <div className="mb-4 flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-[14px] text-white" style={{ background: grad(265, dark) }}><Sparkle size={22} /></span>
+          <div>
+            <h1 className="text-[20px] font-extrabold tracking-tight">{fa ? "دستیار هوشمند" : "AI assistant"}</h1>
+            <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>{fa ? "شخصی‌سازی‌شده بر اساس سفارش‌ها و حساب شما" : "Personalized to your orders & account"}</div>
+          </div>
+        </div>
+
+        <div className="flex flex-col" style={{ ...card, height: 520 }}>
+          <div className="scrollthin flex-1 space-y-2.5 overflow-auto p-4">
+            {msgs.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className="max-w-[80%] whitespace-pre-wrap rounded-[14px] px-3.5 py-2.5 text-[13.5px] leading-relaxed"
+                  style={m.role === "user" ? { background: "var(--accent)", color: "#fff" } : { background: "var(--surface2)", color: "var(--text)" }}>
+                  {m.content}
+                </div>
+              </div>
+            ))}
+            {loading && <div className="text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "در حال فکر کردن…" : "Thinking…"}</div>}
+          </div>
+          <div className="flex flex-wrap gap-2 px-4 pb-2">
+            {chips.map((c) => (
+              <button key={c} onClick={() => send(c)} className="cursor-pointer rounded-full px-3 py-1.5 text-[12px] font-semibold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{c}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 p-3" style={{ borderTop: "1px solid var(--border)" }}>
+            <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={fa ? "سوالت را بنویس…" : "Type your question…"} className="flex-1 rounded-[10px] px-3 py-2.5 text-[14px] outline-none" style={inputStyle} />
+            <button onClick={() => send()} aria-label="send" className="flex h-[42px] w-[42px] items-center justify-center rounded-[10px] border-none text-white" style={{ background: "var(--accent)", cursor: "pointer" }}><Send size={18} /></button>
+          </div>
         </div>
       </>
     );
@@ -477,6 +593,7 @@ export default function AccountPage() {
       {/* content */}
       <section className="min-w-0">
         {section === "dashboard" && <Dashboard />}
+        {section === "assistant" && <Assistant />}
         {section === "orders" && <Orders />}
         {section === "wallet" && <Wallet />}
         {section === "addresses" && <Addresses />}

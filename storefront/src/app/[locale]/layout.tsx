@@ -4,6 +4,7 @@ import "../globals.css";
 import { notFound } from "next/navigation";
 import { isLocale, locales, dir } from "@/i18n/config";
 import { getDict } from "@/i18n/dictionaries";
+import { readStore } from "@/lib/settings";
 import type { Locale } from "@/lib/types";
 import { ShopProvider } from "@/lib/store";
 import { Header } from "@/components/Header";
@@ -29,22 +30,20 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const t = getDict((isLocale(locale) ? locale : "fa") as Locale);
+  const loc = (isLocale(locale) ? locale : "fa") as Locale;
+  const t = getDict(loc);
+  const store = readStore();
+  const name = store.storeName || t.storeName;
   return {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://example.com"),
     title: {
-      default: `${t.storeName} — ${t.heroTitle}`,
-      template: `%s | ${t.storeName}`,
+      default: `${name} — ${t.heroTitle}`,
+      template: `%s | ${name}`,
     },
     description: t.heroSub,
-    openGraph: {
-      title: t.storeName,
-      description: t.heroSub,
-      type: "website",
-    },
-    alternates: {
-      languages: { fa: "/fa", en: "/en" },
-    },
+    openGraph: { title: name, description: t.heroSub, type: "website" },
+    alternates: { languages: { fa: "/fa", en: "/en" } },
+    ...(store.faviconUrl ? { icons: { icon: store.faviconUrl } } : {}),
   };
 }
 
