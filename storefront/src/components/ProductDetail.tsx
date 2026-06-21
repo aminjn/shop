@@ -7,6 +7,7 @@ import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
 import { grad, priceFmt, num } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
+import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
 import { Sparkle, Heart, Play, Download, Plus, Minus, ArrowBack } from "./Icons";
 
@@ -206,9 +207,7 @@ export function ProductDetail({ id }: { id: number }) {
             </div>
           )}
           {tab === "reviews" && (
-            <div className="text-[14px]" style={{ color: "var(--muted)" }}>
-              {locale === "fa" ? `${num(p.reviews, locale)} نظر ثبت‌شده با میانگین امتیاز ${num(p.rating, locale)} از ۵.` : `${num(p.reviews, locale)} reviews with an average rating of ${num(p.rating, locale)} / 5.`}
-            </div>
+            <ProductReviews productId={p.id} fallbackRating={p.rating} fallbackCount={p.reviews} />
           )}
         </div>
       </div>

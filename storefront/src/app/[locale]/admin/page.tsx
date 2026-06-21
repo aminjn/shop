@@ -1098,59 +1098,117 @@ function Discounts() {
   );
 }
 
-/* ---------- reviews (read-only product ratings) ---------- */
+/* ---------- reviews (full moderation) ---------- */
+
+interface AdminReview {
+  id: number;
+  productId: number;
+  author: string;
+  mobile?: string;
+  rating: number;
+  text: string;
+  date: string;
+  status: "pending" | "approved" | "rejected";
+  reply?: string;
+}
 
 function Reviews({ products }: { products: Product[] }) {
-  const { locale, t, dark } = useShop();
+  const { locale, dark, toast } = useShop();
   const fa = locale === "fa";
+  const [reviews, setReviews] = useState<AdminReview[]>([]);
+  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+  const prodMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
-  const stars = (r: number) => {
-    const full = Math.round(r);
-    return "★★★★★".slice(0, full) + "☆☆☆☆☆".slice(0, 5 - full);
+  const load = () =>
+    fetch("/api/admin/reviews")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.reviews) && setReviews(d.reviews))
+      .catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const act = async (id: number, action: string, reply?: string) => {
+    const r = await fetch("/api/admin/reviews", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, action, reply }) });
+    const d = await r.json().catch(() => ({}));
+    if (d.ok) { setReviews(d.reviews); toast(fa ? "انجام شد ✓" : "Done ✓"); }
+    else toast(fa ? "خطا" : "Error");
+  };
+  const reply = (id: number, cur?: string) => {
+    const v = window.prompt(fa ? "پاسخ فروشگاه به این نظر:" : "Store reply:", cur || "");
+    if (v !== null) act(id, "reply", v.trim());
   };
 
-  const rated = [...products].sort((a, b) => b.rating - a.rating);
+  const counts = {
+    all: reviews.length,
+    pending: reviews.filter((r) => r.status === "pending").length,
+    approved: reviews.filter((r) => r.status === "approved").length,
+    rejected: reviews.filter((r) => r.status === "rejected").length,
+  };
+  const shown = reviews.filter((r) => filter === "all" || r.status === filter);
+
+  const stars = (n: number) => "★★★★★".slice(0, Math.round(n)) + "☆☆☆☆☆".slice(0, 5 - Math.round(n));
+  const badge = (st: AdminReview["status"]) => {
+    const map = {
+      approved: ["#1f8a5b", "rgba(31,138,91,.15)", fa ? "تأییدشده" : "Approved"],
+      pending: ["#d97706", "rgba(217,119,6,.12)", fa ? "در انتظار" : "Pending"],
+      rejected: ["#e11d48", "rgba(225,29,72,.12)", fa ? "ردشده" : "Rejected"],
+    } as const;
+    const [c, bg, l] = map[st];
+    return <span className="rounded-full px-2.5 py-1 text-[11.5px] font-extrabold" style={{ color: c, background: bg }}>{l}</span>;
+  };
+  const tabs: [typeof filter, string][] = [
+    ["pending", fa ? "در انتظار" : "Pending"],
+    ["approved", fa ? "تأییدشده" : "Approved"],
+    ["rejected", fa ? "ردشده" : "Rejected"],
+    ["all", fa ? "همه" : "All"],
+  ];
 
   return (
     <>
-      <H1>{fa ? "امتیاز و نظرات محصولات" : "Product ratings"}</H1>
-      {rated.length === 0 ? (
-        <Empty text={fa ? "محصولی برای نمایش نیست." : "No products to show."} />
+      <H1>{fa ? "نظرات مشتریان" : "Customer reviews"}</H1>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {tabs.map(([k, label]) => (
+          <button key={k} onClick={() => setFilter(k)} className="cursor-pointer rounded-[10px] px-4 py-2 text-[13px] font-bold" style={filter === k ? { background: "var(--accent)", color: "#fff", border: "none" } : { ...inputStyle }}>
+            {label} <span style={{ opacity: 0.7 }}>({num(counts[k], locale)})</span>
+          </button>
+        ))}
+      </div>
+      {shown.length === 0 ? (
+        <Empty text={fa ? "نظری در این بخش نیست." : "No reviews here."} />
       ) : (
-        <Table
-          head={[
-            t.thProduct,
-            fa ? "امتیاز" : "Rating",
-            fa ? "تعداد نظرات" : "Reviews",
-          ]}
-        >
-          {rated.map((p) => (
-            <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[13px] font-extrabold"
-                    style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
-                  >
-                    {(fa ? p.fa : p.en).charAt(0)}
+        <div className="flex flex-col gap-3">
+          {shown.map((r) => {
+            const p = prodMap.get(r.productId);
+            return (
+              <div key={r.id} className="p-4" style={{ ...cardStyle, borderRadius: 14 }}>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[13px] font-extrabold" style={{ background: grad(p?.hue ?? 200, dark), color: "rgba(255,255,255,.6)" }}>
+                    {p ? (fa ? p.fa : p.en).charAt(0) : "?"}
                   </span>
-                  <span className="text-[13px] font-bold">{fa ? p.fa : p.en}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-bold">{p ? (fa ? p.fa : p.en) : `#${r.productId}`}</div>
+                    <div className="text-[12px]" style={{ color: "var(--muted)" }}>
+                      {r.author} • {formatDate(r.date, locale, { year: "numeric", month: "short", day: "numeric" })}
+                    </div>
+                  </div>
+                  <span className="text-[14px]" style={{ color: "#d97706", letterSpacing: 1 }}>{stars(r.rating)}</span>
+                  {badge(r.status)}
                 </div>
-              </td>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                <span className="text-[13px]" style={{ color: "#d97706" }}>
-                  {stars(p.rating)}
-                </span>{" "}
-                <span style={{ color: "var(--muted)" }}>
-                  {num(Math.round(p.rating * 10) / 10, locale)}
-                </span>
-              </td>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                {num(p.reviews, locale)}
-              </td>
-            </tr>
-          ))}
-        </Table>
+                <p className="mt-2.5 text-[13.5px] leading-relaxed" style={{ color: "var(--text)", textAlign: "start" }}>{r.text}</p>
+                {r.reply && (
+                  <div className="mt-2 rounded-[10px] p-2.5 text-[12.5px]" style={{ background: "var(--surface2)", color: "var(--text)" }}>
+                    <b style={{ color: "var(--accent)" }}>{fa ? "پاسخ فروشگاه: " : "Reply: "}</b>{r.reply}
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {r.status !== "approved" && <button onClick={() => act(r.id, "approve")} className="cursor-pointer rounded-[9px] border-none px-3 py-1.5 text-[12.5px] font-bold text-white" style={{ background: "#1f8a5b" }}>{fa ? "تأیید" : "Approve"}</button>}
+                  {r.status !== "rejected" && <button onClick={() => act(r.id, "reject")} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ ...inputStyle, color: "#e11d48" }}>{fa ? "رد" : "Reject"}</button>}
+                  <button onClick={() => reply(r.id, r.reply)} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={inputStyle}>{fa ? "پاسخ" : "Reply"}</button>
+                  <button onClick={() => act(r.id, "delete")} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ ...inputStyle, color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </>
   );
