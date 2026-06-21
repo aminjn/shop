@@ -69,6 +69,8 @@ type StoreSettings = {
   storeName: string;
   currencyFa: string;
   currencyEn: string;
+  logoUrl: string;
+  faviconUrl: string;
   shipFee: number;
   freeShipThreshold: number;
   taxRate: number;
@@ -1421,6 +1423,8 @@ function Settings() {
     storeName: "",
     currencyFa: "",
     currencyEn: "",
+    logoUrl: "",
+    faviconUrl: "",
     shipFee: 0,
     freeShipThreshold: 0,
     taxRate: 0,
@@ -1654,6 +1658,32 @@ function Settings() {
                   placeholder="Toman"
                   dir="ltr"
                 />
+              </div>
+              <div className="sm:col-span-2">
+                {lbl(fa ? "آدرس لوگو (URL تصویر)" : "Logo image URL")}
+                <input
+                  className={inputCls}
+                  style={inputStyle}
+                  value={store.logoUrl}
+                  onChange={(e) => setS("logoUrl", e.target.value)}
+                  placeholder="https://…/logo.png"
+                  dir="ltr"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                {lbl(fa ? "آدرس فاوآیکون (favicon URL)" : "Favicon URL")}
+                <input
+                  className={inputCls}
+                  style={inputStyle}
+                  value={store.faviconUrl}
+                  onChange={(e) => setS("faviconUrl", e.target.value)}
+                  placeholder="https://…/favicon.ico"
+                  dir="ltr"
+                />
+                {store.faviconUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={store.faviconUrl} alt="favicon" className="mt-2 h-8 w-8 rounded" />
+                ) : null}
               </div>
               <div>
                 {lbl(fa ? "هزینه ارسال پایه" : "Base shipping fee")}

@@ -20,6 +20,8 @@ export async function POST(req: Request) {
     storeName: String(b.storeName ?? cur.storeName).slice(0, 80),
     currencyFa: String(b.currencyFa ?? cur.currencyFa).slice(0, 20),
     currencyEn: String(b.currencyEn ?? cur.currencyEn).slice(0, 20),
+    logoUrl: String(b.logoUrl ?? cur.logoUrl).slice(0, 500),
+    faviconUrl: String(b.faviconUrl ?? cur.faviconUrl).slice(0, 500),
     shipFee: num(b.shipFee, cur.shipFee),
     freeShipThreshold: num(b.freeShipThreshold, cur.freeShipThreshold),
     taxRate: num(b.taxRate, cur.taxRate),

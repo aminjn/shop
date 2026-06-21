@@ -51,6 +51,8 @@ interface ShopState {
   // live catalog (defaults to the seed, refreshed from /api/products)
   products: Product[];
   productById: (id: number) => Product | undefined;
+  // store branding
+  logoUrl: string;
 }
 
 const Ctx = createContext<ShopState | null>(null);
@@ -83,8 +85,15 @@ export function ShopProvider({
   defaultRoundness?: Roundness;
   children: React.ReactNode;
 }) {
-  const t = getDict(locale);
   const dir = (locale === "fa" ? "rtl" : "ltr") as "rtl" | "ltr";
+  const [brand, setBrand] = useState<{ storeName?: string; currencyFa?: string; currencyEn?: string; logoUrl?: string; faviconUrl?: string }>({});
+  const t = useMemo(() => {
+    const base = getDict(locale);
+    const currency = (locale === "fa" ? brand.currencyFa : brand.currencyEn) || base.currency;
+    const storeName = brand.storeName || base.storeName;
+    return { ...base, storeName, currency } as Dict;
+  }, [locale, brand]);
+  const logoUrl = brand.logoUrl || "";
 
   const [mounted, setMounted] = useState(false);
   const [dark, setDark] = useState(false);
@@ -113,6 +122,17 @@ export function ShopProvider({
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => Array.isArray(d?.products) && d.products.length && setProducts(d.products))
       .catch(() => {});
+    // apply store branding (name / currency / logo) saved in admin
+    fetch("/api/settings/store")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.settings && setBrand({
+        storeName: d.settings.storeName,
+        currencyFa: d.settings.currencyFa,
+        currencyEn: d.settings.currencyEn,
+        logoUrl: d.settings.logoUrl,
+        faviconUrl: d.settings.faviconUrl,
+      }))
+      .catch(() => {});
   }, [accentColor, defaultRoundness]);
 
   // reflect theme on <html> for SSR-safe theming via CSS vars
@@ -123,6 +143,28 @@ export function ShopProvider({
     root.style.setProperty("--accent", accent);
     root.style.setProperty("--radius", ROUNDNESS[roundness]);
   }, [dark, accent, roundness, mounted]);
+
+  // live-apply favicon set in admin (pages are prerendered, so do it client-side)
+  useEffect(() => {
+    if (!brand.faviconUrl) return;
+    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = brand.faviconUrl;
+  }, [brand.faviconUrl]);
+
+  // keep the document title in sync with the store name on the client
+  useEffect(() => {
+    if (brand.storeName) {
+      const base = getDict(locale);
+      if (!document.title || document.title.includes(base.storeName)) {
+        document.title = document.title.replace(base.storeName, brand.storeName) || brand.storeName;
+      }
+    }
+  }, [brand.storeName, locale]);
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -255,6 +297,7 @@ export function ShopProvider({
     setChatOpen,
     products,
     productById: (id: number) => products.find((p) => p.id === id),
+    logoUrl,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
