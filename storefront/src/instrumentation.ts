@@ -1,13 +1,16 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { getAllPosts } = await import("@/lib/posts");
-    // auto-publish scheduled posts whose time has arrived (every 60s)
+    const { getAllPosts, processQueue } = await import("@/lib/posts");
+    // every 20s: auto-publish due posts + generate one queued article
     setInterval(() => {
-      try {
-        getAllPosts();
-      } catch {
-        /* ignore */
-      }
-    }, 60_000);
+      (async () => {
+        try {
+          getAllPosts();
+          await processQueue();
+        } catch {
+          /* ignore */
+        }
+      })();
+    }, 20_000);
   }
 }

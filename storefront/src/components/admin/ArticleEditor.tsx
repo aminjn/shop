@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/format";
 import { renderMarkdown } from "@/lib/markdown";
 import { UploadButton } from "@/components/UploadButton";
 import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
+import { JALALI_MONTHS, jalaliMonthLength, jalaliYearNow, toGregorian } from "@/lib/jalali";
 import { Sparkle, Plus, Trash } from "@/components/Icons";
 
 interface PostRow {
@@ -20,9 +21,22 @@ interface PostRow {
   status: string;
   publishAt?: string;
   date: string;
+  genError?: string;
 }
 
-const blank = { id: 0 as number, title: "", slug: "", catFa: "", tags: "", cover: "", excerpt: "", body: "" };
+const blank = {
+  id: 0 as number, title: "", slug: "", catFa: "", tags: "", cover: "", excerpt: "", body: "",
+  keyword: "", seoTitle: "", metaDesc: "",
+};
+
+const LENGTHS = [
+  { v: 600, fa: "کوتاه (~۶۰۰ کلمه)" },
+  { v: 1200, fa: "متوسط (~۱۲۰۰ کلمه)" },
+  { v: 2000, fa: "بلند (~۲۰۰۰ کلمه)" },
+  { v: 3000, fa: "خیلی بلند (~۳۰۰۰ کلمه)" },
+];
+
+const faNum = (n: number) => n.toLocaleString("fa-IR", { useGrouping: false });
 
 export function ArticleEditor() {
   const { locale, toast } = useShop();
@@ -31,16 +45,17 @@ export function ArticleEditor() {
   const inputStyle = { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" } as const;
   const inputCls = "w-full rounded-[10px] px-3 py-2.5 text-[14px] outline-none";
 
+  const [tab, setTab] = useState<"editor" | "bulk">("editor");
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [form, setForm] = useState({ ...blank });
   const [editing, setEditing] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
-  const [minChars, setMinChars] = useState(2500);
+  const [aiWords, setAiWords] = useState(1200);
   const [tone, setTone] = useState("");
-  const [aiBusy, setAiBusy] = useState(false);
-  const [expandBusy, setExpandBusy] = useState(false);
+  const [busy, setBusy] = useState("");
   const [saving, setSaving] = useState(false);
   const [publishAt, setPublishAt] = useState("");
+  const [titleSug, setTitleSug] = useState<string[]>([]);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = () =>
@@ -53,70 +68,116 @@ export function ArticleEditor() {
   const set = (k: keyof typeof blank, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const slugify = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}-]/gu, "").slice(0, 80);
 
-  const newPost = () => { setForm({ ...blank }); setEditing(false); setPublishAt(""); setAiTopic(""); };
+  const newPost = () => { setForm({ ...blank }); setEditing(false); setPublishAt(""); setAiTopic(""); setTitleSug([]); };
   const editPost = (p: PostRow) => {
-    setForm({ id: p.id, title: p.fa, slug: p.slug, catFa: p.catFa, tags: (p.tags || []).join("، "), cover: p.cover || "", excerpt: p.excerptFa, body: p.bodyFa });
+    setForm({ id: p.id, title: p.fa, slug: p.slug, catFa: p.catFa, tags: (p.tags || []).join("، "), cover: p.cover || "", excerpt: p.excerptFa, body: p.bodyFa, keyword: "", seoTitle: "", metaDesc: "" });
     setEditing(true);
     setPublishAt(p.publishAt || "");
+    setTab("editor");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const genAI = async () => {
-    if (!aiTopic.trim()) { toast(fa ? "موضوع مقاله را وارد کن" : "Enter a topic"); return; }
-    setAiBusy(true);
-    try {
-      const r = await fetch("/api/ai/article", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic: aiTopic.trim(), minChars, tone }),
-      });
-      const d = await r.json();
-      if (d.ok && d.article) {
-        const a = d.article;
-        setForm((f) => ({ ...f, title: a.title || f.title, slug: f.slug || slugify(a.title || ""), excerpt: a.excerpt || "", body: a.body || "", catFa: a.category || f.catFa, tags: Array.isArray(a.tags) ? a.tags.join("، ") : f.tags }));
-        toast(fa ? "مقاله تولید شد ✓" : "Article generated ✓");
-      } else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید گپ‌جی‌پی‌تی و مدل را ذخیره کن" : "AI not configured — save your GapGPT key & model in Settings → AI");
-      else toast(fa ? "تولید ناموفق بود" : "Generation failed");
-    } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setAiBusy(false); }
+  // generic AI helper – surfaces useful errors
+  const ai = async (payload: Record<string, unknown>): Promise<Record<string, unknown> | null> => {
+    const r = await fetch("/api/ai/article", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    const d = await r.json().catch(() => ({}));
+    if (d.ok) return d;
+    if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید و مدل را ذخیره کن" : "AI not configured — set key in Settings → AI");
+    else toast((fa ? "خطای هوش مصنوعی: " : "AI error: ") + (d.detail || d.error || ""));
+    return null;
   };
 
-  const expandBody = async () => {
-    if (!form.body.trim()) { toast(fa ? "ابتدا متنی وارد کن" : "Enter some text first"); return; }
-    setExpandBusy(true);
-    try {
-      const r = await fetch("/api/ai/article", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode: "expand", body: form.body, minChars }),
-      });
-      const d = await r.json();
-      if (d.ok && d.body) { set("body", d.body); toast(fa ? "متن گسترش یافت ✓" : "Expanded ✓"); }
-      else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید گپ‌جی‌پی‌تی و مدل را ذخیره کن" : "AI not configured — save your GapGPT key & model in Settings → AI");
-      else toast(fa ? "گسترش ناموفق بود" : "Expand failed");
-    } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setExpandBusy(false); }
+  const run = async (key: string, fn: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(key);
+    try { await fn(); } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setBusy(""); }
   };
 
+  const genFull = () => run("gen", async () => {
+    const topic = aiTopic.trim() || form.title.trim();
+    if (!topic) { toast(fa ? "موضوع مقاله را وارد کن" : "Enter a topic"); return; }
+    const d = await ai({ action: "generate", topic, words: aiWords, tone, keyword: form.keyword });
+    if (!d) return;
+    const a = d.article as Record<string, unknown>;
+    setForm((f) => ({
+      ...f,
+      title: (a.title as string) || f.title,
+      slug: f.slug || slugify((a.title as string) || ""),
+      excerpt: (a.excerpt as string) || f.excerpt,
+      body: (a.body as string) || "",
+      catFa: (a.category as string) || f.catFa,
+      tags: Array.isArray(a.tags) ? (a.tags as string[]).join("، ") : f.tags,
+      keyword: (a.keyword as string) || f.keyword,
+      seoTitle: (a.seoTitle as string) || f.seoTitle,
+      metaDesc: (a.metaDesc as string) || f.metaDesc,
+    }));
+    toast(fa ? "مقاله تولید شد ✓" : "Article generated ✓");
+  });
+
+  // body transforms (replace whole body)
+  const transform = (action: string, label: string) => run(action, async () => {
+    if (!form.body.trim()) { toast(fa ? "ابتدا متنی وارد کن یا مقاله تولید کن" : "Write or generate first"); return; }
+    const d = await ai({ action, body: form.body, title: form.title, keyword: form.keyword, minChars: action === "expand" ? form.body.length + 2000 : 0 });
+    if (!d) return;
+    set("body", d.body as string);
+    toast(label + " ✓");
+  });
+
+  // snippets (append to body)
+  const snippet = (action: string, label: string) => run(action, async () => {
+    const d = await ai({ action, body: form.body, title: form.title });
+    if (!d) return;
+    set("body", (form.body ? form.body.trimEnd() + "\n\n" : "") + (d.snippet as string));
+    toast(label + " ✓");
+  });
+
+  const genTitles = () => run("titles", async () => {
+    const d = await ai({ action: "titles", title: form.title || aiTopic, body: form.body });
+    if (d) setTitleSug(d.titles as string[]);
+  });
+  const genTags = () => run("tags", async () => {
+    const d = await ai({ action: "tags", title: form.title, body: form.body });
+    if (d) set("tags", (d.tags as string[]).join("، "));
+  });
+  const genMeta = () => run("meta", async () => {
+    const d = await ai({ action: "meta", title: form.title, body: form.body });
+    if (!d) return;
+    const m = d.meta as Record<string, string>;
+    setForm((f) => ({ ...f, excerpt: m.excerpt || f.excerpt, seoTitle: m.seoTitle || f.seoTitle, metaDesc: m.metaDesc || f.metaDesc, keyword: m.keyword || f.keyword }));
+    toast(fa ? "چکیده و متا تولید شد ✓" : "Meta generated ✓");
+  });
+  const genCover = () => run("cover", async () => {
+    if (!form.title.trim()) { toast(fa ? "اول عنوان را بنویس" : "Write a title first"); return; }
+    const r = await fetch("/api/ai/image", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: `تصویر شاخص حرفه‌ای و مرتبط برای مقاله: ${form.title}`, size: "1536x1024" }) });
+    const d = await r.json().catch(() => ({}));
+    if (d.ok && d.url) { set("cover", d.url); toast(fa ? "تصویر شاخص ساخته شد ✓" : "Cover generated ✓"); }
+    else toast((fa ? "خطا: " : "Error: ") + (d.error || ""));
+  });
+
+  // toolbar
   const wrap = (before: string, after = before, block = false) => {
     const el = bodyRef.current; if (!el) return;
     const s = el.selectionStart, e = el.selectionEnd;
     const sel = form.body.slice(s, e) || (fa ? "متن" : "text");
     const ins = block ? `${before}${sel}` : `${before}${sel}${after}`;
-    const next = form.body.slice(0, s) + ins + form.body.slice(e);
-    set("body", next);
+    set("body", form.body.slice(0, s) + ins + form.body.slice(e));
     requestAnimationFrame(() => { el.focus(); el.selectionStart = s + before.length; el.selectionEnd = s + before.length + sel.length; });
   };
-
-  const insertImage = (url: string) => {
+  const insertAt = (text: string) => {
     const el = bodyRef.current;
-    const md = `\n\n![](${url})\n\n`;
-    if (!el) { set("body", form.body + md); toast(fa ? "تصویر درج شد ✓" : "Image inserted ✓"); return; }
+    if (!el) { set("body", form.body + text); return; }
     const s = el.selectionStart;
-    set("body", form.body.slice(0, s) + md + form.body.slice(s));
-    toast(fa ? "تصویر درج شد ✓" : "Image inserted ✓");
+    set("body", form.body.slice(0, s) + text + form.body.slice(s));
   };
-
-  const insertLink = () => {
-    const url = window.prompt(fa ? "آدرس لینک:" : "Link URL:");
-    if (!url) return;
-    wrap("[", `](${url})`);
+  const insertImage = (url: string) => { insertAt(`\n\n![](${url})\n\n`); toast(fa ? "تصویر درج شد ✓" : "Image inserted"); };
+  const insertVideo = () => { const u = window.prompt(fa ? "آدرس ویدئو (یوتیوب/آپارات/mp4):" : "Video URL:"); if (u) insertAt(`\n\n@video(${u.trim()})\n\n`); };
+  const insertLink = () => { const u = window.prompt(fa ? "آدرس لینک:" : "Link URL:"); if (u) wrap("[", `](${u})`); };
+  const clearFmt = () => {
+    const el = bodyRef.current; if (!el) return;
+    const s = el.selectionStart, e = el.selectionEnd;
+    if (s === e) return;
+    const cleaned = form.body.slice(s, e).replace(/^#{1,6}\s+/gm, "").replace(/^>\s?/gm, "").replace(/[*_`]/g, "").replace(/^\s*[-*]\s+/gm, "").replace(/^\s*\d+[.)]\s+/gm, "");
+    set("body", form.body.slice(0, s) + cleaned + form.body.slice(e));
   };
 
   const save = async (status: "draft" | "published" | "scheduled") => {
@@ -133,9 +194,7 @@ export function ArticleEditor() {
         tags: form.tags.split(/[,،]/).map((x) => x.trim()).filter(Boolean),
         cover: form.cover || undefined,
       };
-      const body = editing
-        ? { action: "update", id: form.id, status, publishAt: status === "scheduled" ? new Date(publishAt).toISOString() : undefined, post }
-        : { action: "create", status, publishAt: status === "scheduled" ? new Date(publishAt).toISOString() : undefined, post };
+      const body = { action: editing ? "update" : "create", id: form.id, status, publishAt: status === "scheduled" ? new Date(publishAt).toISOString() : undefined, post };
       const r = await fetch("/api/posts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const d = await r.json();
       if (d.ok) {
@@ -152,146 +211,222 @@ export function ArticleEditor() {
     if (d.ok) { setPosts(d.posts || []); toast(fa ? "حذف شد" : "Deleted"); }
   };
 
-  const charCount = form.body.length;
-  const wordCount = useMemo(() => form.body.trim().split(/\s+/).filter(Boolean).length, [form.body]);
-  const tb = "cursor-pointer rounded-[8px] px-2.5 py-1.5 text-[12.5px] font-bold";
+  // SEO scoring
+  const words = useMemo(() => form.body.trim().split(/\s+/).filter(Boolean).length, [form.body]);
+  const checks = useMemo(() => {
+    const kw = form.keyword.trim();
+    return [
+      { ok: !!kw, fa: "کلمهٔ کلیدی اصلی را وارد کن" },
+      { ok: words >= 300, fa: "متن حداقل ۳۰۰ کلمه باشد" },
+      { ok: !!kw && form.title.includes(kw), fa: "کلمهٔ کلیدی در عنوان بیاید" },
+      { ok: form.metaDesc.length >= 70 && form.metaDesc.length <= 160, fa: "توضیح متا ۷۰ تا ۱۶۰ کاراکتر باشد" },
+      { ok: /(^|\n)##\s/.test(form.body), fa: "زیرعنوان (تیتر ۲) اضافه کن" },
+      { ok: !!kw && form.body.includes(kw), fa: "کلمهٔ کلیدی در متن استفاده شود" },
+    ];
+  }, [form.keyword, form.title, form.metaDesc, form.body, words]);
+  const score = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
+  const scoreColor = score >= 80 ? "#1f8a5b" : score >= 50 ? "#d97706" : "#e11d48";
 
-  const statusBadge = (st: string) => {
+  const tb = "cursor-pointer rounded-[8px] px-2.5 py-1.5 text-[12.5px] font-bold disabled:opacity-50";
+  const toolBtn = "cursor-pointer rounded-[10px] px-3 py-1.5 text-[12.5px] font-bold disabled:opacity-50";
+  const statusBadge = (st: string, err?: string) => {
     const map: Record<string, [string, string, string]> = {
       published: ["#1f8a5b", "rgba(31,138,91,.15)", fa ? "منتشرشده" : "Published"],
       scheduled: ["#0ea5e9", "rgba(14,165,233,.12)", fa ? "زمان‌بندی‌شده" : "Scheduled"],
+      queued: ["#7c3aed", "rgba(124,58,237,.12)", fa ? "در صف تولید" : "Queued"],
       draft: ["#d97706", "rgba(217,119,6,.12)", fa ? "پیش‌نویس" : "Draft"],
     };
-    const [c, bg, l] = map[st] || map.draft;
+    const [c, bg, l] = err ? ["#e11d48", "rgba(225,29,72,.12)", fa ? "خطای تولید" : "Gen failed"] : (map[st] || map.draft);
     return <span className="rounded-full px-2.5 py-1 text-[11.5px] font-extrabold" style={{ color: c, background: bg }}>{l}</span>;
   };
 
   return (
     <>
-      {/* AI generation bar */}
-      <div className="mb-5 p-5" style={card}>
-        <h2 className="mb-3 flex items-center gap-2 text-[15px] font-extrabold"><Sparkle size={16} /> {fa ? "تولید مقاله با هوش مصنوعی" : "AI article generation"}</h2>
-        <div className="flex flex-wrap items-end gap-2.5">
-          <div className="min-w-[240px] flex-1">
-            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "موضوع مقاله" : "Topic"}</label>
-            <input className={inputCls} style={inputStyle} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder={fa ? "مثلاً: راهنمای انتخاب هدفون بی‌سیم" : "e.g. wireless headphones buying guide"} />
-          </div>
-          <div className="w-[140px]">
-            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "حداقل کاراکتر" : "Min characters"}</label>
-            <input className={inputCls} style={inputStyle} type="number" min={0} step={250} value={minChars} onChange={(e) => setMinChars(Math.max(0, Number(e.target.value) || 0))} dir="ltr" />
-          </div>
-          <div className="w-[150px]">
-            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "لحن" : "Tone"}</label>
-            <select className={inputCls} style={inputStyle} value={tone} onChange={(e) => setTone(e.target.value)}>
-              <option value="">{fa ? "پیش‌فرض" : "Default"}</option>
-              <option value={fa ? "رسمی" : "formal"}>{fa ? "رسمی" : "Formal"}</option>
-              <option value={fa ? "صمیمی" : "friendly"}>{fa ? "صمیمی" : "Friendly"}</option>
-              <option value={fa ? "فنی و تخصصی" : "technical"}>{fa ? "فنی" : "Technical"}</option>
-            </select>
-          </div>
-          <button onClick={genAI} disabled={aiBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
-            <Sparkle size={15} /> {aiBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید مقاله" : "Generate"}
-          </button>
-        </div>
-        <p className="mt-2 text-[11.5px]" style={{ color: "var(--muted)" }}>
-          {fa ? "اگر متن کوتاه تولید شود، با دکمهٔ «گسترش متن» در ویرایشگر طولانی‌ترش کن." : "If output is short, use “Expand” in the editor to lengthen it."}
-        </p>
+      {/* tabs */}
+      <div className="mb-4 flex gap-2">
+        <button onClick={() => setTab("editor")} className="cursor-pointer rounded-[10px] px-4 py-2 text-[13.5px] font-extrabold" style={tab === "editor" ? { background: "var(--accent)", color: "#fff", border: "none" } : { ...inputStyle }}>{fa ? "ویرایشگر مقاله" : "Editor"}</button>
+        <button onClick={() => setTab("bulk")} className="cursor-pointer rounded-[10px] px-4 py-2 text-[13.5px] font-extrabold" style={tab === "bulk" ? { background: "var(--accent)", color: "#fff", border: "none" } : { ...inputStyle }}>{fa ? "تولید انبوه و زمان‌بندی" : "Bulk & schedule"}</button>
       </div>
 
-      {/* editor */}
-      <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
-        <div className="p-5" style={card}>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[15px] font-extrabold">{editing ? (fa ? "ویرایش مقاله" : "Edit article") : fa ? "نوشتن مقاله" : "Write article"}</h2>
-            {editing && <button onClick={newPost} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>+ {fa ? "مقالهٔ جدید" : "New"}</button>}
-          </div>
-
-          <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "عنوان" : "Title"}</label>
-          <input className={`${inputCls} mb-3 text-[16px] font-bold`} style={inputStyle} value={form.title} onChange={(e) => { set("title", e.target.value); if (!editing && (!form.slug || form.slug === slugify(form.title))) set("slug", slugify(e.target.value)); }} />
-
-          <div className="mb-3 grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "نامک (slug)" : "Slug"}</label>
-              <input className={inputCls} style={inputStyle} value={form.slug} onChange={(e) => set("slug", e.target.value)} dir="ltr" />
+      {tab === "bulk" ? (
+        <BulkScheduler fa={fa} locale={locale} card={card} inputCls={inputCls} inputStyle={inputStyle} toast={toast} onChanged={load} />
+      ) : (
+        <>
+          {/* header actions */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-2">
+              <button onClick={() => save("published")} disabled={saving} className="cursor-pointer rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره و انتشار" : "Save & publish") : fa ? "انتشار" : "Publish"}</button>
+              <button onClick={() => save("draft")} disabled={saving} className="cursor-pointer rounded-[10px] px-4 py-2.5 text-[13.5px] font-bold disabled:opacity-60" style={inputStyle}>{fa ? "ذخیرهٔ پیش‌نویس" : "Save draft"}</button>
             </div>
-            <div>
-              <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته" : "Category"}</label>
-              <input className={inputCls} style={inputStyle} value={form.catFa} onChange={(e) => set("catFa", e.target.value)} />
+            <button onClick={newPost} className="cursor-pointer rounded-[10px] px-4 py-2 text-[12.5px] font-bold" style={inputStyle}>{fa ? "+ مقالهٔ جدید" : "+ New"}</button>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+            {/* main column */}
+            <div className="flex flex-col gap-4">
+              {/* title + slug */}
+              <div className="p-5" style={card}>
+                <input className="mb-2 w-full bg-transparent text-[22px] font-extrabold outline-none" style={{ color: "var(--text)" }} value={form.title} placeholder={fa ? "عنوان مقاله را اینجا بنویس…" : "Article title…"} onChange={(e) => { set("title", e.target.value); if (!editing && (!form.slug || form.slug === slugify(form.title))) set("slug", slugify(e.target.value)); }} />
+                <div className="flex items-center gap-1 text-[12.5px]" style={{ color: "var(--muted)" }} dir="ltr">
+                  <span className="whitespace-nowrap">/blog/</span>
+                  <input className="w-full bg-transparent outline-none" style={{ color: "var(--muted)" }} value={form.slug} placeholder="slug" onChange={(e) => set("slug", e.target.value)} dir="ltr" />
+                </div>
+                {titleSug.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {titleSug.map((tt, i) => (
+                      <button key={i} onClick={() => { set("title", tt); set("slug", slugify(tt)); setTitleSug([]); }} className="cursor-pointer rounded-full px-3 py-1 text-[12px] font-bold" style={inputStyle}>{tt}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* AI panel */}
+              <div className="p-5" style={{ ...card, background: "var(--surface2)", borderColor: "var(--accent)" }}>
+                <h2 className="mb-3 flex items-center gap-2 text-[14px] font-extrabold" style={{ color: "var(--accent)" }}><Sparkle size={16} /> {fa ? "نوشتن با هوش مصنوعی (انسان‌نما و سئو)" : "Write with AI"}</h2>
+                <div className="flex flex-wrap items-stretch gap-2">
+                  <input className={`${inputCls} min-w-[220px] flex-1`} style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder={fa ? "موضوع مقاله (مثلاً: راهنمای خرید هدفون بی‌سیم)" : "Topic"} />
+                  <select className={inputCls} style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", width: "auto" }} value={aiWords} onChange={(e) => setAiWords(Number(e.target.value))}>
+                    {LENGTHS.map((l) => <option key={l.v} value={l.v}>{l.fa}</option>)}
+                  </select>
+                  <select className={inputCls} style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", width: "auto" }} value={tone} onChange={(e) => setTone(e.target.value)}>
+                    <option value="">{fa ? "لحن پیش‌فرض" : "Default tone"}</option>
+                    <option value="رسمی">{fa ? "رسمی" : "Formal"}</option>
+                    <option value="صمیمی">{fa ? "صمیمی" : "Friendly"}</option>
+                    <option value="فنی و تخصصی">{fa ? "فنی" : "Technical"}</option>
+                  </select>
+                  <button onClick={genFull} disabled={!!busy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+                    <Sparkle size={15} /> {busy === "gen" ? (fa ? "در حال نوشتن…" : "Writing…") : fa ? "بنویس مقالهٔ کامل" : "Write full article"}
+                  </button>
+                </div>
+                {/* AI tools grid */}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {([
+                    ["expand", fa ? "✦ طولانی‌تر کن" : "Longer", () => transform("expand", fa ? "طولانی‌تر شد" : "Expanded")],
+                    ["faq", fa ? "❓ سؤالات متداول" : "FAQ", () => snippet("faq", fa ? "سؤالات متداول اضافه شد" : "FAQ added")],
+                    ["keypoints", fa ? "◆ نکات کلیدی" : "Key points", () => snippet("keypoints", fa ? "نکات کلیدی اضافه شد" : "Key points added")],
+                    ["rewrite", fa ? "↻ بهبود و بازنویسی" : "Rewrite", () => transform("rewrite", fa ? "بازنویسی شد" : "Rewritten")],
+                    ["conclusion", fa ? "⊕ جمع‌بندی" : "Conclusion", () => snippet("conclusion", fa ? "جمع‌بندی اضافه شد" : "Conclusion added")],
+                    ["toc", fa ? "≣ فهرست مطالب" : "TOC", () => snippet("toc", fa ? "فهرست مطالب اضافه شد" : "TOC added")],
+                    ["keyword", fa ? "🎯 بهینه‌سازی کلمهٔ کلیدی" : "Keyword optimize", () => transform("keyword", fa ? "بهینه شد" : "Optimized")],
+                    ["titles", fa ? "✎ پیشنهاد عنوان" : "Title ideas", genTitles],
+                    ["tags", fa ? "🏷 تولید برچسب" : "Tags", genTags],
+                    ["meta", fa ? "📝 چکیده و متا" : "Excerpt & meta", genMeta],
+                    ["cover", fa ? "🖼 تصویر شاخص AI" : "AI cover", genCover],
+                    ["proofread", fa ? "✓ ویرایش نگارشی" : "Proofread", () => transform("proofread", fa ? "ویرایش شد" : "Proofread")],
+                  ] as const).map(([key, label, fn]) => (
+                    <button key={key} onClick={fn} disabled={!!busy} className={toolBtn} style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
+                      {busy === key ? "…" : label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* excerpt */}
+              <div className="p-5" style={card}>
+                <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "خلاصه" : "Excerpt"}</label>
+                <textarea className={`${inputCls} mb-3`} style={{ ...inputStyle, minHeight: 52, resize: "vertical" }} value={form.excerpt} onChange={(e) => set("excerpt", e.target.value)} />
+
+                {/* toolbar */}
+                <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                  <button onClick={() => wrap("**")} className={tb} style={{ ...inputStyle, fontWeight: 800 }}>B</button>
+                  <button onClick={() => wrap("*")} className={tb} style={{ ...inputStyle, fontStyle: "italic" }}>I</button>
+                  <button onClick={() => wrap("# ", "", true)} className={tb} style={inputStyle}>تیتر</button>
+                  <button onClick={() => wrap("## ", "", true)} className={tb} style={inputStyle}>H2</button>
+                  <button onClick={() => wrap("### ", "", true)} className={tb} style={inputStyle}>H3</button>
+                  <button onClick={() => wrap("- ", "", true)} className={tb} style={inputStyle}>• {fa ? "فهرست" : "List"}</button>
+                  <button onClick={() => wrap("1. ", "", true)} className={tb} style={inputStyle}>۱. {fa ? "شماره‌دار" : "Numbered"}</button>
+                  <button onClick={() => wrap("> ", "", true)} className={tb} style={inputStyle}>❝</button>
+                  <button onClick={insertLink} className={tb} style={inputStyle}>🔗 {fa ? "لینک" : "Link"}</button>
+                  <UploadButton accept="image/*" label={fa ? "🖼 عکس" : "🖼 Image"} onUploaded={(url) => insertImage(url)} />
+                  <button onClick={insertVideo} className={tb} style={inputStyle}>▶ {fa ? "ویدئو" : "Video"}</button>
+                  <button onClick={clearFmt} className={tb} style={inputStyle}>✕ {fa ? "پاک‌کردن قالب" : "Clear"}</button>
+                </div>
+
+                {/* editor + preview */}
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <textarea ref={bodyRef} className={inputCls} style={{ ...inputStyle, minHeight: 380, resize: "vertical", lineHeight: 1.9 }} value={form.body} onChange={(e) => set("body", e.target.value)} placeholder={fa ? "متن مقاله را اینجا بنویس… (عکس و ویدئو هم می‌توانی اضافه کنی)" : "Article body…"} />
+                  <div className="prose-mini rounded-[10px] p-4" style={{ ...inputStyle, minHeight: 380, maxHeight: 600, overflow: "auto" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(form.body || (fa ? "*پیش‌نمایش زنده اینجا نمایش داده می‌شود*" : "*live preview*")) }} />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[12px]" style={{ color: "var(--muted)" }}>
+                  <span>{fa ? `${faNum(form.body.length)} کاراکتر • ${faNum(words)} کلمه` : `${form.body.length} chars • ${words} words`}</span>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "خلاصه" : "Excerpt"}</label>
-          <textarea className={`${inputCls} mb-3`} style={{ ...inputStyle, minHeight: 56, resize: "vertical" }} value={form.excerpt} onChange={(e) => set("excerpt", e.target.value)} />
+            {/* sidebar */}
+            <div className="flex flex-col gap-4">
+              {/* category */}
+              <div className="p-4" style={card}>
+                <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته‌بندی" : "Category"}</label>
+                <input className={inputCls} style={inputStyle} value={form.catFa} onChange={(e) => set("catFa", e.target.value)} placeholder={fa ? "مثلاً راهنمای خرید" : "Category"} />
+              </div>
 
-          {/* body toolbar (WordPress-like) */}
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <button onClick={() => wrap("# ", "", true)} className={tb} style={inputStyle} title={fa ? "تیتر بزرگ" : "Heading 1"}>تیتر</button>
-            <button onClick={() => wrap("## ", "", true)} className={tb} style={inputStyle}>H2</button>
-            <button onClick={() => wrap("### ", "", true)} className={tb} style={inputStyle}>H3</button>
-            <button onClick={() => wrap("**")} className={tb} style={{ ...inputStyle, fontWeight: 800 }}>B</button>
-            <button onClick={() => wrap("*")} className={tb} style={{ ...inputStyle, fontStyle: "italic" }}>I</button>
-            <button onClick={() => wrap("> ", "", true)} className={tb} style={inputStyle} title={fa ? "نقل‌قول" : "Quote"}>❝</button>
-            <button onClick={() => wrap("- ", "", true)} className={tb} style={inputStyle}>• {fa ? "لیست" : "List"}</button>
-            <button onClick={() => wrap("1. ", "", true)} className={tb} style={inputStyle}>1. {fa ? "شماره‌دار" : "Numbered"}</button>
-            <button onClick={insertLink} className={tb} style={inputStyle} title={fa ? "لینک" : "Link"}>🔗 {fa ? "لینک" : "Link"}</button>
-            <UploadButton accept="image/*" label={fa ? "🖼 درج تصویر" : "🖼 Image"} onUploaded={(url) => insertImage(url)} />
-            <span className="flex-1" />
-            <button onClick={expandBody} disabled={expandBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[8px] border-none px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
-              <Sparkle size={13} /> {expandBusy ? "…" : fa ? "گسترش متن" : "Expand"}
-            </button>
-          </div>
+              {/* cover */}
+              <div className="p-4" style={card}>
+                <h3 className="mb-2 text-[13.5px] font-extrabold">{fa ? "تصویر شاخص" : "Cover image"}</h3>
+                {form.cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={form.cover} alt="" className="mb-2 h-32 w-full rounded-[10px] object-cover" style={{ border: "1px solid var(--border)" }} />
+                ) : (
+                  <div className="mb-2 flex h-28 items-center justify-center rounded-[10px] text-[12.5px]" style={{ border: "1px dashed var(--border)", color: "var(--muted)" }}>{fa ? "تصویری انتخاب نشده" : "No image"}</div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <UploadButton accept="image/*" label={fa ? "آپلود تصویر" : "Upload"} onUploaded={(url) => set("cover", url)} />
+                  <button onClick={genCover} disabled={!!busy} className={toolBtn} style={inputStyle}>{busy === "cover" ? "…" : fa ? "🖼 ساخت با AI" : "AI"}</button>
+                  {form.cover && <button onClick={() => set("cover", "")} className="cursor-pointer border-none bg-transparent text-[12px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>}
+                </div>
+              </div>
 
-          {/* side-by-side: editor + live preview */}
-          <div className="grid gap-3 lg:grid-cols-2">
-            <textarea ref={bodyRef} className={inputCls} style={{ ...inputStyle, minHeight: 360, resize: "vertical", lineHeight: 1.9 }} value={form.body} onChange={(e) => set("body", e.target.value)} placeholder={fa ? "متن مقاله…" : "Article body…"} />
-            <div className="prose-mini rounded-[10px] p-4" style={{ ...inputStyle, minHeight: 360, maxHeight: 560, overflow: "auto" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(form.body || (fa ? "*پیش‌نمایش زنده اینجا نمایش داده می‌شود*" : "*live preview*")) }} />
-          </div>
+              {/* tags */}
+              <div className="p-4" style={card}>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "برچسب‌ها (با ویرگول)" : "Tags"}</label>
+                  <button onClick={genTags} disabled={!!busy} className="cursor-pointer border-none bg-transparent text-[11.5px] font-bold" style={{ color: "var(--accent)" }}>{busy === "tags" ? "…" : fa ? "✦ تولید" : "AI"}</button>
+                </div>
+                <input className={inputCls} style={inputStyle} value={form.tags} onChange={(e) => set("tags", e.target.value)} />
+              </div>
 
-          <div className="mt-2 flex items-center justify-between text-[12px]" style={{ color: charCount < minChars ? "#d97706" : "#1f8a5b" }}>
-            <span>{fa ? `${charCount.toLocaleString("fa-IR")} کاراکتر • ${wordCount.toLocaleString("fa-IR")} کلمه` : `${charCount} chars • ${wordCount} words`}</span>
-            {minChars > 0 && <span>{charCount >= minChars ? (fa ? "✓ به حداقل رسید" : "✓ meets minimum") : (fa ? `حداقل ${minChars.toLocaleString("fa-IR")}` : `min ${minChars}`)}</span>}
-          </div>
-        </div>
+              {/* SEO */}
+              <div className="p-4" style={card}>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-[13.5px] font-extrabold">{fa ? "سئو" : "SEO"}</h3>
+                  <span className="rounded-full px-2.5 py-1 text-[12px] font-extrabold" style={{ color: scoreColor, background: "var(--surface2)" }}>{faNum(score)}٪</span>
+                </div>
+                <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--surface2)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${score}%`, background: scoreColor }} />
+                </div>
+                <label className="mb-1 mt-2 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "کلمهٔ کلیدی اصلی" : "Focus keyword"}</label>
+                <input className={`${inputCls} mb-2`} style={inputStyle} value={form.keyword} onChange={(e) => set("keyword", e.target.value)} placeholder={fa ? "مثلاً خرید هدفون" : "keyword"} />
+                <label className="mb-1 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "عنوان سئو" : "SEO title"}</label>
+                <input className={`${inputCls} mb-2`} style={inputStyle} value={form.seoTitle} onChange={(e) => set("seoTitle", e.target.value)} placeholder={fa ? "عنوان برای گوگل" : "Title for Google"} />
+                <label className="mb-1 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? `توضیح متا (${faNum(form.metaDesc.length)}/۱۶۰)` : `Meta (${form.metaDesc.length}/160)`}</label>
+                <textarea className={`${inputCls} mb-3`} style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={form.metaDesc} onChange={(e) => set("metaDesc", e.target.value.slice(0, 200))} placeholder={fa ? "توضیح کوتاه برای نتایج گوگل" : "Meta description"} />
+                <button onClick={genMeta} disabled={!!busy} className="mb-3 w-full cursor-pointer rounded-[10px] py-2 text-[12.5px] font-bold disabled:opacity-50" style={inputStyle}>{busy === "meta" ? "…" : fa ? "✦ تولید خودکار چکیده و متا" : "Generate meta"}</button>
+                <ul className="flex flex-col gap-1.5">
+                  {checks.map((c, i) => (
+                    <li key={i} className="flex items-start gap-2 text-[12px]" style={{ color: c.ok ? "#1f8a5b" : "var(--muted)" }}>
+                      <span className="mt-0.5">{c.ok ? "✓" : "•"}</span><span>{c.fa}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-        {/* side: publish + cover */}
-        <div className="flex flex-col gap-5">
-          <div className="p-5" style={card}>
-            <h3 className="mb-3 text-[14px] font-extrabold">{fa ? "انتشار" : "Publish"}</h3>
-            <div className="flex flex-col gap-2.5">
-              <button onClick={() => save("published")} disabled={saving} className="cursor-pointer rounded-[10px] border-none py-2.5 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره و انتشار" : "Save & publish") : fa ? "انتشار فوری" : "Publish"}</button>
-              <button onClick={() => save("draft")} disabled={saving} className="cursor-pointer rounded-[10px] py-2.5 text-[13.5px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{fa ? "ذخیره پیش‌نویس" : "Save draft"}</button>
-              <div className="mt-1 border-t pt-2.5" style={{ borderColor: "var(--border)" }}>
-                <label className="mb-1.5 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "زمان‌بندی انتشار (شمسی)" : "Schedule (Shamsi)"}</label>
+              {/* schedule */}
+              <div className="p-4" style={card}>
+                <h3 className="mb-2 text-[13.5px] font-extrabold">{fa ? "زمان‌بندی انتشار (شمسی)" : "Schedule"}</h3>
                 <div className="mb-2"><JalaliDateTimePicker value={publishAt} onChange={setPublishAt} /></div>
-                <button onClick={() => save("scheduled")} disabled={saving} className="w-full cursor-pointer rounded-[10px] py-2.5 text-[13.5px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--accent)", color: "var(--accent)" }}>{fa ? "زمان‌بندی انتشار" : "Schedule"}</button>
+                <button onClick={() => save("scheduled")} disabled={saving} className="w-full cursor-pointer rounded-[10px] py-2.5 text-[13px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--accent)", color: "var(--accent)" }}>{fa ? "زمان‌بندی انتشار" : "Schedule"}</button>
               </div>
             </div>
           </div>
+        </>
+      )}
 
-          <div className="p-5" style={card}>
-            <h3 className="mb-3 text-[14px] font-extrabold">{fa ? "تصویر شاخص" : "Cover image"}</h3>
-            {form.cover ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={form.cover} alt="" className="mb-2 h-32 w-full rounded-[10px] object-cover" style={{ border: "1px solid var(--border)" }} />
-            ) : null}
-            <div className="flex items-center gap-2">
-              <UploadButton accept="image/*" label={fa ? "آپلود تصویر" : "Upload"} onUploaded={(url) => set("cover", url)} />
-              {form.cover && <button onClick={() => set("cover", "")} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>}
-            </div>
-          </div>
-
-          <div className="p-5" style={card}>
-            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "برچسب‌ها (با ویرگول)" : "Tags (comma)"}</label>
-            <input className={inputCls} style={inputStyle} value={form.tags} onChange={(e) => set("tags", e.target.value)} />
-          </div>
-        </div>
-      </div>
-
-      {/* posts list */}
+      {/* posts list (always visible) */}
       <div className="mt-6 p-5" style={card}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-[15px] font-extrabold">{fa ? "همهٔ مقالات" : "All articles"}</h2>
-          <button onClick={newPost} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold text-white" style={{ background: "var(--accent)" }}><Plus size={14} /> {fa ? "مقالهٔ جدید" : "New"}</button>
+          <button onClick={() => { newPost(); setTab("editor"); }} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold text-white" style={{ background: "var(--accent)" }}><Plus size={14} /> {fa ? "مقالهٔ جدید" : "New"}</button>
         </div>
         {posts.length === 0 ? (
           <div className="py-6 text-center text-[13.5px]" style={{ color: "var(--muted)" }}>{fa ? "مقاله‌ای نیست" : "No articles"}</div>
@@ -300,8 +435,8 @@ export function ArticleEditor() {
             {posts.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-[10px] px-3 py-2.5" style={{ background: "var(--surface2)" }}>
                 <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{p.fa}</span>
-                {statusBadge(p.status)}
-                <span className="text-[12px]" style={{ color: "var(--muted)" }}>{p.status === "scheduled" && p.publishAt ? formatDate(p.publishAt, locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : formatDate(p.date, locale, { month: "short", day: "numeric" })}</span>
+                {statusBadge(p.status, p.genError)}
+                <span className="text-[12px]" style={{ color: "var(--muted)" }}>{(p.status === "scheduled" || p.status === "queued") && p.publishAt ? formatDate(p.publishAt, locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : formatDate(p.date, locale, { month: "short", day: "numeric" })}</span>
                 <button onClick={() => editPost(p)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
                 <button onClick={() => del(p.id)} aria-label="delete" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[8px] border-none" style={{ background: "var(--surface)", color: "#e11d48" }}><Trash size={14} /></button>
               </div>
@@ -310,5 +445,180 @@ export function ArticleEditor() {
         )}
       </div>
     </>
+  );
+}
+
+/* ---------------- Bulk generation + scheduling ---------------- */
+
+function BulkScheduler({
+  fa, locale, card, inputCls, inputStyle, toast, onChanged,
+}: {
+  fa: boolean; locale: string;
+  card: React.CSSProperties; inputCls: string; inputStyle: React.CSSProperties;
+  toast: (m: string) => void; onChanged: () => void;
+}) {
+  const [mode, setMode] = useState<"manual" | "auto">("auto");
+  const [theme, setTheme] = useState("");
+  const [count, setCount] = useState(30);
+  const [topicsText, setTopicsText] = useState("");
+  const [hours, setHours] = useState<number[]>([9, 13, 17, 20, 22]);
+  const [words, setWords] = useState(1200);
+  const [tone, setTone] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [category, setCategory] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<{ queued: number; failed: number; scheduled: number } | null>(null);
+
+  // start date (shamsi)
+  const yNow = jalaliYearNow();
+  const [jy, setJy] = useState(yNow);
+  const [jm, setJm] = useState(() => { const d = new Date(); return Math.min(12, d.getMonth() + 1); });
+  const [jd, setJd] = useState(() => new Date().getDate());
+
+  const loadStatus = () =>
+    fetch("/api/ai/bulk").then((r) => (r.ok ? r.json() : null)).then((d) => d?.ok && setStatus({ queued: d.queued, failed: d.failed, scheduled: d.scheduled })).catch(() => {});
+  useEffect(() => { loadStatus(); const t = setInterval(loadStatus, 15000); return () => clearInterval(t); }, []);
+
+  const toggleHour = (h: number) => setHours((hs) => hs.includes(h) ? hs.filter((x) => x !== h) : [...hs, h].sort((a, b) => a - b));
+
+  const submit = async () => {
+    const topics = topicsText.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (mode === "manual" && topics.length === 0) { toast(fa ? "حداقل یک موضوع وارد کن" : "Enter topics"); return; }
+    if (mode === "auto" && !theme.trim()) { toast(fa ? "موضوع کلی را وارد کن" : "Enter a theme"); return; }
+    if (hours.length === 0) { toast(fa ? "حداقل یک ساعت انتشار انتخاب کن" : "Pick at least one hour"); return; }
+    setBusy(true);
+    try {
+      const g = toGregorian(jy, jm, jd);
+      const startDate = `${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}`;
+      const payload = mode === "manual"
+        ? { topics, perDay: hours.length, hours, words, tone, keyword, category, startDate }
+        : { theme: theme.trim(), count, perDay: hours.length, hours, words, tone, keyword, category, startDate };
+      const r = await fetch("/api/ai/bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const d = await r.json().catch(() => ({}));
+      if (d.ok) {
+        toast(fa ? `${faNum(d.count)} مقاله در صف تولید و زمان‌بندی شد ✓` : `${d.count} articles queued ✓`);
+        setTopicsText(""); loadStatus(); onChanged();
+      } else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در تنظیمات کلید را ذخیره کن" : "AI not configured");
+      else toast((fa ? "خطا: " : "Error: ") + (d.detail || d.error || ""));
+    } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setBusy(false); }
+  };
+
+  const perDay = hours.length;
+  const total = mode === "manual" ? topicsText.split("\n").filter((s) => s.trim()).length : count;
+  const days = perDay ? Math.ceil(total / perDay) : 0;
+  const sel = "rounded-[10px] px-2 py-2.5 text-[13.5px] outline-none";
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+      <div className="p-5" style={card}>
+        <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold"><Sparkle size={16} /> {fa ? "تولید انبوه و زمان‌بندی هوشمند" : "Bulk generate & schedule"}</h2>
+        <p className="mb-4 text-[12.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
+          {fa ? "ده‌ها مقاله را یک‌جا بساز و بگو روزی چند تا و چه ساعت‌هایی منتشر شوند. مقاله‌ها در پس‌زمینه به‌مرور تولید می‌شوند و سر وقت خودشان منتشر می‌شوند." : "Generate many articles at once and let them auto-publish on a schedule."}
+        </p>
+
+        {/* mode */}
+        <div className="mb-4 flex gap-2">
+          <button onClick={() => setMode("auto")} className="cursor-pointer rounded-[10px] px-3 py-1.5 text-[12.5px] font-bold" style={mode === "auto" ? { background: "var(--accent)", color: "#fff", border: "none" } : inputStyle}>{fa ? "تولید خودکار موضوع‌ها" : "Auto topics"}</button>
+          <button onClick={() => setMode("manual")} className="cursor-pointer rounded-[10px] px-3 py-1.5 text-[12.5px] font-bold" style={mode === "manual" ? { background: "var(--accent)", color: "#fff", border: "none" } : inputStyle}>{fa ? "موضوع‌های دستی" : "Manual topics"}</button>
+        </div>
+
+        {mode === "auto" ? (
+          <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_140px]">
+            <div>
+              <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "موضوع کلی" : "Theme"}</label>
+              <input className={inputCls} style={inputStyle} value={theme} onChange={(e) => setTheme(e.target.value)} placeholder={fa ? "مثلاً: لوازم آرایشی و مراقبت پوست" : "e.g. skincare"} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "تعداد مقاله" : "Count"}</label>
+              <input className={inputCls} style={inputStyle} type="number" min={1} max={50} value={count} onChange={(e) => setCount(Math.min(50, Math.max(1, Number(e.target.value) || 1)))} dir="ltr" />
+            </div>
+          </div>
+        ) : (
+          <div className="mb-4">
+            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "موضوع‌ها (هر خط یک مقاله)" : "Topics (one per line)"}</label>
+            <textarea className={inputCls} style={{ ...inputStyle, minHeight: 160, resize: "vertical" }} value={topicsText} onChange={(e) => setTopicsText(e.target.value)} placeholder={fa ? "راهنمای انتخاب کرم ضدآفتاب\nبهترین سرم ویتامین C\n..." : "topic per line"} />
+          </div>
+        )}
+
+        {/* publish hours */}
+        <label className="mb-1.5 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "ساعت‌های انتشار در روز (روزی " + faNum(perDay) + " مقاله)" : "Publish hours per day"}</label>
+        <div className="mb-4 flex flex-wrap gap-1.5" dir="ltr">
+          {Array.from({ length: 24 }, (_, h) => h).map((h) => (
+            <button key={h} onClick={() => toggleHour(h)} className="cursor-pointer rounded-[8px] px-2 py-1 text-[12px] font-bold" style={hours.includes(h) ? { background: "var(--accent)", color: "#fff", border: "none" } : inputStyle}>{String(h).padStart(2, "0")}</button>
+          ))}
+        </div>
+
+        {/* options */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "طول هر مقاله" : "Length"}</label>
+            <select className={inputCls} style={inputStyle} value={words} onChange={(e) => setWords(Number(e.target.value))}>
+              {LENGTHS.map((l) => <option key={l.v} value={l.v}>{l.fa}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "لحن" : "Tone"}</label>
+            <select className={inputCls} style={inputStyle} value={tone} onChange={(e) => setTone(e.target.value)}>
+              <option value="">{fa ? "پیش‌فرض" : "Default"}</option>
+              <option value="رسمی">{fa ? "رسمی" : "Formal"}</option>
+              <option value="صمیمی">{fa ? "صمیمی" : "Friendly"}</option>
+              <option value="فنی و تخصصی">{fa ? "فنی" : "Technical"}</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته (اختیاری)" : "Category"}</label>
+            <input className={inputCls} style={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)} />
+          </div>
+        </div>
+
+        {/* start date */}
+        <label className="mb-1.5 mt-4 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "تاریخ شروع انتشار (شمسی)" : "Start date"}</label>
+        <div className="flex flex-wrap gap-2" dir="rtl">
+          <select className={sel} style={inputStyle} value={jd} onChange={(e) => setJd(+e.target.value)}>
+            {Array.from({ length: jalaliMonthLength(jy, jm) }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{faNum(d)}</option>)}
+          </select>
+          <select className={`${sel} flex-1`} style={inputStyle} value={jm} onChange={(e) => setJm(+e.target.value)}>
+            {JALALI_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+          </select>
+          <select className={sel} style={inputStyle} value={jy} onChange={(e) => setJy(+e.target.value)}>
+            {Array.from({ length: 3 }, (_, i) => yNow + i).map((y) => <option key={y} value={y}>{faNum(y)}</option>)}
+          </select>
+        </div>
+
+        <p className="mt-3 text-[12px]" style={{ color: "var(--muted)" }}>
+          {fa ? `جمعاً ${faNum(total)} مقاله، روزی ${faNum(perDay)} تا، در ${faNum(days)} روز منتشر می‌شود.` : `${total} articles, ${perDay}/day over ${days} days.`}
+        </p>
+
+        <button onClick={submit} disabled={busy} className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+          <Sparkle size={16} /> {busy ? (fa ? "در حال ثبت…" : "Submitting…") : fa ? "شروع تولید و زمان‌بندی" : "Generate & schedule"}
+        </button>
+      </div>
+
+      {/* status */}
+      <div className="flex flex-col gap-4">
+        <div className="p-5" style={card}>
+          <h3 className="mb-3 text-[14px] font-extrabold">{fa ? "وضعیت صف تولید" : "Queue status"}</h3>
+          {status ? (
+            <div className="flex flex-col gap-2.5 text-[13px]">
+              <Row label={fa ? "در حال تولید (در صف)" : "Queued"} value={faNum(status.queued)} color="#7c3aed" />
+              <Row label={fa ? "زمان‌بندی‌شده" : "Scheduled"} value={faNum(status.scheduled)} color="#0ea5e9" />
+              {status.failed > 0 && <Row label={fa ? "خطای تولید" : "Failed"} value={faNum(status.failed)} color="#e11d48" />}
+            </div>
+          ) : <div className="text-[13px]" style={{ color: "var(--muted)" }}>…</div>}
+          <p className="mt-3 text-[11.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
+            {fa ? "مقاله‌ها در پس‌زمینه و به‌مرور تولید می‌شوند (هر ۲۰ ثانیه یکی) تا به محدودیت سرویس برنخوریم. می‌توانی این صفحه را ببندی؛ ادامه می‌یابد." : "Generated gradually in the background."}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-[10px] px-3 py-2" style={{ background: "var(--surface2)" }}>
+      <span style={{ color: "var(--muted)" }}>{label}</span>
+      <span className="font-extrabold" style={{ color }}>{value}</span>
+    </div>
   );
 }

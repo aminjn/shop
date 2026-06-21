@@ -8,6 +8,18 @@ function safeUrl(u: string): string {
   return "#";
 }
 
+const FRAME = 'style="width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin:10px 0" allowfullscreen loading="lazy"';
+function videoEmbed(url: string): string | null {
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{6,})/);
+  if (yt) return `<iframe src="https://www.youtube.com/embed/${yt[1]}" ${FRAME}></iframe>`;
+  const ap = url.match(/aparat\.com\/v\/([\w-]+)/);
+  if (ap) return `<iframe src="https://www.aparat.com/video/video/embed/videohash/${ap[1]}/vt/frame" ${FRAME}></iframe>`;
+  if (/^https?:\/\/[^\s"]+\.(mp4|webm|ogg)(\?|$)/i.test(url))
+    return `<video src="${safeUrl(url)}" controls style="width:100%;border-radius:12px;margin:10px 0"></video>`;
+  if (/^https?:\/\//i.test(url)) return `<iframe src="${safeUrl(url)}" ${FRAME}></iframe>`;
+  return null;
+}
+
 export function renderMarkdown(src: string): string {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -56,6 +68,12 @@ export function renderMarkdown(src: string): string {
     if (lines.length === 1 && /^!\[[^\]]*\]\([^)]+\)$/.test(lines[0].trim())) {
       html.push(inline(lines[0]));
       continue;
+    }
+    // video embed: @video(url) — YouTube, Aparat, or direct mp4
+    const vm = lines.length === 1 && lines[0].trim().match(/^@video\(([^)]+)\)$/);
+    if (vm) {
+      const v = videoEmbed(vm[1].trim());
+      if (v) { html.push(v); continue; }
     }
     html.push(`<p>${lines.map(inline).join("<br>")}</p>`);
   }

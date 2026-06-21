@@ -54,9 +54,21 @@ export async function callAI(
   system: string,
   messages: ChatMessage[],
   model?: string,
+  maxTokens = 900,
 ): Promise<string | null> {
+  const r = await callAIDetailed(system, messages, model, maxTokens);
+  return r.text;
+}
+
+/** Like callAI but returns the error reason for surfacing in the UI. */
+export async function callAIDetailed(
+  system: string,
+  messages: ChatMessage[],
+  model?: string,
+  maxTokens = 900,
+): Promise<{ text: string | null; error?: string }> {
   const c = aiConfig();
-  if (!c.configured) return null;
+  if (!c.configured) return { text: null, error: "not-configured" };
   try {
     const res = await fetch(`${c.baseUrl}/chat/completions`, {
       method: "POST",
@@ -67,15 +79,24 @@ export async function callAI(
       body: JSON.stringify({
         model: model || c.model,
         messages: [{ role: "system", content: system }, ...messages],
-        max_tokens: 700,
+        max_tokens: maxTokens,
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let msg = `http ${res.status}`;
+      try {
+        const e = await res.json();
+        msg = e?.error?.message || msg;
+      } catch {
+        /* ignore */
+      }
+      return { text: null, error: msg };
+    }
     const data = await res.json();
     const text = data?.choices?.[0]?.message?.content;
-    return typeof text === "string" ? text.trim() : null;
-  } catch {
-    return null;
+    return { text: typeof text === "string" ? text.trim() : null };
+  } catch (e) {
+    return { text: null, error: e instanceof Error ? e.message : "network" };
   }
 }
 

@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   }
 
   const p = b.post || {};
-  const status: PostStatus = ["published", "scheduled", "draft"].includes(b.status) ? b.status : "published";
+  const status: PostStatus = ["published", "scheduled", "draft", "queued"].includes(b.status) ? b.status : "published";
   const fa = String(p.fa || "").trim();
   if (!fa) return NextResponse.json({ ok: false, error: "title-required" }, { status: 400 });
 
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
 }
 
 function sanitize(p: Record<string, unknown>) {
-  const str = (v: unknown, n = 4000) => String(v ?? "").slice(0, n);
+  const str = (v: unknown, n = 60000) => String(v ?? "").slice(0, n);
   const fa = str(p.fa, 160);
   const en = str(p.en, 160) || fa;
   return {

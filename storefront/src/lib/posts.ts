@@ -2,10 +2,16 @@ import "server-only";
 import { POSTS, type Post } from "@/data/posts";
 import { readArray, writeArray } from "./settings";
 
-export type PostStatus = "published" | "scheduled" | "draft";
+export type PostStatus = "published" | "scheduled" | "draft" | "queued";
 export interface StoredPost extends Post {
   status: PostStatus;
-  publishAt?: string; // ISO; when status === "scheduled"
+  publishAt?: string; // ISO; when status === "scheduled" | "queued"
+  // generation queue (status === "queued"): worker fills the body then flips to "scheduled"
+  genTopic?: string;
+  genWords?: number;
+  genTone?: string;
+  genKeyword?: string;
+  genError?: string;
 }
 
 const seed = (): StoredPost[] =>
@@ -60,4 +66,62 @@ export function nextPostId(): number {
 
 export function savePosts(list: StoredPost[]) {
   return write(list);
+}
+
+let queueBusy = false;
+/** Generate the body for the next queued post (oldest publishAt first), then
+ *  flip it to "scheduled". Called periodically from instrumentation. Generates
+ *  one post per tick to respect rate limits. */
+export async function processQueue(): Promise<boolean> {
+  if (queueBusy) return false;
+  const list = getAllPosts();
+  const next = list
+    .filter((p) => p.status === "queued" && !p.genError)
+    .sort((a, b) => (a.publishAt || "") < (b.publishAt || "") ? -1 : 1)[0];
+  if (!next) return false;
+
+  queueBusy = true;
+  try {
+    const { callAIDetailed, parseJson, modelFor } = await import("./ai");
+    const words = next.genWords || 1200;
+    const targetChars = words * 6;
+    const tone = next.genTone ? `\nلحن متن: ${next.genTone}.` : "";
+    const kw = next.genKeyword ? `\nکلمهٔ کلیدی اصلی «${next.genKeyword}» را طبیعی به کار ببر.` : "";
+    const system = "تو نویسندهٔ حرفه‌ای بلاگ فارسی و متخصص سئو هستی. body را Markdown بنویس. فقط یک JSON معتبر برگردان، بدون متن اضافه.";
+    const prompt = `یک مقالهٔ کامل و سئوشده دربارهٔ «${next.genTopic}» بنویس (حدود ${words} کلمه، حداقل ${targetChars} کاراکتر، با زیرعنوان ## و فهرست‌ها).${tone}${kw}\n\n{"title":"عنوان جذاب","excerpt":"خلاصه","body":"متن Markdown","category":"دسته","tags":["۴ تا ۶ برچسب"],"seoTitle":"عنوان سئو","metaDesc":"متا","keyword":"کلمهٔ کلیدی"}`;
+    const r = await callAIDetailed(system, [{ role: "user", content: prompt }], modelFor("article"), Math.min(16000, Math.ceil(targetChars / 1.5) + 1500));
+    const j = r.text ? parseJson<{ title: string; excerpt: string; body: string; category: string; tags: string[]; seoTitle?: string; metaDesc?: string; keyword?: string }>(r.text) : null;
+
+    const fresh = getAllPosts();
+    const idx = fresh.findIndex((p) => p.id === next.id);
+    if (idx < 0) return false;
+    if (j && j.title && j.body) {
+      fresh[idx] = {
+        ...fresh[idx],
+        fa: j.title.slice(0, 160),
+        en: j.title.slice(0, 160),
+        excerptFa: (j.excerpt || "").slice(0, 320),
+        excerptEn: (j.excerpt || "").slice(0, 320),
+        bodyFa: j.body,
+        bodyEn: j.body,
+        catFa: (j.category || fresh[idx].catFa || "عمومی").slice(0, 60),
+        catEn: (j.category || "General").slice(0, 60),
+        tags: Array.isArray(j.tags) ? j.tags.map(String).slice(0, 8) : fresh[idx].tags,
+        status: "scheduled",
+        genTopic: undefined,
+        genWords: undefined,
+        genTone: undefined,
+        genKeyword: undefined,
+      };
+    } else {
+      // mark error so we don't loop forever; keep it queued-visible
+      fresh[idx] = { ...fresh[idx], genError: r.error || "generation-failed" };
+    }
+    savePosts(fresh);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    queueBusy = false;
+  }
 }
