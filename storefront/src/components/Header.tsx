@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { PRODUCTS } from "@/data/products";
@@ -49,6 +49,14 @@ export function Header() {
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [megaCat, setMegaCat] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setRole(d?.session?.role ?? null))
+      .catch(() => setRole(null));
+  }, []);
 
   const storeName = t.storeName;
 
@@ -253,7 +261,7 @@ export function Header() {
             <Heart size={19} />
             {wishlist.length > 0 && <Badge>{num(wishlist.length, locale)}</Badge>}
           </LocaleLink>
-          <LocaleLink href="/account" title={t.account} className={iconBtn} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
+          <LocaleLink href={role ? "/account" : "/login"} title={t.account} className={iconBtn} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
             <User size={19} />
           </LocaleLink>
           <LocaleLink
@@ -297,13 +305,15 @@ export function Header() {
             {t.navBlog}
           </LocaleLink>
           <span className="flex-1" />
-          <LocaleLink
-            href="/admin"
-            className="link-accent inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-bold no-underline"
-            style={{ border: "1px solid var(--border)", color: "var(--muted)" }}
-          >
-            {t.adminPanel}
-          </LocaleLink>
+          {role === "super_admin" && (
+            <LocaleLink
+              href="/admin"
+              className="link-accent inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-bold no-underline"
+              style={{ border: "1px solid var(--border)", color: "var(--muted)" }}
+            >
+              {t.adminPanel}
+            </LocaleLink>
+          )}
         </div>
 
         {mega && (
