@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
-import { productById } from "@/data/products";
 import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
 import { grad, priceFmt, num } from "@/lib/format";
@@ -13,7 +12,7 @@ import { Sparkle, Heart, Play, Download, Plus, Minus, ArrowBack } from "./Icons"
 
 export function ProductDetail({ id }: { id: number }) {
   const router = useRouter();
-  const { locale, t, dark, addToCart, toggleWish, wishlist } = useShop();
+  const { locale, t, dark, addToCart, toggleWish, wishlist, products, productById } = useShop();
   const p = productById(id);
   const [gallery, setGallery] = useState(0);
   const [color, setColor] = useState(0);
@@ -195,7 +194,7 @@ export function ProductDetail({ id }: { id: number }) {
       <div className="mt-8">
         <h2 className="mb-[18px] text-[22px] font-extrabold tracking-tight">{t.relatedTitle}</h2>
         <div className="grid grid-cols-2 gap-[18px] md:grid-cols-4">
-          {related(p).map((rp) => (
+          {related(p, products).map((rp) => (
             <ProductCard key={rp.id} p={rp} />
           ))}
         </div>

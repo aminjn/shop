@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useShop } from "@/lib/store";
-import { PRODUCTS } from "@/data/products";
 import { CATEGORIES } from "@/data/categories";
 import { num } from "@/lib/format";
 import { ProductCard } from "@/components/ProductCard";
@@ -31,7 +30,7 @@ export default function ShopPage() {
 
 function ShopContent() {
   const sp = useSearchParams();
-  const { locale, t } = useShop();
+  const { locale, t, products } = useShop();
 
   const qParam = sp.get("q") || "";
   const catParam = sp.get("cat") || "all";
@@ -85,15 +84,15 @@ function ShopContent() {
     };
   }, [qParam, locale]);
 
-  const brands = useMemo(() => [...new Set(PRODUCTS.map((p) => p.brand))], []);
+  const brands = useMemo(() => [...new Set(products.map((p) => p.brand))], [products]);
 
   const list: Product[] = useMemo(() => {
     if (aiIds) {
       return aiIds
-        .map((id) => PRODUCTS.find((p) => p.id === id))
+        .map((id) => products.find((p) => p.id === id))
         .filter((p): p is Product => Boolean(p));
     }
-    let out = PRODUCTS.filter((p) => {
+    let out = products.filter((p) => {
       if (activeCat !== "all" && p.cat !== activeCat) return false;
       if (p.price > priceMax) return false;
       if (brandFilter.length && !brandFilter.includes(p.brand)) return false;
@@ -120,7 +119,7 @@ function ShopContent() {
       default: out.sort((a, b) => b.rating - a.rating);
     }
     return out;
-  }, [aiIds, activeCat, priceMax, brandFilter, ratingMin, inStockOnly, colorFilter, sizeFilter, sort]);
+  }, [products, aiIds, activeCat, priceMax, brandFilter, ratingMin, inStockOnly, colorFilter, sizeFilter, sort]);
 
   const reset = () => {
     setActiveCat("all");
