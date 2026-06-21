@@ -1,16 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
-import { postBySlug, POSTS } from "@/data/posts";
-import { grad } from "@/lib/format";
+import { postBySlug, POSTS, type Post } from "@/data/posts";
+import { grad, formatDate } from "@/lib/format";
 import { LocaleLink } from "./LocaleLink";
 import { Sparkle, Send, ArrowBack, ArrowForward } from "./Icons";
 
 export function BlogArticle({ slug }: { slug: string }) {
   const { locale, t, dark, toast } = useShop();
   const [question, setQuestion] = useState("");
-  const p = postBySlug(slug);
+
+  // Prefer dynamic published posts; fall back to the seed list.
+  const [posts, setPosts] = useState<Post[]>(POSTS);
+  useEffect(() => {
+    fetch("/api/posts")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (Array.isArray(d?.posts) && d.posts.length) setPosts(d.posts as Post[]);
+      })
+      .catch(() => {});
+  }, []);
+
+  const p = posts.find((x) => x.slug === slug) ?? postBySlug(slug);
 
   if (!p) {
     return (
@@ -27,12 +39,7 @@ export function BlogArticle({ slug }: { slug: string }) {
   const cat = locale === "fa" ? p.catFa : p.catEn;
   const body = (locale === "fa" ? p.bodyFa : p.bodyEn).split("\n\n");
 
-  const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString(locale === "fa" ? "fa-IR" : "en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  const fmtDate = (d: string) => formatDate(d, locale, { year: "numeric", month: "short", day: "numeric" });
 
   const summary =
     locale === "fa" ? p.excerptFa : p.excerptEn;
@@ -59,7 +66,7 @@ export function BlogArticle({ slug }: { slug: string }) {
     setQuestion("");
   };
 
-  const related = POSTS.filter((x) => x.id !== p.id).slice(0, 3);
+  const related = posts.filter((x) => x.id !== p.id).slice(0, 3);
 
   return (
     <div className="mx-auto max-w-[820px] px-[22px] py-7">

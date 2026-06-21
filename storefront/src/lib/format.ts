@@ -35,3 +35,17 @@ export const ROUNDNESS: Record<string, string> = {
   soft: "14px",
   round: "22px",
 };
+
+/** Format a date — Persian (Jalali) calendar with Persian digits for fa,
+ *  Gregorian for en. Used everywhere so all dates are Shamsi on the fa site. */
+export function formatDate(
+  input: string | number | Date,
+  locale: Locale,
+  opts: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" },
+): string {
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d.getTime())) return typeof input === "string" ? input : "";
+  const loc = locale === "fa" ? "fa-IR-u-ca-persian" : "en-US";
+  return new Intl.DateTimeFormat(loc, opts).format(d);
+}
+

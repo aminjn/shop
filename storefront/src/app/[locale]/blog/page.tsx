@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useShop } from "@/lib/store";
-import { POSTS } from "@/data/posts";
-import { grad, num } from "@/lib/format";
+import { POSTS, type Post } from "@/data/posts";
+import { grad, num, formatDate } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { ArrowForward } from "@/components/Icons";
 
@@ -11,22 +11,28 @@ export default function BlogPage() {
   const { locale, t, dark } = useShop();
   const [cat, setCat] = useState<string>("all");
 
-  const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString(locale === "fa" ? "fa-IR" : "en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  // Prefer dynamic published posts from the API; fall back to the seed list.
+  const [posts, setPosts] = useState<Post[]>(POSTS);
+  useEffect(() => {
+    fetch("/api/posts")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (Array.isArray(d?.posts) && d.posts.length) setPosts(d.posts as Post[]);
+      })
+      .catch(() => {});
+  }, []);
+
+  const fmtDate = (d: string) => formatDate(d, locale, { year: "numeric", month: "short", day: "numeric" });
 
   const cats = useMemo(() => {
     const map = new Map<string, string>();
-    for (const p of POSTS) map.set(p.catEn, locale === "fa" ? p.catFa : p.catEn);
+    for (const p of posts) map.set(p.catEn, locale === "fa" ? p.catFa : p.catEn);
     return Array.from(map.entries()); // [catEn, label]
-  }, [locale]);
+  }, [locale, posts]);
 
   const filtered = useMemo(
-    () => (cat === "all" ? POSTS : POSTS.filter((p) => p.catEn === cat)),
-    [cat],
+    () => (cat === "all" ? posts : posts.filter((p) => p.catEn === cat)),
+    [cat, posts],
   );
 
   const [featured, ...rest] = filtered;

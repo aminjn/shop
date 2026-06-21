@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useShop } from "@/lib/store";
 import { CATEGORIES, catById } from "@/data/categories";
 import type { Product } from "@/lib/types";
+import type { Post } from "@/data/posts";
 import type { OrderStatus } from "@/lib/userstore";
-import { grad, priceFmt, num } from "@/lib/format";
+import { grad, priceFmt, num, formatDate } from "@/lib/format";
 import { AI_MODELS } from "@/data/aiModels";
 import { ProductModal } from "@/components/admin/ProductModal";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -16,6 +17,7 @@ import {
   Sparkle,
   Plus,
   Trash,
+  Close,
 } from "@/components/Icons";
 
 type Section =
@@ -105,11 +107,7 @@ const STATUS_META: Record<OrderStatus, { fa: string; en: string; color: string }
 const fmtDate = (iso: string, fa: boolean) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso || "—";
-  return d.toLocaleDateString(fa ? "fa-IR" : "en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return formatDate(d, fa ? "fa" : "en");
 };
 
 export default function AdminPage() {
@@ -497,7 +495,7 @@ function Dashboard({ products }: { products: Product[] }) {
                     title={priceFmt(val, locale, t.currency)}
                   />
                   <span className="text-[11px]" style={{ color: "var(--muted)" }}>
-                    {days[i].toLocaleDateString(fa ? "fa-IR" : "en-US", { weekday: "short" })}
+                    {formatDate(days[i], fa ? "fa" : "en", { weekday: "short" })}
                   </span>
                 </div>
               );
@@ -1232,7 +1230,7 @@ function Reports() {
                   title={priceFmt(val, locale, t.currency)}
                 />
                 <span className="text-[10.5px]" style={{ color: "var(--muted)" }}>
-                  {months[i].toLocaleDateString(fa ? "fa-IR" : "en-US", { month: "short" })}
+                  {formatDate(months[i], fa ? "fa" : "en", { month: "short" })}
                 </span>
               </div>
             );
@@ -1243,7 +1241,7 @@ function Reports() {
   );
 }
 
-/* ---------- AI studio (real product-content generator) ---------- */
+/* ---------- AI studio (real product-content generator, article + scheduling, tool hub) ---------- */
 
 type AiResult = {
   seoTitle?: string;
@@ -1255,20 +1253,116 @@ type AiResult = {
   tags?: string[];
 };
 
+type AiArticle = {
+  title: string;
+  excerpt: string;
+  body: string;
+  category: string;
+  tags: string[];
+};
+
+type StoredPost = Post & {
+  status: "published" | "scheduled" | "draft";
+  publishAt?: string;
+};
+
+type AiTool = { id: string; label: string; emoji: string; cat: string };
+
+const TOOL_CATS = [
+  "همه",
+  "محتوا و سئو",
+  "بلاگ هوشمند",
+  "تصویر هوشمند",
+  "فروش و قیمت",
+  "مشتری و هوش تجاری",
+] as const;
+
+const TOOLS: AiTool[] = [
+  // محتوا و سئو
+  { id: "seo-title", label: "عنوان سئو", emoji: "🏷️", cat: "محتوا و سئو" },
+  { id: "short-desc", label: "توضیح کوتاه", emoji: "✏️", cat: "محتوا و سئو" },
+  { id: "long-desc", label: "توضیح کامل", emoji: "📝", cat: "محتوا و سئو" },
+  { id: "specs", label: "مشخصات فنی", emoji: "⚙️", cat: "محتوا و سئو" },
+  { id: "meta-desc", label: "متا دیسکریپشن", emoji: "🔖", cat: "محتوا و سئو" },
+  { id: "keywords", label: "کلمات کلیدی", emoji: "🔑", cat: "محتوا و سئو" },
+  { id: "rewrite", label: "بازنویسی متن", emoji: "🔁", cat: "محتوا و سئو" },
+  { id: "translate", label: "ترجمه متن", emoji: "🌐", cat: "محتوا و سئو" },
+  { id: "improve", label: "بهبود متن", emoji: "✨", cat: "محتوا و سئو" },
+  { id: "faq", label: "FAQ محصول", emoji: "❓", cat: "محتوا و سئو" },
+  { id: "duplicate", label: "تشخیص محتوای تکراری", emoji: "🧬", cat: "محتوا و سئو" },
+  { id: "internal-link", label: "لینک داخلی", emoji: "🔗", cat: "محتوا و سئو" },
+  // بلاگ هوشمند
+  { id: "outline", label: "تولید Outline", emoji: "🗂️", cat: "بلاگ هوشمند" },
+  { id: "title-suggest", label: "پیشنهاد تیتر", emoji: "💡", cat: "بلاگ هوشمند" },
+  { id: "meta-title", label: "متا تایتل", emoji: "🏷️", cat: "بلاگ هوشمند" },
+  { id: "seo-optimize", label: "بهینه‌سازی سئو", emoji: "📈", cat: "بلاگ هوشمند" },
+  { id: "rewrite-article", label: "بازنویسی مقاله", emoji: "🔂", cat: "بلاگ هوشمند" },
+  { id: "summarize", label: "خلاصه‌سازی", emoji: "📰", cat: "بلاگ هوشمند" },
+  { id: "multilingual", label: "محتوای چندزبانه", emoji: "🌍", cat: "بلاگ هوشمند" },
+  // تصویر هوشمند
+  { id: "feature-image", label: "تصویر شاخص", emoji: "🖼️", cat: "تصویر هوشمند" },
+  { id: "banner", label: "تولید بنر", emoji: "🎌", cat: "تصویر هوشمند" },
+  { id: "ad-images", label: "تصاویر تبلیغاتی", emoji: "📸", cat: "تصویر هوشمند" },
+  // فروش و قیمت
+  { id: "price-suggest", label: "پیشنهاد قیمت", emoji: "💰", cat: "فروش و قیمت" },
+  { id: "auto-discount", label: "تخفیف خودکار", emoji: "🏷️", cat: "فروش و قیمت" },
+  { id: "sales-forecast", label: "پیش‌بینی فروش ماهانه", emoji: "📊", cat: "فروش و قیمت" },
+  { id: "seasonal", label: "تحلیل فصلی", emoji: "🍂", cat: "فروش و قیمت" },
+  // مشتری و هوش تجاری
+  { id: "reco-engine", label: "موتور پیشنهاد خرید", emoji: "🛒", cat: "مشتری و هوش تجاری" },
+  { id: "segmentation", label: "سگمنت‌بندی مشتریان", emoji: "👥", cat: "مشتری و هوش تجاری" },
+  { id: "loyalty", label: "وفاداری هوشمند", emoji: "🎁", cat: "مشتری و هوش تجاری" },
+];
+
 function AiStudio() {
   const { locale, t, toast } = useShop();
   const fa = locale === "fa";
+  const aiToast = () => toast(fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured");
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0].id);
   const [result, setResult] = useState<AiResult | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // image generator
+  // --- article generator + scheduling ---
+  const [topic, setTopic] = useState("");
+  const [artBusy, setArtBusy] = useState(false);
+  const [art, setArt] = useState<AiArticle | null>(null);
+  const [artTitle, setArtTitle] = useState("");
+  const [artExcerpt, setArtExcerpt] = useState("");
+  const [artBody, setArtBody] = useState("");
+  const [schedAt, setSchedAt] = useState("");
+  const [pubBusy, setPubBusy] = useState(false);
+
+  // --- scheduled / draft list ---
+  const [scheduled, setScheduled] = useState<StoredPost[]>([]);
+  const loadScheduled = () =>
+    fetch("/api/posts?all=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (Array.isArray(d?.posts)) {
+          setScheduled((d.posts as StoredPost[]).filter((p) => p.status !== "published"));
+        }
+      })
+      .catch(() => {});
+
+  useEffect(() => {
+    loadScheduled();
+  }, []);
+
+  // --- image generator ---
   const [imgPrompt, setImgPrompt] = useState("");
   const [imgSize, setImgSize] = useState("1024x1024");
   const [imgUrl, setImgUrl] = useState("");
   const [imgBusy, setImgBusy] = useState(false);
+
+  // --- tool hub ---
+  const [toolCat, setToolCat] = useState<string>("همه");
+  const [activeTool, setActiveTool] = useState<AiTool | null>(null);
+  const [toolInput, setToolInput] = useState("");
+  const [toolOutput, setToolOutput] = useState("");
+  const [toolBusy, setToolBusy] = useState(false);
+
   const genImage = async () => {
     if (!imgPrompt.trim()) { toast(fa ? "توضیح تصویر را وارد کنید" : "Enter an image prompt"); return; }
     setImgBusy(true);
@@ -1281,7 +1375,7 @@ function AiStudio() {
       });
       const d = await r.json();
       if (d.ok && d.url) { setImgUrl(d.url); toast(fa ? "تصویر تولید شد ✓" : "Image generated ✓"); }
-      else if (d.error === "ai-not-configured") toast(fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured");
+      else if (d.error === "ai-not-configured" || d.error === "ai-unavailable") aiToast();
       else toast(fa ? "تولید تصویر ناموفق بود: " + (d.error || "") : "Image generation failed: " + (d.error || ""));
     } catch {
       toast(fa ? "خطای شبکه" : "Network error");
@@ -1307,8 +1401,8 @@ function AiStudio() {
       if (d.ok && d.result) {
         setResult(d.result as AiResult);
         toast(fa ? "محتوا تولید شد ✓" : "Content generated ✓");
-      } else if (d.error === "ai-unavailable") {
-        toast(fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured");
+      } else if (d.error === "ai-unavailable" || d.error === "ai-not-configured") {
+        aiToast();
       } else {
         toast(fa ? "تولید محتوا ناموفق بود" : "Generation failed");
       }
@@ -1319,6 +1413,158 @@ function AiStudio() {
     }
   };
 
+  const generateArticle = async () => {
+    if (!topic.trim()) {
+      toast(fa ? "موضوع مقاله را وارد کنید" : "Enter an article topic");
+      return;
+    }
+    setArtBusy(true);
+    setArt(null);
+    try {
+      const r = await fetch("/api/ai/article", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topic: topic.trim() }),
+      });
+      const d = await r.json();
+      if (d.ok && d.article) {
+        const a = d.article as AiArticle;
+        setArt(a);
+        setArtTitle(a.title || "");
+        setArtExcerpt(a.excerpt || "");
+        setArtBody(a.body || "");
+        toast(fa ? "مقاله تولید شد ✓" : "Article generated ✓");
+      } else if (d.error === "ai-unavailable" || d.error === "ai-not-configured") {
+        aiToast();
+      } else {
+        toast(fa ? "تولید مقاله ناموفق بود" : "Article generation failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setArtBusy(false);
+    }
+  };
+
+  const postArticle = async (status: "published" | "scheduled") => {
+    if (!artTitle.trim()) {
+      toast(fa ? "عنوان مقاله را وارد کنید" : "Enter an article title");
+      return;
+    }
+    if (status === "scheduled" && !schedAt) {
+      toast(fa ? "زمان انتشار را انتخاب کنید" : "Pick a publish time");
+      return;
+    }
+    setPubBusy(true);
+    try {
+      const r = await fetch("/api/posts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          status,
+          publishAt: status === "scheduled" ? new Date(schedAt).toISOString() : undefined,
+          post: {
+            fa: artTitle.trim(),
+            excerptFa: artExcerpt.trim(),
+            bodyFa: artBody.trim(),
+            catFa: art?.category || "",
+            tags: art?.tags || [],
+          },
+        }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(status === "published" ? (fa ? "مقاله منتشر شد ✓" : "Article published ✓") : (fa ? "مقاله زمان‌بندی شد ✓" : "Article scheduled ✓"));
+        setArt(null);
+        setArtTitle("");
+        setArtExcerpt("");
+        setArtBody("");
+        setTopic("");
+        setSchedAt("");
+        await loadScheduled();
+      } else {
+        toast(fa ? "عملیات ناموفق بود" : "Operation failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setPubBusy(false);
+    }
+  };
+
+  const deleteScheduled = async (id: number) => {
+    try {
+      const r = await fetch("/api/posts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(fa ? "حذف شد ✓" : "Deleted ✓");
+        await loadScheduled();
+      } else {
+        toast(fa ? "حذف ناموفق بود" : "Delete failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    }
+  };
+
+  const openTool = (tool: AiTool) => {
+    if (tool.cat === "تصویر هوشمند") {
+      setImgPrompt(tool.label);
+      const el = document.getElementById("ai-image-generator");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setActiveTool(tool);
+    setToolInput("");
+    setToolOutput("");
+  };
+
+  const runTool = async () => {
+    if (!activeTool) return;
+    setToolBusy(true);
+    setToolOutput("");
+    try {
+      const r = await fetch("/api/ai/tool", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tool: activeTool.label, input: toolInput.trim() || undefined }),
+      });
+      const d = await r.json();
+      if (d.ok && typeof d.output === "string") {
+        setToolOutput(d.output);
+      } else if (d.error === "ai-unavailable" || d.error === "ai-not-configured") {
+        aiToast();
+      } else {
+        toast(fa ? "اجرای ابزار ناموفق بود" : "Tool run failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setToolBusy(false);
+    }
+  };
+
+  const copyOutput = async () => {
+    try {
+      await navigator.clipboard.writeText(toolOutput);
+      toast(fa ? "کپی شد ✓" : "Copied ✓");
+    } catch {
+      toast(fa ? "کپی ناموفق بود" : "Copy failed");
+    }
+  };
+
+  const statusBadge = (s: StoredPost["status"]) =>
+    s === "scheduled"
+      ? { label: fa ? "زمان‌بندی‌شده" : "Scheduled", color: "#2a6fdb" }
+      : { label: fa ? "پیش‌نویس" : "Draft", color: "#d97706" };
+
+  const visibleTools = toolCat === "همه" ? TOOLS : TOOLS.filter((x) => x.cat === toolCat);
+
   return (
     <>
       <div className="mb-5">
@@ -1328,6 +1574,7 @@ function AiStudio() {
         </p>
       </div>
 
+      {/* A) product content generator */}
       <Card className="mb-6 p-5">
         <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
           <Sparkle size={16} /> {fa ? "تولیدکننده محتوای محصول" : "Product content generator"}
@@ -1428,39 +1675,321 @@ function AiStudio() {
         )}
       </Card>
 
-      {/* image generator (gpt-image-2 via GapGPT) */}
-      <Card className="p-5">
+      {/* B) blog article generator + scheduling */}
+      <Card className="mb-6 p-5">
         <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
-          <Sparkle size={16} /> {fa ? "تولید تصویر با هوش مصنوعی" : "AI image generator"}
+          <Sparkle size={16} /> {fa ? "تولید مقاله بلاگ با هوش مصنوعی" : "AI blog article generator"}
         </h2>
         <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
-          {fa ? "تصویر محصول یا بنر بساز (مدل gpt-image-2 از طریق گپ‌جی‌پی‌تی)." : "Generate product images or banners (gpt-image-2 via GapGPT)."}
+          {fa
+            ? "موضوع را وارد کنید، مقاله را ویرایش و سپس فوری منتشر یا زمان‌بندی کنید (انتشار خودکار)."
+            : "Enter a topic, edit the article, then publish now or schedule it (auto-posts)."}
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-[220px] flex-1">
-            {lbl(fa ? "توضیح تصویر (Prompt)" : "Image prompt")}
-            <input className={inputCls} style={inputStyle} value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} placeholder={fa ? "مثلاً: عکس محصول روی پس‌زمینه سفید" : "e.g. product photo on white background"} />
+            {lbl(fa ? "موضوع مقاله" : "Article topic")}
+            <input
+              className={inputCls}
+              style={inputStyle}
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder={fa ? "مثلاً: راهنمای انتخاب لپ‌تاپ گیمینگ" : "e.g. guide to choosing a gaming laptop"}
+            />
           </div>
-          <div className="min-w-[130px]">
-            {lbl(fa ? "اندازه" : "Size")}
-            <select className={inputCls} style={inputStyle} value={imgSize} onChange={(e) => setImgSize(e.target.value)}>
-              <option value="1024x1024">1024×1024</option>
-              <option value="1024x1536">1024×1536</option>
-              <option value="1536x1024">1536×1024</option>
-            </select>
-          </div>
-          <button onClick={genImage} disabled={imgBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
-            <Sparkle size={15} /> {imgBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید تصویر" : "Generate"}
+          <button
+            onClick={generateArticle}
+            disabled={artBusy}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60"
+            style={{ background: "var(--accent)" }}
+          >
+            <Sparkle size={15} /> {artBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید مقاله" : "Generate"}
           </button>
         </div>
-        {imgUrl && (
-          <div className="mt-4 flex flex-col items-start gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imgUrl} alt="generated" className="max-h-[360px] rounded-[12px]" style={{ border: "1px solid var(--border)" }} />
-            <a href={imgUrl} target="_blank" rel="noreferrer" className="text-[12.5px] font-bold no-underline" style={{ color: "var(--accent)" }}>{fa ? "باز کردن تصویر" : "Open image"}</a>
+
+        {art && (
+          <div
+            className="mt-4 flex flex-col gap-3 rounded-[12px] p-4"
+            style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
+          >
+            {(art.category || (art.tags && art.tags.length > 0)) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {art.category && (
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[11.5px] font-bold"
+                    style={{ background: "var(--accent)1f", color: "var(--accent)" }}
+                  >
+                    {art.category}
+                  </span>
+                )}
+                {art.tags?.map((tg, i) => (
+                  <span key={i} className="rounded-full px-2.5 py-1 text-[11.5px] font-bold" style={{ background: "var(--surface)", color: "var(--muted)", border: "1px solid var(--border)" }}>
+                    {tg}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div>
+              {lbl(fa ? "عنوان" : "Title")}
+              <input className={inputCls} style={inputStyle} value={artTitle} onChange={(e) => setArtTitle(e.target.value)} />
+            </div>
+            <div>
+              {lbl(fa ? "خلاصه" : "Excerpt")}
+              <textarea className={inputCls} style={{ ...inputStyle, minHeight: 64, resize: "vertical" }} value={artExcerpt} onChange={(e) => setArtExcerpt(e.target.value)} />
+            </div>
+            <div>
+              {lbl(fa ? "متن مقاله" : "Body")}
+              <textarea className={inputCls} style={{ ...inputStyle, minHeight: 180, resize: "vertical", lineHeight: "1.8" }} value={artBody} onChange={(e) => setArtBody(e.target.value)} />
+            </div>
+
+            {/* live preview */}
+            <div>
+              <div className="mb-1 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
+                {fa ? "پیش‌نمایش" : "Preview"}
+              </div>
+              <div className="flex flex-col gap-2 rounded-[10px] p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                <div className="text-[15px] font-extrabold">{artTitle}</div>
+                {artExcerpt && <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>{artExcerpt}</div>}
+                {artBody.split("\n\n").filter(Boolean).map((para, i) => (
+                  <p key={i} className="text-[13.5px] leading-[1.9]" style={{ color: "var(--text)", textAlign: "start" }}>
+                    {para}
+                  </p>
+                ))}
+              </div>
+            </div>
+
+            {/* actions */}
+            <div className="flex flex-wrap items-end gap-2">
+              <button
+                onClick={() => postArticle("published")}
+                disabled={pubBusy}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-4 py-2.5 text-[13px] font-extrabold text-white disabled:opacity-60"
+                style={{ background: "var(--accent)" }}
+              >
+                {fa ? "انتشار فوری" : "Publish now"}
+              </button>
+              <div className="min-w-[200px]">
+                {lbl(fa ? "زمان انتشار" : "Publish time")}
+                <input
+                  type="datetime-local"
+                  className={inputCls}
+                  style={inputStyle}
+                  value={schedAt}
+                  onChange={(e) => setSchedAt(e.target.value)}
+                  dir="ltr"
+                />
+              </div>
+              <button
+                onClick={() => postArticle("scheduled")}
+                disabled={pubBusy}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-extrabold disabled:opacity-60"
+                style={{ background: "var(--surface)", color: "var(--accent)", border: "1px solid var(--border)" }}
+              >
+                {fa ? "زمان‌بندی انتشار" : "Schedule"}
+              </button>
+            </div>
           </div>
         )}
       </Card>
+
+      {/* C) scheduled / draft list */}
+      <Card className="mb-6 p-5">
+        <h2 className="mb-4 text-[15px] font-extrabold">
+          {fa ? "محتوای زمان‌بندی‌شده و پیش‌نویس" : "Scheduled & draft content"}
+        </h2>
+        {scheduled.length === 0 ? (
+          <p className="text-[13px]" style={{ color: "var(--muted)" }}>
+            {fa ? "محتوای زمان‌بندی‌شده‌ای وجود ندارد." : "No scheduled or draft content."}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {scheduled.map((p) => {
+              const b = statusBadge(p.status);
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 rounded-[10px] p-3"
+                  style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-bold">{p.fa}</div>
+                    {p.publishAt && (
+                      <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
+                        {fa ? "انتشار: " : "Publishes: "}
+                        {formatDate(p.publishAt, locale, { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    )}
+                  </div>
+                  <Badge label={b.label} color={b.color} />
+                  <ActBtn onClick={() => deleteScheduled(p.id)} color="#e11d48" label={t.del}>
+                    <Trash size={15} />
+                  </ActBtn>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* D) image generator (gpt-image-2 via GapGPT) */}
+      <Card className="mb-6 p-5" >
+        <div id="ai-image-generator" className="scroll-mt-24">
+          <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
+            <Sparkle size={16} /> {fa ? "تولید تصویر با هوش مصنوعی" : "AI image generator"}
+          </h2>
+          <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
+            {fa ? "تصویر محصول یا بنر بساز (مدل gpt-image-2 از طریق گپ‌جی‌پی‌تی)." : "Generate product images or banners (gpt-image-2 via GapGPT)."}
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[220px] flex-1">
+              {lbl(fa ? "توضیح تصویر (Prompt)" : "Image prompt")}
+              <input className={inputCls} style={inputStyle} value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} placeholder={fa ? "مثلاً: عکس محصول روی پس‌زمینه سفید" : "e.g. product photo on white background"} />
+            </div>
+            <div className="min-w-[130px]">
+              {lbl(fa ? "اندازه" : "Size")}
+              <select className={inputCls} style={inputStyle} value={imgSize} onChange={(e) => setImgSize(e.target.value)}>
+                <option value="1024x1024">1024×1024</option>
+                <option value="1024x1536">1024×1536</option>
+                <option value="1536x1024">1536×1024</option>
+              </select>
+            </div>
+            <button onClick={genImage} disabled={imgBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+              <Sparkle size={15} /> {imgBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید تصویر" : "Generate"}
+            </button>
+          </div>
+          {imgUrl && (
+            <div className="mt-4 flex flex-col items-start gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imgUrl} alt="generated" className="max-h-[360px] rounded-[12px]" style={{ border: "1px solid var(--border)" }} />
+              <a href={imgUrl} target="_blank" rel="noreferrer" className="text-[12.5px] font-bold no-underline" style={{ color: "var(--accent)" }}>{fa ? "باز کردن تصویر" : "Open image"}</a>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* E) tool hub */}
+      <Card className="p-5">
+        <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
+          <Sparkle size={16} /> {fa ? "جعبه‌ابزار هوش مصنوعی" : "AI tool hub"}
+        </h2>
+        <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
+          {fa ? "ابزارهای آماده برای محتوا، سئو، تصویر، فروش و مشتری." : "Ready-made tools for content, SEO, images, sales and customers."}
+        </p>
+
+        {/* category pills */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {TOOL_CATS.map((c) => {
+            const active = toolCat === c;
+            return (
+              <button
+                key={c}
+                onClick={() => setToolCat(c)}
+                className="cursor-pointer rounded-full px-3.5 py-1.5 text-[12.5px] font-bold"
+                style={{
+                  background: active ? "var(--accent)" : "var(--surface2)",
+                  color: active ? "#fff" : "var(--text)",
+                  border: "1px solid " + (active ? "var(--accent)" : "var(--border)"),
+                }}
+              >
+                {c}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* tool grid */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleTools.map((tool) => (
+            <div
+              key={tool.id}
+              className="flex items-center gap-3 rounded-[12px] p-3.5"
+              style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
+            >
+              <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[10px] text-[20px]" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                {tool.emoji}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-bold">{tool.label}</div>
+                <div className="truncate text-[11px]" style={{ color: "var(--muted)" }}>{tool.cat}</div>
+              </div>
+              <button
+                onClick={() => openTool(tool)}
+                className="flex-none cursor-pointer rounded-[9px] border-none px-3 py-1.5 text-[12px] font-bold text-white"
+                style={{ background: "var(--accent)" }}
+              >
+                {fa ? "اجرا" : "Run"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* tool modal */}
+      {activeTool && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,.5)" }}
+          onClick={() => setActiveTool(null)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[16px]"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+              <h3 className="flex items-center gap-2 text-[15px] font-extrabold">
+                <span className="text-[18px]">{activeTool.emoji}</span> {activeTool.label}
+              </h3>
+              <button
+                onClick={() => setActiveTool(null)}
+                aria-label={fa ? "بستن" : "Close"}
+                className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[9px] border-none"
+                style={{ background: "var(--surface2)", color: "var(--text)" }}
+              >
+                <Close size={16} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 overflow-y-auto p-5 scrollthin">
+              <div>
+                {lbl(fa ? "ورودی (اختیاری)" : "Input (optional)")}
+                <textarea
+                  className={inputCls}
+                  style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
+                  value={toolInput}
+                  onChange={(e) => setToolInput(e.target.value)}
+                  placeholder={fa ? "متن یا توضیح خود را وارد کنید..." : "Enter your text or prompt..."}
+                />
+              </div>
+              <button
+                onClick={runTool}
+                disabled={toolBusy}
+                className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13px] font-extrabold text-white disabled:opacity-60"
+                style={{ background: "var(--accent)" }}
+              >
+                <Sparkle size={15} /> {toolBusy ? (fa ? "در حال اجرا…" : "Running…") : fa ? "اجرا" : "Run"}
+              </button>
+              {toolOutput && (
+                <div className="flex flex-col gap-2 rounded-[12px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
+                      {fa ? "خروجی" : "Output"}
+                    </div>
+                    <button
+                      onClick={copyOutput}
+                      className="cursor-pointer rounded-[8px] border-none px-2.5 py-1 text-[11.5px] font-bold"
+                      style={{ background: "var(--accent)1f", color: "var(--accent)" }}
+                    >
+                      {fa ? "کپی" : "Copy"}
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap text-[13.5px] leading-[1.9]" style={{ color: "var(--text)", textAlign: "start" }}>
+                    {toolOutput}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
