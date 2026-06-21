@@ -1117,6 +1117,8 @@ function Reviews({ products }: { products: Product[] }) {
   const fa = locale === "fa";
   const [reviews, setReviews] = useState<AdminReview[]>([]);
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+  const [replyOpen, setReplyOpen] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState("");
   const prodMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
   const load = () =>
@@ -1132,10 +1134,8 @@ function Reviews({ products }: { products: Product[] }) {
     if (d.ok) { setReviews(d.reviews); toast(fa ? "انجام شد ✓" : "Done ✓"); }
     else toast(fa ? "خطا" : "Error");
   };
-  const reply = (id: number, cur?: string) => {
-    const v = window.prompt(fa ? "پاسخ فروشگاه به این نظر:" : "Store reply:", cur || "");
-    if (v !== null) act(id, "reply", v.trim());
-  };
+  const openReply = (id: number, cur?: string) => { setReplyOpen(id); setReplyText(cur || ""); };
+  const saveReply = async (id: number) => { await act(id, "reply", replyText.trim()); setReplyOpen(null); setReplyText(""); };
 
   const counts = {
     all: reviews.length,
@@ -1194,15 +1194,33 @@ function Reviews({ products }: { products: Product[] }) {
                   {badge(r.status)}
                 </div>
                 <p className="mt-2.5 text-[13.5px] leading-relaxed" style={{ color: "var(--text)", textAlign: "start" }}>{r.text}</p>
-                {r.reply && (
+                {r.reply && replyOpen !== r.id && (
                   <div className="mt-2 rounded-[10px] p-2.5 text-[12.5px]" style={{ background: "var(--surface2)", color: "var(--text)" }}>
                     <b style={{ color: "var(--accent)" }}>{fa ? "پاسخ فروشگاه: " : "Reply: "}</b>{r.reply}
+                    <button onClick={() => openReply(r.id, r.reply)} className="ms-2 cursor-pointer border-none bg-transparent text-[11.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
+                  </div>
+                )}
+                {replyOpen === r.id && (
+                  <div className="mt-2.5">
+                    <textarea
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      autoFocus
+                      placeholder={fa ? "پاسخ فروشگاه به این نظر…" : "Your reply…"}
+                      className="w-full rounded-[10px] px-3 py-2.5 text-[13px] outline-none"
+                      style={{ ...inputStyle, minHeight: 70, resize: "vertical" }}
+                    />
+                    <div className="mt-2 flex gap-2">
+                      <button onClick={() => saveReply(r.id)} className="cursor-pointer rounded-[9px] border-none px-4 py-1.5 text-[12.5px] font-bold text-white" style={{ background: "var(--accent)" }}>{fa ? "ثبت پاسخ" : "Save reply"}</button>
+                      <button onClick={() => { setReplyOpen(null); setReplyText(""); }} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>
+                      {r.reply && <button onClick={() => { act(r.id, "reply", ""); setReplyOpen(null); }} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ ...inputStyle, color: "#e11d48" }}>{fa ? "حذف پاسخ" : "Remove"}</button>}
+                    </div>
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {r.status !== "approved" && <button onClick={() => act(r.id, "approve")} className="cursor-pointer rounded-[9px] border-none px-3 py-1.5 text-[12.5px] font-bold text-white" style={{ background: "#1f8a5b" }}>{fa ? "تأیید" : "Approve"}</button>}
                   {r.status !== "rejected" && <button onClick={() => act(r.id, "reject")} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ ...inputStyle, color: "#e11d48" }}>{fa ? "رد" : "Reject"}</button>}
-                  <button onClick={() => reply(r.id, r.reply)} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={inputStyle}>{fa ? "پاسخ" : "Reply"}</button>
+                  {replyOpen !== r.id && <button onClick={() => openReply(r.id, r.reply)} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={inputStyle}>{r.reply ? (fa ? "ویرایش پاسخ" : "Edit reply") : (fa ? "پاسخ دادن" : "Reply")}</button>}
                   <button onClick={() => act(r.id, "delete")} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ ...inputStyle, color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
                 </div>
               </div>
