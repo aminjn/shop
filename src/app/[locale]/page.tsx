@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useShop } from "@/lib/store";
-import { PRODUCTS } from "@/data/products";
 import { CATEGORIES } from "@/data/categories";
 import {
   featured,
@@ -23,14 +22,14 @@ import { Sparkle } from "@/components/Icons";
 const SECTION = "mx-auto max-w-[1280px] px-[22px]";
 
 export default function HomePage() {
-  const { locale, t, dark, addToCart, setChatOpen } = useShop();
+  const { locale, t, dark, addToCart, setChatOpen, products } = useShop();
   const [tab, setTab] = useState<"featured" | "new" | "best" | "deal">("featured");
 
-  const deal = dealOfDay();
+  const deal = dealOfDay(products);
   const dealName = locale === "fa" ? deal.fa : deal.en;
   const dealCat = CATEGORIES.find((c) => c.id === deal.cat);
 
-  const picks = smartPicks();
+  const picks = smartPicks(products);
   const reasons =
     locale === "fa"
       ? ["چون قبلاً محصول مشابه دیدی", "چون کاربران مشابه انتخاب کرده‌اند", "پرتکرار در سبد خریدها", "متناسب با سلیقه‌ی تو"]
@@ -38,10 +37,10 @@ export default function HomePage() {
   const matches = [96, 93, 91, 89];
 
   const tabs = [
-    { id: "featured" as const, label: t.tabFeatured, items: featured() },
-    { id: "new" as const, label: t.tabNew, items: newest() },
-    { id: "best" as const, label: t.tabBest, items: bestSellers() },
-    { id: "deal" as const, label: t.tabDeal, items: onSale() },
+    { id: "featured" as const, label: t.tabFeatured, items: featured(products) },
+    { id: "new" as const, label: t.tabNew, items: newest(products) },
+    { id: "best" as const, label: t.tabBest, items: bestSellers(products) },
+    { id: "deal" as const, label: t.tabDeal, items: onSale(products) },
   ];
   const active = tabs.find((x) => x.id === tab)!;
 
@@ -186,7 +185,7 @@ export default function HomePage() {
         </div>
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-5">
           {CATEGORIES.map((c) => {
-            const count = PRODUCTS.filter((p) => p.cat === c.id).length;
+            const count = products.filter((p) => p.cat === c.id).length;
             return (
               <LocaleLink key={c.id} href={`/shop?cat=${c.id}`} className="lift flex flex-col items-center gap-2.5 rounded-[16px] px-4 py-6 text-center text-white no-underline transition" style={{ background: grad(c.hue, dark) }}>
                 <span className="flex h-[54px] w-[54px] items-center justify-center rounded-full text-[22px] font-extrabold" style={{ background: "rgba(255,255,255,.22)" }}>{(locale === "fa" ? c.fa : c.en).charAt(0)}</span>
@@ -252,7 +251,7 @@ export default function HomePage() {
       <section className={`${SECTION} py-6`}>
         <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{t.popularBrands}</h2>
         <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-5">
-          {topBrands().map((b) => (
+          {topBrands(products).map((b) => (
             <LocaleLink key={b} href={`/shop?brand=${encodeURIComponent(b)}`} className="row-hover flex items-center justify-center rounded-[14px] py-7 text-[18px] font-extrabold no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
               {b}
             </LocaleLink>

@@ -20,7 +20,7 @@ export function ProductModal({
 }: {
   initial?: Product | null;
   onClose: () => void;
-  onSave: (p: Product) => void;
+  onSave: (p: Product) => void | Promise<void>;
 }) {
   const { locale, t, toast } = useShop();
 
@@ -80,8 +80,8 @@ export function ProductModal({
       sku: sku.trim() || undefined,
       variations: vars.length ? vars : undefined,
     };
+    // The parent persists to the API and shows the success/failure toast.
     onSave(product);
-    toast(initial ? t.saved : locale === "fa" ? "محصول اضافه شد ✓" : "Product added ✓");
     onClose();
   };
 

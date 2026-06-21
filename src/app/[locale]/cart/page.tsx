@@ -1,27 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
-import { productById } from "@/data/products";
-import { computeTotals, COUPONS } from "@/lib/cart";
+import { computeTotals } from "@/lib/cart";
 import { grad, priceFmt, num } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Plus, Minus, Trash, Cart as CartIcon, ArrowBack } from "@/components/Icons";
 
 export default function CartPage() {
-  const { locale, t, dark, cart, changeLine, removeLine, coupon, setCoupon } = useShop();
+  const { locale, t, dark, cart, changeLine, removeLine, coupon, setCoupon, products, productById } = useShop();
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState("");
-  const totals = computeTotals(cart, coupon);
+  const [cfg, setCfg] = useState<{ shipFee: number; freeShipThreshold: number; taxRate: number } | undefined>();
 
-  const applyCoupon = () => {
-    const c = COUPONS[code.trim().toUpperCase()];
-    if (c) {
-      setCoupon(c);
-      setMsg(t.couponApplied);
-    } else {
-      setCoupon(null);
-      setMsg(t.couponInvalid);
+  useEffect(() => {
+    fetch("/api/settings/store")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.settings && setCfg({ shipFee: d.settings.shipFee, freeShipThreshold: d.settings.freeShipThreshold, taxRate: d.settings.taxRate }))
+      .catch(() => {});
+  }, []);
+
+  const subtotal = cart.reduce((sum, l) => { const p = productById(l.id); return sum + (p ? p.price * l.qty : 0); }, 0);
+  const totals = computeTotals(cart, coupon, { products, config: cfg });
+
+  const applyCoupon = async () => {
+    try {
+      const r = await fetch("/api/coupons/apply", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code, subtotal }),
+      });
+      const d = await r.json();
+      if (d.ok && d.coupon) { setCoupon(d.coupon); setMsg(t.couponApplied); }
+      else { setCoupon(null); setMsg(t.couponInvalid); }
+    } catch {
+      setCoupon(null); setMsg(t.couponInvalid);
     }
   };
 

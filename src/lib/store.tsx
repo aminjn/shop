@@ -9,9 +9,10 @@ import {
   useRef,
   useState,
 } from "react";
-import type { CartLine, Coupon, Locale } from "./types";
+import type { CartLine, Coupon, Locale, Product } from "./types";
 import { getDict, type Dict } from "@/i18n/dictionaries";
 import { ROUNDNESS } from "./format";
+import { PRODUCTS as SEED_PRODUCTS } from "@/data/products";
 
 type Roundness = "sharp" | "soft" | "round";
 
@@ -47,6 +48,9 @@ interface ShopState {
   // chat
   chatOpen: boolean;
   setChatOpen: (v: boolean) => void;
+  // live catalog (defaults to the seed, refreshed from /api/products)
+  products: Product[];
+  productById: (id: number) => Product | undefined;
 }
 
 const Ctx = createContext<ShopState | null>(null);
@@ -92,6 +96,7 @@ export function ShopProvider({
   const [coupon, setCoupon] = useState<Coupon | null>(null);
   const [toastMsg, setToastMsg] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // hydrate from localStorage on mount
@@ -103,6 +108,11 @@ export function ShopProvider({
     setWishlist(load("wishlist", []));
     setCompare(load("compare", []));
     setMounted(true);
+    // refresh catalog with any admin edits (falls back to seed on failure)
+    fetch("/api/products")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.products) && d.products.length && setProducts(d.products))
+      .catch(() => {});
   }, [accentColor, defaultRoundness]);
 
   // reflect theme on <html> for SSR-safe theming via CSS vars
@@ -243,6 +253,8 @@ export function ShopProvider({
     toastMsg,
     chatOpen,
     setChatOpen,
+    products,
+    productById: (id: number) => products.find((p) => p.id === id),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

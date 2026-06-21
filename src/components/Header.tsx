@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
-import { PRODUCTS } from "@/data/products";
 import { CATEGORIES } from "@/data/categories";
 import { grad, priceFmt, num } from "@/lib/format";
 import { LocaleLink } from "./LocaleLink";
@@ -45,6 +44,7 @@ export function Header() {
     wishlist,
     compare,
     setChatOpen,
+    products,
   } = useShop();
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
@@ -63,7 +63,7 @@ export function Header() {
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return { prods: [], cats: [], brands: [] };
-    const prods = PRODUCTS.filter(
+    const prods = products.filter(
       (p) =>
         p.fa.toLowerCase().includes(q) ||
         p.en.toLowerCase().includes(q) ||
@@ -72,11 +72,11 @@ export function Header() {
     const cats = CATEGORIES.filter(
       (c) => c.fa.includes(q) || c.en.toLowerCase().includes(q),
     ).slice(0, 3);
-    const brands = [...new Set(PRODUCTS.map((p) => p.brand))]
+    const brands = [...new Set(products.map((p) => p.brand))]
       .filter((b) => b.toLowerCase().includes(q))
       .slice(0, 3);
     return { prods, cats, brands };
-  }, [query]);
+  }, [query, products]);
 
   const runSearch = () => {
     const q = query.trim();

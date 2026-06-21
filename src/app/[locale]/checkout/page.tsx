@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useShop } from "@/lib/store";
-import { productById } from "@/data/products";
 import { computeTotals } from "@/lib/cart";
 import { grad, priceFmt, num } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
@@ -12,7 +11,7 @@ const field =
   "rounded-[10px] px-3 py-3 text-[14px] outline-none w-full";
 
 export default function CheckoutPage() {
-  const { locale, t, dark, cart, clearCart, coupon, toast } = useShop();
+  const { locale, t, dark, cart, clearCart, coupon, toast, productById } = useShop();
   const totals = computeTotals(cart, coupon);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [form, setForm] = useState({

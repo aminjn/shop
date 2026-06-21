@@ -1,13 +1,12 @@
 "use client";
 
 import { useShop } from "@/lib/store";
-import { productById } from "@/data/products";
 import { ProductCard } from "@/components/ProductCard";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Heart } from "@/components/Icons";
 
 export default function WishlistPage() {
-  const { t, wishlist } = useShop();
+  const { t, wishlist, productById } = useShop();
   const items = wishlist.map((id) => productById(id)).filter(Boolean);
 
   if (items.length === 0) {

@@ -1,14 +1,13 @@
 "use client";
 
 import { useShop } from "@/lib/store";
-import { productById } from "@/data/products";
 import { catById } from "@/data/categories";
 import { grad, priceFmt, num } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Compare as CompareIcon, Close } from "@/components/Icons";
 
 export default function ComparePage() {
-  const { locale, t, dark, compare, toggleCompare, addToCart } = useShop();
+  const { locale, t, dark, compare, toggleCompare, addToCart, productById } = useShop();
   const items = compare.map((id) => productById(id)).filter(Boolean);
 
   if (items.length === 0) {

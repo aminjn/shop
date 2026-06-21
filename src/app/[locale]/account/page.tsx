@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
-import { productById } from "@/data/products";
 import { num, priceFmt, grad } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -40,7 +39,7 @@ const TIERS = [
 ];
 
 export default function AccountPage() {
-  const { locale, t, dark, toast, wishlist } = useShop();
+  const { locale, t, dark, toast, wishlist, productById } = useShop();
   const fa = locale === "fa";
   const [data, setData] = useState<UserData | null>(null);
   const [section, setSection] = useState<Section>("dashboard");

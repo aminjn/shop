@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useShop } from "@/lib/store";
-import { PRODUCTS } from "@/data/products";
 import { CATEGORIES, catById } from "@/data/categories";
 import type { Product } from "@/lib/types";
+import type { OrderStatus } from "@/lib/userstore";
 import { grad, priceFmt, num } from "@/lib/format";
 import { AI_MODELS } from "@/data/aiModels";
 import { ProductModal } from "@/components/admin/ProductModal";
@@ -15,8 +15,6 @@ import {
   Sparkle,
   Plus,
   Trash,
-  Check,
-  Close,
 } from "@/components/Icons";
 
 type Section =
@@ -30,6 +28,54 @@ type Section =
   | "ai"
   | "settings";
 
+/* ---------- shared data types (mirror the API responses) ---------- */
+
+type AdminOrder = {
+  id: string;
+  date: string;
+  status: OrderStatus;
+  total: number;
+  items: { id: number; name: string; qty: number; price: number }[];
+  payment: string;
+  shipping: string;
+  mobile: string;
+  customer: string;
+};
+
+type AdminCustomer = {
+  mobile: string;
+  name: string;
+  email: string;
+  orders: number;
+  spent: number;
+  points: number;
+  wallet: number;
+  joined: string;
+  role: string;
+};
+
+type AdminCoupon = {
+  code: string;
+  type: "percent" | "fixed" | "ship";
+  value: number;
+  enabled: boolean;
+  expiry?: string;
+  minPurchase?: number;
+  usageLimit?: number;
+  used?: number;
+};
+
+type StoreSettings = {
+  storeName: string;
+  currencyFa: string;
+  currencyEn: string;
+  shipFee: number;
+  freeShipThreshold: number;
+  taxRate: number;
+  maintenance: boolean;
+  cod: boolean;
+};
+
 const cardStyle = {
   background: "var(--surface)",
   border: "1px solid var(--border)",
@@ -41,14 +87,45 @@ const inputStyle = {
   color: "var(--text)",
 } as const;
 
+const STATUS_META: Record<OrderStatus, { fa: string; en: string; color: string }> = {
+  processing: { fa: "در حال پردازش", en: "Processing", color: "#d97706" },
+  shipped: { fa: "ارسال شده", en: "Shipped", color: "#2a6fdb" },
+  delivered: { fa: "تحویل شده", en: "Delivered", color: "#1f8a5b" },
+  cancelled: { fa: "لغو شده", en: "Cancelled", color: "#e11d48" },
+};
+
+const fmtDate = (iso: string, fa: boolean) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso || "—";
+  return d.toLocaleDateString(fa ? "fa-IR" : "en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
+
 export default function AdminPage() {
-  const { locale, t, dark, toast } = useShop();
+  const { locale, t, toast } = useShop();
   const [section, setSection] = useState<Section>("dashboard");
-  const [products, setProducts] = useState<Product[]>(() => [...PRODUCTS]);
+
+  // Live catalog — single source of truth shared by products & reviews & dashboard.
+  const [products, setProducts] = useState<Product[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
 
   const fa = locale === "fa";
+
+  const loadProducts = () =>
+    fetch("/api/products")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (Array.isArray(d?.products)) setProducts(d.products);
+      })
+      .catch(() => {});
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
 
   const NAV: { id: Section; label: string }[] = [
     { id: "dashboard", label: t.aDashboard },
@@ -77,20 +154,49 @@ export default function AdminPage() {
     setEditing(p);
     setModalOpen(true);
   };
-  const saveProduct = (p: Product) => {
-    setProducts((prev) => {
-      const i = prev.findIndex((x) => x.id === p.id);
-      if (i >= 0) {
-        const next = [...prev];
-        next[i] = p;
-        return next;
+
+  // Persist via the live catalog API, then sync local state from the response.
+  const saveProduct = async (p: Product) => {
+    const editingExisting = editing != null;
+    try {
+      const r = await fetch("/api/products", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          editingExisting
+            ? { action: "update", id: p.id, product: p }
+            : { action: "add", product: p },
+        ),
+      });
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.products)) {
+        setProducts(d.products);
+        toast(editingExisting ? t.saved : fa ? "محصول اضافه شد ✓" : "Product added ✓");
+      } else {
+        toast(fa ? "ذخیره ناموفق بود" : "Save failed");
       }
-      return [p, ...prev];
-    });
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    }
   };
-  const deleteProduct = (id: number) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    toast(fa ? "محصول حذف شد ✓" : "Product deleted ✓");
+
+  const deleteProduct = async (id: number) => {
+    try {
+      const r = await fetch("/api/products", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.products)) {
+        setProducts(d.products);
+        toast(fa ? "محصول حذف شد ✓" : "Product deleted ✓");
+      } else {
+        toast(fa ? "حذف ناموفق بود" : "Delete failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    }
   };
 
   return (
@@ -147,7 +253,7 @@ export default function AdminPage() {
           {section === "orders" && <Orders />}
           {section === "customers" && <Customers />}
           {section === "discounts" && <Discounts />}
-          {section === "reviews" && <Reviews />}
+          {section === "reviews" && <Reviews products={products} />}
           {section === "reports" && <Reports />}
           {section === "ai" && <AiStudio />}
           {section === "settings" && <Settings />}
@@ -213,6 +319,16 @@ function Table({ head, children }: { head: string[]; children: React.ReactNode }
   );
 }
 
+function Empty({ text }: { text: string }) {
+  return (
+    <Card className="p-10">
+      <p className="text-center text-[13.5px]" style={{ color: "var(--muted)" }}>
+        {text}
+      </p>
+    </Card>
+  );
+}
+
 function ActBtn({
   onClick,
   color,
@@ -248,30 +364,96 @@ function pill(onClick: () => void, label: string, color = "var(--accent)") {
   );
 }
 
-/* ---------- dashboard ---------- */
+function lbl(s: string) {
+  return (
+    <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>
+      {s}
+    </label>
+  );
+}
 
-const WEEK = [42, 65, 58, 80, 73, 95, 88];
+/* ---------- dashboard ---------- */
 
 function Dashboard({ products }: { products: Product[] }) {
   const { locale, t, dark } = useShop();
   const fa = locale === "fa";
 
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/orders")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.orders) && setOrders(d.orders))
+      .catch(() => {});
+    fetch("/api/admin/customers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.customers) && setCustomers(d.customers))
+      .catch(() => {});
+  }, []);
+
+  const live = useMemo(() => orders.filter((o) => o.status !== "cancelled"), [orders]);
+
+  const now = new Date();
+  const sameDay = (d: Date) =>
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const sameMonth = (d: Date) =>
+    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+
+  const todaySales = live.reduce(
+    (s, o) => (sameDay(new Date(o.date)) ? s + o.total : s),
+    0,
+  );
+  const monthSales = live.reduce(
+    (s, o) => (sameMonth(new Date(o.date)) ? s + o.total : s),
+    0,
+  );
+
   const kpis = [
-    { label: t.salesToday, value: priceFmt(48_500_000, locale, t.currency), hue: 215 },
-    { label: t.salesMonth, value: priceFmt(1_240_000_000, locale, t.currency), hue: 152 },
-    { label: t.ordersCount, value: num(1284, locale), hue: 28 },
-    { label: t.customersCount, value: num(8642, locale), hue: 320 },
+    { label: t.salesToday, value: priceFmt(todaySales, locale, t.currency), hue: 215 },
+    { label: t.salesMonth, value: priceFmt(monthSales, locale, t.currency), hue: 152 },
+    { label: t.ordersCount, value: num(orders.length, locale), hue: 28 },
+    { label: t.customersCount, value: num(customers.length, locale), hue: 320 },
   ];
 
-  const top = products.slice(0, 6);
-  const sales = [320, 280, 210, 190, 150, 120];
+  // 7-day bar chart (oldest → newest), totals from non-cancelled orders.
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(now.getDate() - (6 - i));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const dayTotals = days.map((d) =>
+    live.reduce((s, o) => {
+      const od = new Date(o.date);
+      return od.getFullYear() === d.getFullYear() &&
+        od.getMonth() === d.getMonth() &&
+        od.getDate() === d.getDate()
+        ? s + o.total
+        : s;
+    }, 0),
+  );
+  const maxDay = Math.max(...dayTotals, 0);
 
-  const orderStatus = [
-    { label: fa ? "در انتظار" : "Pending", n: 38, color: "#d97706" },
-    { label: fa ? "ارسال شده" : "Shipped", n: 124, color: "#2a6fdb" },
-    { label: fa ? "تحویل شده" : "Delivered", n: 1086, color: "#1f8a5b" },
-    { label: fa ? "لغو شده" : "Cancelled", n: 36, color: "#e11d48" },
-  ];
+  // Top products by aggregated order item quantity.
+  const top = useMemo(() => {
+    const agg = new Map<string, number>();
+    for (const o of live)
+      for (const it of o.items)
+        agg.set(it.name, (agg.get(it.name) ?? 0) + it.qty);
+    return [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [live]);
+
+  const findProduct = (name: string) =>
+    products.find((p) => p.fa === name || p.en === name);
+
+  const orderStatus = (Object.keys(STATUS_META) as OrderStatus[]).map((k) => ({
+    label: fa ? STATUS_META[k].fa : STATUS_META[k].en,
+    n: orders.filter((o) => o.status === k).length,
+    color: STATUS_META[k].color,
+  }));
 
   return (
     <>
@@ -297,17 +479,21 @@ function Dashboard({ products }: { products: Product[] }) {
         <Card className="p-5">
           <h2 className="mb-5 text-[15px] font-extrabold">{t.salesChart}</h2>
           <div className="flex h-[200px] items-end gap-3">
-            {WEEK.map((h, i) => (
-              <div key={i} className="flex flex-1 flex-col items-center gap-2">
-                <div
-                  className="w-full rounded-t-[8px]"
-                  style={{ height: `${h}%`, background: "var(--accent)" }}
-                />
-                <span className="text-[11px]" style={{ color: "var(--muted)" }}>
-                  {num(i + 1, locale)}
-                </span>
-              </div>
-            ))}
+            {dayTotals.map((val, i) => {
+              const h = maxDay > 0 ? Math.max(4, (val / maxDay) * 100) : 4;
+              return (
+                <div key={i} className="flex flex-1 flex-col items-center gap-2">
+                  <div
+                    className="w-full rounded-t-[8px]"
+                    style={{ height: `${h}%`, background: "var(--accent)" }}
+                    title={priceFmt(val, locale, t.currency)}
+                  />
+                  <span className="text-[11px]" style={{ color: "var(--muted)" }}>
+                    {days[i].toLocaleDateString(fa ? "fa-IR" : "en-US", { weekday: "short" })}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Card>
 
@@ -331,27 +517,41 @@ function Dashboard({ products }: { products: Product[] }) {
 
       <Card className="mt-6 p-5">
         <h2 className="mb-4 text-[15px] font-extrabold">{t.topProducts}</h2>
-        <div className="flex flex-col gap-3">
-          {top.map((p, i) => (
-            <div key={p.id} className="flex items-center gap-3">
-              <span
-                className="flex h-11 w-11 flex-none items-center justify-center rounded-[10px] text-[16px] font-extrabold"
-                style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
-              >
-                {(fa ? p.fa : p.en).charAt(0)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-bold">{fa ? p.fa : p.en}</div>
-                <div className="text-[12px]" style={{ color: "var(--muted)" }}>
-                  {priceFmt(p.price, locale, t.currency)}
+        {top.length === 0 ? (
+          <p className="text-[13px]" style={{ color: "var(--muted)" }}>
+            {fa ? "هنوز فروشی ثبت نشده است." : "No sales recorded yet."}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {top.map(([name, qty]) => {
+              const p = findProduct(name);
+              return (
+                <div key={name} className="flex items-center gap-3">
+                  <span
+                    className="flex h-11 w-11 flex-none items-center justify-center rounded-[10px] text-[16px] font-extrabold"
+                    style={{
+                      background: grad(p?.hue ?? 215, dark),
+                      color: "rgba(255,255,255,.5)",
+                    }}
+                  >
+                    {name.charAt(0)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-bold">{name}</div>
+                    {p && (
+                      <div className="text-[12px]" style={{ color: "var(--muted)" }}>
+                        {priceFmt(p.price, locale, t.currency)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-[13px] font-bold" style={{ color: "var(--accent)" }}>
+                    {num(qty, locale)} {fa ? "فروش" : "sold"}
+                  </div>
                 </div>
-              </div>
-              <div className="text-[13px] font-bold" style={{ color: "var(--accent)" }}>
-                {num(sales[i] ?? 90, locale)} {fa ? "فروش" : "sold"}
-              </div>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
     </>
   );
@@ -372,8 +572,19 @@ function Products({
   onEdit: (p: Product) => void;
   onDelete: (id: number) => void;
 }) {
-  const { locale, t, dark } = useShop();
+  const { locale, t, dark, toast } = useShop();
   const fa = locale === "fa";
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+
+  const onDeleteClick = (p: Product) => {
+    if (confirmId === p.id) {
+      setConfirmId(null);
+      onDelete(p.id);
+    } else {
+      setConfirmId(p.id);
+      toast(fa ? "برای حذف دوباره بزنید" : "Tap again to delete");
+    }
+  };
 
   return (
     <>
@@ -388,56 +599,60 @@ function Products({
         </button>
       </div>
 
-      <Table
-        head={[t.thProduct, t.thCat, t.thPrice, t.thStock, t.thStatus, t.thActions]}
-      >
-        {products.map((p) => {
-          const st = statusOf(p.stock);
-          const c = catById(p.cat);
-          return (
-            <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="flex h-10 w-10 flex-none items-center justify-center rounded-[9px] text-[14px] font-extrabold"
-                    style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
-                  >
-                    {(fa ? p.fa : p.en).charAt(0)}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-bold">{fa ? p.fa : p.en}</div>
-                    <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-                      {p.brand}
+      {products.length === 0 ? (
+        <Empty text={fa ? "هنوز محصولی ثبت نشده است." : "No products yet."} />
+      ) : (
+        <Table
+          head={[t.thProduct, t.thCat, t.thPrice, t.thStock, t.thStatus, t.thActions]}
+        >
+          {products.map((p) => {
+            const st = statusOf(p.stock);
+            const c = catById(p.cat);
+            return (
+              <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="flex h-10 w-10 flex-none items-center justify-center rounded-[9px] text-[14px] font-extrabold"
+                      style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
+                    >
+                      {(fa ? p.fa : p.en).charAt(0)}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-bold">{fa ? p.fa : p.en}</div>
+                      <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
+                        {p.brand}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </td>
-              <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
-                {c ? (fa ? c.fa : c.en) : p.cat}
-              </td>
-              <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-                {priceFmt(p.price, locale, t.currency)}
-              </td>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                {num(p.stock, locale)}
-              </td>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                <Badge label={st.label} color={st.color} />
-              </td>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                <div className="flex gap-2">
-                  <ActBtn onClick={() => onEdit(p)} color="var(--accent)" label={t.edit}>
-                    <List size={15} />
-                  </ActBtn>
-                  <ActBtn onClick={() => onDelete(p.id)} color="#e11d48" label={t.del}>
-                    <Trash size={15} />
-                  </ActBtn>
-                </div>
-              </td>
-            </tr>
-          );
-        })}
-      </Table>
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
+                  {c ? (fa ? c.fa : c.en) : p.cat}
+                </td>
+                <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
+                  {priceFmt(p.price, locale, t.currency)}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  {num(p.stock, locale)}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  <Badge label={st.label} color={st.color} />
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  <div className="flex gap-2">
+                    <ActBtn onClick={() => onEdit(p)} color="var(--accent)" label={t.edit}>
+                      <List size={15} />
+                    </ActBtn>
+                    <ActBtn onClick={() => onDeleteClick(p)} color="#e11d48" label={t.del}>
+                      <Trash size={15} />
+                    </ActBtn>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </Table>
+      )}
     </>
   );
 }
@@ -448,61 +663,96 @@ function Orders() {
   const { locale, t, toast } = useShop();
   const fa = locale === "fa";
 
-  const orders = [
-    { id: "10241", cust: ["آرش رضایی", "Arash Rezaei"], total: 4200000, st: ["در انتظار", "Pending"], color: "#d97706" },
-    { id: "10240", cust: ["مینا کریمی", "Mina Karimi"], total: 8900000, st: ["ارسال شده", "Shipped"], color: "#2a6fdb" },
-    { id: "10239", cust: ["سینا مرادی", "Sina Moradi"], total: 1850000, st: ["تحویل شده", "Delivered"], color: "#1f8a5b" },
-    { id: "10238", cust: ["نگار احمدی", "Negar Ahmadi"], total: 12500000, st: ["در انتظار", "Pending"], color: "#d97706" },
-    { id: "10237", cust: ["پویا حسینی", "Pouya Hosseini"], total: 690000, st: ["لغو شده", "Cancelled"], color: "#e11d48" },
-  ];
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  const act = (key: string) => {
-    const m: Record<string, [string, string]> = {
-      confirm: ["سفارش تأیید شد ✓", "Order confirmed ✓"],
-      ship: ["سفارش ارسال شد ✓", "Order shipped ✓"],
-      cancel: ["سفارش لغو شد ✓", "Order cancelled ✓"],
-      return: ["درخواست مرجوعی ثبت شد ✓", "Return requested ✓"],
-    };
-    toast(fa ? m[key][0] : m[key][1]);
+  const load = () =>
+    fetch("/api/admin/orders")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.orders) && setOrders(d.orders))
+      .catch(() => {});
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const setStatus = async (o: AdminOrder, status: OrderStatus) => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/orders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mobile: o.mobile, orderId: o.id, status }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(fa ? "وضعیت سفارش به‌روزرسانی شد ✓" : "Order status updated ✓");
+        await load();
+      } else {
+        toast(fa ? "به‌روزرسانی ناموفق بود" : "Update failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <>
       <H1>{t.aOrders}</H1>
-      <Table
-        head={[
-          fa ? "شماره سفارش" : "Order #",
-          fa ? "مشتری" : "Customer",
-          t.thPrice,
-          t.thStatus,
-          t.thActions,
-        ]}
-      >
-        {orders.map((o) => (
-          <tr key={o.id} style={{ borderTop: "1px solid var(--border)" }}>
-            <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-              #{num(Number(o.id), locale)}
-            </td>
-            <td className="px-4 py-3" style={{ textAlign: "start" }}>
-              {fa ? o.cust[0] : o.cust[1]}
-            </td>
-            <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-              {priceFmt(o.total, locale, t.currency)}
-            </td>
-            <td className="px-4 py-3" style={{ textAlign: "start" }}>
-              <Badge label={fa ? o.st[0] : o.st[1]} color={o.color} />
-            </td>
-            <td className="px-4 py-3" style={{ textAlign: "start" }}>
-              <div className="flex flex-wrap gap-1.5">
-                {pill(() => act("confirm"), fa ? "تأیید" : "Confirm", "#1f8a5b")}
-                {pill(() => act("ship"), fa ? "ارسال" : "Ship", "#2a6fdb")}
-                {pill(() => act("cancel"), fa ? "لغو" : "Cancel", "#e11d48")}
-                {pill(() => act("return"), fa ? "مرجوع" : "Return", "#d97706")}
-              </div>
-            </td>
-          </tr>
-        ))}
-      </Table>
+      {orders.length === 0 ? (
+        <Empty text={fa ? "هنوز سفارشی ثبت نشده است." : "No orders yet."} />
+      ) : (
+        <Table
+          head={[
+            fa ? "شماره سفارش" : "Order #",
+            fa ? "مشتری" : "Customer",
+            fa ? "تاریخ" : "Date",
+            fa ? "اقلام" : "Items",
+            t.thPrice,
+            t.thStatus,
+            t.thActions,
+          ]}
+        >
+          {orders.map((o) => {
+            const meta = STATUS_META[o.status];
+            const itemCount = o.items.reduce((s, it) => s + it.qty, 0);
+            return (
+              <tr key={`${o.mobile}-${o.id}`} style={{ borderTop: "1px solid var(--border)" }}>
+                <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }} dir="ltr">
+                  #{o.id}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  <div className="text-[13px] font-bold">{o.customer}</div>
+                  <div className="text-[11.5px]" style={{ color: "var(--muted)" }} dir="ltr">
+                    {o.mobile}
+                  </div>
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
+                  {fmtDate(o.date, fa)}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  {num(itemCount, locale)}
+                </td>
+                <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
+                  {priceFmt(o.total, locale, t.currency)}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  <Badge label={fa ? meta.fa : meta.en} color={meta.color} />
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  <div className="flex flex-wrap gap-1.5" style={{ opacity: busy ? 0.6 : 1 }}>
+                    {pill(() => setStatus(o, "shipped"), fa ? "ارسال شد" : "Shipped", "#2a6fdb")}
+                    {pill(() => setStatus(o, "delivered"), fa ? "تحویل شد" : "Delivered", "#1f8a5b")}
+                    {pill(() => setStatus(o, "cancelled"), fa ? "لغو" : "Cancel", "#e11d48")}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </Table>
+      )}
     </>
   );
 }
@@ -513,53 +763,81 @@ function Customers() {
   const { locale, t } = useShop();
   const fa = locale === "fa";
 
-  const customers = [
-    { name: ["آرش رضایی", "Arash Rezaei"], orders: 24, spent: 142000000, tier: ["طلایی", "Gold"], color: "#d4af37" },
-    { name: ["مینا کریمی", "Mina Karimi"], orders: 16, spent: 98000000, tier: ["نقره‌ای", "Silver"], color: "#9ca3af" },
-    { name: ["سینا مرادی", "Sina Moradi"], orders: 9, spent: 41000000, tier: ["برنزی", "Bronze"], color: "#b45309" },
-    { name: ["نگار احمدی", "Negar Ahmadi"], orders: 31, spent: 210000000, tier: ["طلایی", "Gold"], color: "#d4af37" },
-    { name: ["پویا حسینی", "Pouya Hosseini"], orders: 4, spent: 12000000, tier: ["برنزی", "Bronze"], color: "#b45309" },
-  ];
+  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/customers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.customers) && setCustomers(d.customers))
+      .catch(() => {});
+  }, []);
+
+  const roleBadge = (role: string) =>
+    role === "admin"
+      ? { label: fa ? "مدیر" : "Admin", color: "#7c3aed" }
+      : { label: fa ? "مشتری" : "Customer", color: "#2a6fdb" };
 
   return (
     <>
       <H1>{t.aCustomers}</H1>
-      <Table
-        head={[
-          fa ? "مشتری" : "Customer",
-          t.ordersCount,
-          fa ? "مجموع خرید" : "Total spent",
-          fa ? "سطح" : "Tier",
-        ]}
-      >
-        {customers.map((c, i) => {
-          const nm = fa ? c.name[0] : c.name[1];
-          return (
-            <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[14px] font-extrabold text-white"
-                    style={{ background: "var(--accent)" }}
-                  >
-                    {nm.charAt(0)}
-                  </span>
-                  <span className="text-[13px] font-bold">{nm}</span>
-                </div>
-              </td>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                {num(c.orders, locale)}
-              </td>
-              <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-                {priceFmt(c.spent, locale, t.currency)}
-              </td>
-              <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                <Badge label={fa ? c.tier[0] : c.tier[1]} color={c.color} />
-              </td>
-            </tr>
-          );
-        })}
-      </Table>
+      {customers.length === 0 ? (
+        <Empty text={fa ? "هنوز مشتری‌ای ثبت نشده است." : "No customers yet."} />
+      ) : (
+        <Table
+          head={[
+            fa ? "مشتری" : "Customer",
+            t.ordersCount,
+            fa ? "مجموع خرید" : "Total spent",
+            fa ? "امتیاز" : "Points",
+            fa ? "کیف پول" : "Wallet",
+            fa ? "تاریخ عضویت" : "Joined",
+            fa ? "نقش" : "Role",
+          ]}
+        >
+          {customers.map((c) => {
+            const nm = c.name || c.mobile;
+            const rb = roleBadge(c.role);
+            return (
+              <tr key={c.mobile} style={{ borderTop: "1px solid var(--border)" }}>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[14px] font-extrabold text-white"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      {nm.charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold">{nm}</div>
+                      <div className="text-[11.5px]" style={{ color: "var(--muted)" }} dir="ltr">
+                        {c.mobile}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  {num(c.orders, locale)}
+                </td>
+                <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
+                  {priceFmt(c.spent, locale, t.currency)}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  {num(c.points, locale)}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  {priceFmt(c.wallet, locale, t.currency)}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
+                  {fmtDate(c.joined, fa)}
+                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                  <Badge label={rb.label} color={rb.color} />
+                </td>
+              </tr>
+            );
+          })}
+        </Table>
+      )}
     </>
   );
 }
@@ -570,161 +848,353 @@ function Discounts() {
   const { locale, t, toast } = useShop();
   const fa = locale === "fa";
 
-  const [codes, setCodes] = useState([
-    { code: "WELCOME10", type: ["درصدی", "Percent"], value: "۱۰٪", usage: 482, expiry: "1404/12/29", active: true },
-    { code: "FREESHIP", type: ["ارسال", "Shipping"], value: fa ? "رایگان" : "Free", usage: 1203, expiry: "1404/10/01", active: true },
-    { code: "SUMMER50", type: ["مبلغی", "Fixed"], value: "500K", usage: 96, expiry: "1404/06/31", active: false },
-  ]);
+  const [coupons, setCoupons] = useState<AdminCoupon[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    code: "",
+    type: "percent" as AdminCoupon["type"],
+    value: "",
+    expiry: "",
+    minPurchase: "",
+    usageLimit: "",
+  });
 
-  const toggle = (i: number) => {
-    setCodes((prev) => prev.map((c, idx) => (idx === i ? { ...c, active: !c.active } : c)));
-    toast(fa ? "وضعیت کد تخفیف تغییر کرد ✓" : "Coupon status updated ✓");
+  const load = () =>
+    fetch("/api/coupons")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.coupons) && setCoupons(d.coupons))
+      .catch(() => {});
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const post = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/coupons", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.coupons)) {
+        setCoupons(d.coupons);
+        return true;
+      }
+      toast(fa ? "عملیات ناموفق بود" : "Operation failed");
+      return false;
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+      return false;
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const add = async () => {
+    if (!form.code.trim()) {
+      toast(fa ? "کد تخفیف را وارد کنید" : "Enter a coupon code");
+      return;
+    }
+    const ok = await post({
+      action: "add",
+      code: form.code.trim(),
+      type: form.type,
+      value: form.value,
+      expiry: form.expiry || undefined,
+      minPurchase: form.minPurchase || undefined,
+      usageLimit: form.usageLimit || undefined,
+    });
+    if (ok) {
+      toast(fa ? "کد تخفیف اضافه شد ✓" : "Coupon added ✓");
+      setForm({ code: "", type: "percent", value: "", expiry: "", minPurchase: "", usageLimit: "" });
+    }
+  };
+
+  const toggle = async (c: AdminCoupon) => {
+    const ok = await post({ action: "toggle", code: c.code });
+    if (ok) toast(fa ? "وضعیت کد تخفیف تغییر کرد ✓" : "Coupon status updated ✓");
+  };
+
+  const remove = async (c: AdminCoupon) => {
+    const ok = await post({ action: "delete", code: c.code });
+    if (ok) toast(fa ? "کد تخفیف حذف شد ✓" : "Coupon deleted ✓");
+  };
+
+  const typeLabel = (ty: AdminCoupon["type"]) =>
+    ty === "percent"
+      ? fa ? "درصدی" : "Percent"
+      : ty === "fixed"
+        ? fa ? "مبلغی" : "Fixed"
+        : fa ? "ارسال" : "Shipping";
+
+  const valueLabel = (c: AdminCoupon) =>
+    c.type === "percent"
+      ? `${num(c.value, locale)}٪`
+      : c.type === "ship"
+        ? fa ? "ارسال رایگان" : "Free shipping"
+        : priceFmt(c.value, locale, t.currency);
 
   return (
     <>
-      <div className="mb-5 flex items-center justify-between">
-        <H1>{t.aDiscounts}</H1>
+      <H1>{t.aDiscounts}</H1>
+
+      {/* add form */}
+      <Card className="mb-6 p-5">
+        <h2 className="mb-4 text-[15px] font-extrabold">
+          {fa ? "افزودن کد تخفیف" : "Add coupon"}
+        </h2>
+        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            {lbl(fa ? "کد" : "Code")}
+            <input
+              className={inputCls}
+              style={inputStyle}
+              value={form.code}
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+              placeholder="SUMMER20"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            {lbl(fa ? "نوع" : "Type")}
+            <select
+              className={inputCls}
+              style={inputStyle}
+              value={form.type}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, type: e.target.value as AdminCoupon["type"] }))
+              }
+            >
+              <option value="percent">{fa ? "درصدی" : "Percent"}</option>
+              <option value="fixed">{fa ? "مبلغی" : "Fixed"}</option>
+              <option value="ship">{fa ? "ارسال رایگان" : "Free shipping"}</option>
+            </select>
+          </div>
+          <div>
+            {lbl(fa ? "مقدار" : "Value")}
+            <input
+              className={inputCls}
+              style={inputStyle}
+              inputMode="numeric"
+              value={form.value}
+              onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+              disabled={form.type === "ship"}
+              placeholder={form.type === "percent" ? "10" : "500000"}
+            />
+          </div>
+          <div>
+            {lbl(fa ? "انقضا" : "Expiry")}
+            <input
+              className={inputCls}
+              style={inputStyle}
+              type="date"
+              value={form.expiry}
+              onChange={(e) => setForm((f) => ({ ...f, expiry: e.target.value }))}
+              dir="ltr"
+            />
+          </div>
+          <div>
+            {lbl(fa ? "حداقل خرید" : "Min purchase")}
+            <input
+              className={inputCls}
+              style={inputStyle}
+              inputMode="numeric"
+              value={form.minPurchase}
+              onChange={(e) => setForm((f) => ({ ...f, minPurchase: e.target.value }))}
+              placeholder="0"
+            />
+          </div>
+          <div>
+            {lbl(fa ? "سقف استفاده" : "Usage limit")}
+            <input
+              className={inputCls}
+              style={inputStyle}
+              inputMode="numeric"
+              value={form.usageLimit}
+              onChange={(e) => setForm((f) => ({ ...f, usageLimit: e.target.value }))}
+              placeholder="—"
+            />
+          </div>
+        </div>
         <button
-          onClick={() => toast(fa ? "کد تخفیف اضافه شد ✓" : "Coupon added ✓")}
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] border-none px-4 py-2.5 text-[13.5px] font-extrabold text-white"
+          onClick={add}
+          disabled={busy}
+          className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] border-none px-4 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60"
           style={{ background: "var(--accent)" }}
         >
           <Plus size={16} /> {fa ? "افزودن کد" : "Add code"}
         </button>
-      </div>
-      <Table
-        head={[
-          fa ? "کد" : "Code",
-          fa ? "نوع" : "Type",
-          fa ? "مقدار" : "Value",
-          fa ? "تعداد استفاده" : "Usage",
-          fa ? "انقضا" : "Expiry",
-          fa ? "فعال" : "Active",
-        ]}
-      >
-        {codes.map((c, i) => (
-          <tr key={c.code} style={{ borderTop: "1px solid var(--border)" }}>
-            <td className="px-4 py-3 font-bold" style={{ textAlign: "start", color: "var(--accent)" }}>
-              {c.code}
-            </td>
-            <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
-              {fa ? c.type[0] : c.type[1]}
-            </td>
-            <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-              {c.value}
-            </td>
-            <td className="px-4 py-3" style={{ textAlign: "start" }}>
-              {num(c.usage, locale)}
-            </td>
-            <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
-              {c.expiry}
-            </td>
-            <td className="px-4 py-3" style={{ textAlign: "start" }}>
-              <button
-                onClick={() => toggle(i)}
-                aria-label={fa ? "فعال/غیرفعال" : "Toggle"}
-                className="relative inline-flex h-6 w-11 cursor-pointer items-center rounded-full border-none transition-colors"
-                style={{ background: c.active ? "var(--accent)" : "var(--surface2)" }}
+      </Card>
+
+      {coupons.length === 0 ? (
+        <Empty text={fa ? "هنوز کد تخفیفی ثبت نشده است." : "No coupons yet."} />
+      ) : (
+        <Table
+          head={[
+            fa ? "کد" : "Code",
+            fa ? "نوع" : "Type",
+            fa ? "مقدار" : "Value",
+            fa ? "استفاده" : "Usage",
+            fa ? "انقضا" : "Expiry",
+            fa ? "فعال" : "Active",
+            t.thActions,
+          ]}
+        >
+          {coupons.map((c) => (
+            <tr key={c.code} style={{ borderTop: "1px solid var(--border)" }}>
+              <td
+                className="px-4 py-3 font-bold"
+                style={{ textAlign: "start", color: "var(--accent)" }}
+                dir="ltr"
               >
-                <span
-                  className="absolute h-4.5 w-4.5 rounded-full bg-white transition-all"
-                  style={{
-                    width: 18,
-                    height: 18,
-                    insetInlineStart: c.active ? 22 : 4,
-                  }}
-                />
-              </button>
-            </td>
-          </tr>
-        ))}
-      </Table>
+                {c.code}
+              </td>
+              <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
+                {typeLabel(c.type)}
+              </td>
+              <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
+                {valueLabel(c)}
+              </td>
+              <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                {num(c.used ?? 0, locale)}
+                {c.usageLimit != null ? ` / ${num(c.usageLimit, locale)}` : ""}
+              </td>
+              <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
+                {c.expiry ? fmtDate(c.expiry, fa) : fa ? "بدون انقضا" : "No expiry"}
+              </td>
+              <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                <button
+                  onClick={() => toggle(c)}
+                  disabled={busy}
+                  aria-label={fa ? "فعال/غیرفعال" : "Toggle"}
+                  className="relative inline-flex h-6 w-11 cursor-pointer items-center rounded-full border-none transition-colors"
+                  style={{ background: c.enabled ? "var(--accent)" : "var(--surface2)" }}
+                >
+                  <span
+                    className="absolute rounded-full bg-white transition-all"
+                    style={{ width: 18, height: 18, insetInlineStart: c.enabled ? 22 : 4 }}
+                  />
+                </button>
+              </td>
+              <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                <ActBtn onClick={() => remove(c)} color="#e11d48" label={t.del}>
+                  <Trash size={15} />
+                </ActBtn>
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
     </>
   );
 }
 
-/* ---------- reviews ---------- */
+/* ---------- reviews (read-only product ratings) ---------- */
 
-function Reviews() {
-  const { locale, t, toast } = useShop();
+function Reviews({ products }: { products: Product[] }) {
+  const { locale, t, dark } = useShop();
   const fa = locale === "fa";
 
-  const reviews = [
-    { name: ["آرش رضایی", "Arash Rezaei"], product: ["هدفون بی‌سیم پرو", "Pro Wireless Headphones"], rating: 5, text: ["کیفیت صدا فوق‌العاده است و باتری عالی کار می‌کند.", "Amazing sound quality and the battery lasts forever."] },
-    { name: ["مینا کریمی", "Mina Karimi"], product: ["ساعت هوشمند سری ۷", "Smartwatch Series 7"], rating: 4, text: ["ظاهر زیبایی دارد ولی شارژ کمی سریع تمام می‌شود.", "Looks great but the battery drains a bit fast."] },
-    { name: ["سینا مرادی", "Sina Moradi"], product: ["کفش کتانی روزمره", "Everyday Sneakers"], rating: 5, text: ["خیلی راحت است و کیفیت دوخت بالایی دارد.", "Super comfortable with great stitching quality."] },
-  ];
+  const stars = (r: number) => {
+    const full = Math.round(r);
+    return "★★★★★".slice(0, full) + "☆☆☆☆☆".slice(0, 5 - full);
+  };
 
-  const stars = (r: number) => "★★★★★".slice(0, r) + "☆☆☆☆☆".slice(0, 5 - r);
+  const rated = [...products].sort((a, b) => b.rating - a.rating);
 
   return (
     <>
-      <H1>{t.aReviews}</H1>
-      <div className="flex flex-col gap-3.5">
-        {reviews.map((r, i) => (
-          <Card key={i} className="p-4">
-            <div className="flex items-start gap-3">
-              <span
-                className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[14px] font-extrabold text-white"
-                style={{ background: "var(--accent)" }}
-              >
-                {(fa ? r.name[0] : r.name[1]).charAt(0)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13.5px] font-bold">{fa ? r.name[0] : r.name[1]}</span>
-                  <span className="text-[12px]" style={{ color: "#d97706" }}>{stars(r.rating)}</span>
-                </div>
-                <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-                  {fa ? r.product[0] : r.product[1]}
-                </div>
-                <p className="mt-1.5 text-[13px]" style={{ color: "var(--text)" }}>
-                  {fa ? r.text[0] : r.text[1]}
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => toast(fa ? "نظر تأیید شد ✓" : "Review approved ✓")}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold"
-                    style={{ background: "#1f8a5b1f", color: "#1f8a5b" }}
+      <H1>{fa ? "امتیاز و نظرات محصولات" : "Product ratings"}</H1>
+      {rated.length === 0 ? (
+        <Empty text={fa ? "محصولی برای نمایش نیست." : "No products to show."} />
+      ) : (
+        <Table
+          head={[
+            t.thProduct,
+            fa ? "امتیاز" : "Rating",
+            fa ? "تعداد نظرات" : "Reviews",
+          ]}
+        >
+          {rated.map((p) => (
+            <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+              <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                <div className="flex items-center gap-3">
+                  <span
+                    className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[13px] font-extrabold"
+                    style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
                   >
-                    <Check size={14} /> {fa ? "تأیید" : "Approve"}
-                  </button>
-                  <button
-                    onClick={() => toast(fa ? "نظر رد شد ✓" : "Review rejected ✓")}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold"
-                    style={{ background: "#e11d481f", color: "#e11d48" }}
-                  >
-                    <Close size={14} /> {fa ? "رد" : "Reject"}
-                  </button>
+                    {(fa ? p.fa : p.en).charAt(0)}
+                  </span>
+                  <span className="text-[13px] font-bold">{fa ? p.fa : p.en}</span>
                 </div>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+              </td>
+              <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                <span className="text-[13px]" style={{ color: "#d97706" }}>
+                  {stars(p.rating)}
+                </span>{" "}
+                <span style={{ color: "var(--muted)" }}>
+                  {num(Math.round(p.rating * 10) / 10, locale)}
+                </span>
+              </td>
+              <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                {num(p.reviews, locale)}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
     </>
   );
 }
 
 /* ---------- reports ---------- */
 
-const YEAR = [55, 62, 48, 70, 65, 82, 90, 78, 88, 95, 72, 100];
-
 function Reports() {
   const { locale, t } = useShop();
   const fa = locale === "fa";
 
-  const months = fa
-    ? ["فرو", "ارد", "خرد", "تیر", "مرد", "شهر", "مهر", "آبا", "آذر", "دی", "بهم", "اسف"]
-    : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/orders")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.orders) && setOrders(d.orders))
+      .catch(() => {});
+    fetch("/api/admin/customers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => Array.isArray(d?.customers) && setCustomers(d.customers))
+      .catch(() => {});
+  }, []);
+
+  const live = orders.filter((o) => o.status !== "cancelled");
+  const revenue = live.reduce((s, o) => s + o.total, 0);
+  const avg = live.length ? Math.round(revenue / live.length) : 0;
 
   const kpis = [
-    { label: fa ? "درآمد کل" : "Total revenue", value: priceFmt(14_800_000_000, locale, t.currency) },
-    { label: fa ? "میانگین سبد" : "Avg. order", value: priceFmt(3_400_000, locale, t.currency) },
-    { label: fa ? "نرخ تبدیل" : "Conversion", value: fa ? "٪۳٫۸" : "3.8%" },
-    { label: fa ? "بازگشت کالا" : "Returns", value: fa ? "٪۱٫۲" : "1.2%" },
+    { label: fa ? "درآمد کل" : "Total revenue", value: priceFmt(revenue, locale, t.currency) },
+    { label: t.ordersCount, value: num(orders.length, locale) },
+    { label: t.customersCount, value: num(customers.length, locale) },
+    { label: fa ? "میانگین سبد" : "Avg. order", value: priceFmt(avg, locale, t.currency) },
   ];
+
+  // Last 12 months, oldest → newest.
+  const now = new Date();
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    return d;
+  });
+  const monthTotals = months.map((m) =>
+    live.reduce((s, o) => {
+      const od = new Date(o.date);
+      return od.getFullYear() === m.getFullYear() && od.getMonth() === m.getMonth()
+        ? s + o.total
+        : s;
+    }, 0),
+  );
+  const maxMonth = Math.max(...monthTotals, 0);
 
   return (
     <>
@@ -744,50 +1214,75 @@ function Reports() {
           {fa ? "فروش ۱۲ ماه اخیر" : "Sales last 12 months"}
         </h2>
         <div className="flex h-[220px] items-end gap-2">
-          {YEAR.map((h, i) => (
-            <div key={i} className="flex flex-1 flex-col items-center gap-2">
-              <div
-                className="w-full rounded-t-[6px]"
-                style={{ height: `${h}%`, background: "var(--accent)" }}
-              />
-              <span className="text-[10.5px]" style={{ color: "var(--muted)" }}>
-                {months[i]}
-              </span>
-            </div>
-          ))}
+          {monthTotals.map((val, i) => {
+            const h = maxMonth > 0 ? Math.max(4, (val / maxMonth) * 100) : 4;
+            return (
+              <div key={i} className="flex flex-1 flex-col items-center gap-2">
+                <div
+                  className="w-full rounded-t-[6px]"
+                  style={{ height: `${h}%`, background: "var(--accent)" }}
+                  title={priceFmt(val, locale, t.currency)}
+                />
+                <span className="text-[10.5px]" style={{ color: "var(--muted)" }}>
+                  {months[i].toLocaleDateString(fa ? "fa-IR" : "en-US", { month: "short" })}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </Card>
     </>
   );
 }
 
-/* ---------- AI studio ---------- */
+/* ---------- AI studio (real product-content generator) ---------- */
+
+type AiResult = {
+  seoTitle?: string;
+  shortDesc?: string;
+  longDesc?: string;
+  metaDesc?: string;
+  keywords?: string[];
+  specs?: { k: string; v: string }[];
+  tags?: string[];
+};
 
 function AiStudio() {
-  const { locale, t, dark, toast } = useShop();
+  const { locale, t, toast } = useShop();
   const fa = locale === "fa";
 
   const [name, setName] = useState("");
-  const [result, setResult] = useState(false);
+  const [category, setCategory] = useState(CATEGORIES[0].id);
+  const [result, setResult] = useState<AiResult | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const providers = ["OpenAI", "Claude", "Gemini", "Ollama", "vLLM", "Custom"];
-
-  const tools = [
-    { hue: 215, title: ["تولید محتوا و سئو", "Content & SEO"] },
-    { hue: 152, title: ["نگارش بلاگ", "Blog writer"] },
-    { hue: 320, title: ["تولید تصویر", "Image generator"] },
-    { hue: 28, title: ["پیشنهاد قیمت", "Smart pricing"] },
-    { hue: 198, title: ["تحلیل داده", "Analytics"] },
-    { hue: 268, title: ["چت پشتیبانی", "Support chat"] },
-  ];
-
-  const generate = () => {
+  const generate = async () => {
     if (!name.trim()) {
       toast(fa ? "نام محصول را وارد کنید" : "Enter a product name");
       return;
     }
-    setResult(true);
-    toast(fa ? "محتوا تولید شد ✓" : "Content generated ✓");
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), category }),
+      });
+      const d = await r.json();
+      if (d.ok && d.result) {
+        setResult(d.result as AiResult);
+        toast(fa ? "محتوا تولید شد ✓" : "Content generated ✓");
+      } else if (d.error === "ai-unavailable") {
+        toast(fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured");
+      } else {
+        toast(fa ? "تولید محتوا ناموفق بود" : "Generation failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -799,93 +1294,105 @@ function AiStudio() {
         </p>
       </div>
 
-      {/* providers */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        {providers.map((p) => (
-          <button
-            key={p}
-            onClick={() => toast(fa ? `${p} متصل است ✓` : `${p} connected ✓`)}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border-none px-3.5 py-2 text-[12.5px] font-bold"
-            style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}
-          >
-            <span className="h-2 w-2 rounded-full" style={{ background: "#1f8a5b" }} />
-            {p}
-          </button>
-        ))}
-      </div>
-
-      {/* content generator */}
       <Card className="mb-6 p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-[15px] font-extrabold">
+        <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
           <Sparkle size={16} /> {fa ? "تولیدکننده محتوای محصول" : "Product content generator"}
         </h2>
-        <div className="flex flex-wrap gap-2">
-          <input
-            className="min-w-[200px] flex-1 rounded-[10px] px-3 py-2.5 text-[13.5px] outline-none"
-            style={inputStyle}
-            placeholder={fa ? "نام محصول..." : "Product name..."}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+        <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
+          {fa
+            ? "مدل و سرویس‌دهنده در «تنظیمات ← هوش مصنوعی» پیکربندی می‌شود."
+            : "Model and provider are configured in Settings → AI."}
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[200px] flex-1">
+            {lbl(fa ? "نام محصول" : "Product name")}
+            <input
+              className={inputCls}
+              style={inputStyle}
+              placeholder={fa ? "نام محصول..." : "Product name..."}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="min-w-[160px]">
+            {lbl(t.thCat)}
+            <select
+              className={inputCls}
+              style={inputStyle}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {fa ? c.fa : c.en}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={generate}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white"
+            disabled={busy}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60"
             style={{ background: "var(--accent)" }}
           >
-            <Sparkle size={15} /> {fa ? "تولید کن" : "Generate"}
+            <Sparkle size={15} /> {busy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید کن" : "Generate"}
           </button>
         </div>
 
         {result && (
-          <div className="mt-4 flex flex-col gap-3 rounded-[12px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-            <Field
-              label={fa ? "عنوان سئو" : "SEO title"}
-              value={fa ? `خرید ${name} اصل با بهترین قیمت و ضمانت` : `Buy authentic ${name} at the best price with warranty`}
-            />
-            <Field
-              label={fa ? "توضیح کوتاه" : "Short description"}
-              value={fa ? `${name} با کیفیت ساخت بالا، طراحی مدرن و عملکرد بی‌نقص؛ انتخابی مطمئن برای استفاده روزمره.` : `${name} with premium build quality, modern design and flawless performance — a reliable pick for daily use.`}
-            />
-            <Field
-              label={fa ? "متا توضیحات" : "Meta description"}
-              value={fa ? `${name} را با ارسال سریع، گارانتی معتبر و پشتیبانی ۲۴ ساعته از مارکت‌لند بخرید.` : `Get ${name} with fast delivery, valid warranty and 24/7 support from MarketLand.`}
-            />
-            <Field
-              label={fa ? "کلمات کلیدی" : "Keywords"}
-              value={fa ? `${name}، خرید آنلاین، قیمت، اصل، گارانتی` : `${name}, buy online, price, authentic, warranty`}
-            />
+          <div
+            className="mt-4 flex flex-col gap-3 rounded-[12px] p-4"
+            style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
+          >
+            {result.seoTitle && <Field label={fa ? "عنوان سئو" : "SEO title"} value={result.seoTitle} />}
+            {result.shortDesc && (
+              <Field label={fa ? "توضیح کوتاه" : "Short description"} value={result.shortDesc} />
+            )}
+            {result.longDesc && (
+              <Field label={fa ? "توضیح کامل" : "Long description"} value={result.longDesc} />
+            )}
+            {result.metaDesc && (
+              <Field label={fa ? "متا توضیحات" : "Meta description"} value={result.metaDesc} />
+            )}
+            {Array.isArray(result.keywords) && result.keywords.length > 0 && (
+              <Field label={fa ? "کلمات کلیدی" : "Keywords"} value={result.keywords.join("، ")} />
+            )}
+            {Array.isArray(result.specs) && result.specs.length > 0 && (
+              <div>
+                <div className="mb-1 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
+                  {fa ? "مشخصات" : "Specs"}
+                </div>
+                <div className="flex flex-col gap-1">
+                  {result.specs.map((sp, i) => (
+                    <div key={i} className="flex justify-between gap-3 text-[13px]">
+                      <span style={{ color: "var(--muted)" }}>{sp.k}</span>
+                      <span className="font-bold">{sp.v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {Array.isArray(result.tags) && result.tags.length > 0 && (
+              <div>
+                <div className="mb-1 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
+                  {fa ? "برچسب‌ها" : "Tags"}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.tags.map((tg, i) => (
+                    <span
+                      key={i}
+                      className="rounded-full px-2.5 py-1 text-[11.5px] font-bold"
+                      style={{ background: "var(--accent)1f", color: "var(--accent)" }}
+                    >
+                      {tg}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>
-
-      {/* tools */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {tools.map((tool, i) => (
-          <button
-            key={i}
-            onClick={() =>
-              toast(
-                fa
-                  ? `ابزار «${tool.title[0]}» اجرا شد ✓`
-                  : `"${tool.title[1]}" tool launched ✓`,
-              )
-            }
-            className="cursor-pointer rounded-[16px] border-none p-4"
-            style={{ ...cardStyle, textAlign: "start" }}
-          >
-            <span
-              className="mb-3 flex h-10 w-10 items-center justify-center rounded-[12px]"
-              style={{ background: grad(tool.hue, dark), color: "rgba(255,255,255,.85)" }}
-            >
-              <Sparkle size={18} />
-            </span>
-            <div className="text-[14px] font-extrabold">{fa ? tool.title[0] : tool.title[1]}</div>
-            <div className="mt-1 text-[12px]" style={{ color: "var(--muted)" }}>
-              {fa ? "اجرای ابزار هوش مصنوعی" : "Run AI tool"}
-            </div>
-          </button>
-        ))}
-      </div>
     </>
   );
 }
@@ -909,13 +1416,55 @@ function Settings() {
   const { locale, t, toast } = useShop();
   const fa = locale === "fa";
 
-  const lbl = (s: string) => (
-    <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>
-      {s}
-    </label>
-  );
+  // Store settings — loaded from & persisted to the backend.
+  const [store, setStore] = useState<StoreSettings>({
+    storeName: "",
+    currencyFa: "",
+    currencyEn: "",
+    shipFee: 0,
+    freeShipThreshold: 0,
+    taxRate: 0,
+    maintenance: false,
+    cod: true,
+  });
+  const [storeSaving, setStoreSaving] = useState(false);
 
-  const [maintenance, setMaintenance] = useState(false);
+  const loadStore = () =>
+    fetch("/api/settings/store")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.settings) setStore(d.settings);
+      })
+      .catch(() => {});
+
+  useEffect(() => {
+    loadStore();
+  }, []);
+
+  const setS = <K extends keyof StoreSettings>(k: K, v: StoreSettings[K]) =>
+    setStore((s) => ({ ...s, [k]: v }));
+
+  const saveStore = async () => {
+    setStoreSaving(true);
+    try {
+      const r = await fetch("/api/settings/store", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(store),
+      });
+      const d = await r.json();
+      if (d.ok && d.settings) {
+        setStore(d.settings);
+        toast(t.saved);
+      } else {
+        toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setStoreSaving(false);
+    }
+  };
 
   // IPPanel SMS settings — editable & saved server-side
   type SmsCfg = { configured: boolean; hasKey: boolean; from: string; patternCode: string; otpVar: string; apiKeyMasked: string };
@@ -1040,6 +1589,33 @@ function Settings() {
     }
   };
 
+  const ToggleRow = ({
+    label,
+    on,
+    onClick,
+  }: {
+    label: string;
+    on: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      onClick={onClick}
+      className="inline-flex w-full items-center justify-between rounded-[10px] px-3 py-2.5 text-[13px] font-bold"
+      style={inputStyle}
+    >
+      {label}
+      <span
+        className="relative inline-flex h-6 w-11 items-center rounded-full"
+        style={{ background: on ? "var(--accent)" : "var(--border)" }}
+      >
+        <span
+          className="absolute rounded-full bg-white"
+          style={{ width: 18, height: 18, insetInlineStart: on ? 22 : 4 }}
+        />
+      </span>
+    </button>
+  );
+
   return (
     <>
       <H1>{t.aSettings}</H1>
@@ -1050,57 +1626,93 @@ function Settings() {
           <div className="flex flex-col gap-3.5">
             <div>
               {lbl(fa ? "نام فروشگاه" : "Store name")}
-              <input className={inputCls} style={inputStyle} defaultValue={t.storeName} />
+              <input
+                className={inputCls}
+                style={inputStyle}
+                value={store.storeName}
+                onChange={(e) => setS("storeName", e.target.value)}
+              />
             </div>
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div>
-                {lbl(t.currency)}
-                <input className={inputCls} style={inputStyle} defaultValue={t.currency} />
+                {lbl(fa ? "واحد پول (فارسی)" : "Currency (Persian)")}
+                <input
+                  className={inputCls}
+                  style={inputStyle}
+                  value={store.currencyFa}
+                  onChange={(e) => setS("currencyFa", e.target.value)}
+                  placeholder="تومان"
+                />
               </div>
               <div>
-                {lbl(fa ? "زبان پیش‌فرض" : "Default language")}
-                <select className={inputCls} style={inputStyle} defaultValue={locale}>
-                  <option value="fa">{fa ? "فارسی" : "Persian"}</option>
-                  <option value="en">{fa ? "انگلیسی" : "English"}</option>
-                </select>
+                {lbl(fa ? "واحد پول (انگلیسی)" : "Currency (English)")}
+                <input
+                  className={inputCls}
+                  style={inputStyle}
+                  value={store.currencyEn}
+                  onChange={(e) => setS("currencyEn", e.target.value)}
+                  placeholder="Toman"
+                  dir="ltr"
+                />
               </div>
               <div>
                 {lbl(fa ? "هزینه ارسال پایه" : "Base shipping fee")}
-                <input className={inputCls} style={inputStyle} inputMode="numeric" defaultValue="120000" />
+                <input
+                  className={inputCls}
+                  style={inputStyle}
+                  inputMode="numeric"
+                  value={String(store.shipFee)}
+                  onChange={(e) =>
+                    setS("shipFee", Number(e.target.value.replace(/[^\d]/g, "")) || 0)
+                  }
+                />
               </div>
               <div>
                 {lbl(fa ? "آستانه ارسال رایگان" : "Free-ship threshold")}
-                <input className={inputCls} style={inputStyle} inputMode="numeric" defaultValue="2000000" />
+                <input
+                  className={inputCls}
+                  style={inputStyle}
+                  inputMode="numeric"
+                  value={String(store.freeShipThreshold)}
+                  onChange={(e) =>
+                    setS("freeShipThreshold", Number(e.target.value.replace(/[^\d]/g, "")) || 0)
+                  }
+                />
               </div>
               <div>
                 {lbl(fa ? "نرخ مالیات (٪)" : "Tax rate (%)")}
-                <input className={inputCls} style={inputStyle} inputMode="numeric" defaultValue="9" />
+                <input
+                  className={inputCls}
+                  style={inputStyle}
+                  inputMode="numeric"
+                  value={String(store.taxRate)}
+                  onChange={(e) =>
+                    setS("taxRate", Number(e.target.value.replace(/[^\d]/g, "")) || 0)
+                  }
+                />
               </div>
               <div className="flex items-end">
-                <button
-                  onClick={() => setMaintenance((m) => !m)}
-                  className="inline-flex w-full items-center justify-between rounded-[10px] px-3 py-2.5 text-[13px] font-bold"
-                  style={inputStyle}
-                >
-                  {fa ? "حالت تعمیر" : "Maintenance"}
-                  <span
-                    className="relative inline-flex h-6 w-11 items-center rounded-full"
-                    style={{ background: maintenance ? "var(--accent)" : "var(--border)" }}
-                  >
-                    <span
-                      className="absolute rounded-full bg-white"
-                      style={{ width: 18, height: 18, insetInlineStart: maintenance ? 22 : 4 }}
-                    />
-                  </span>
-                </button>
+                <ToggleRow
+                  label={fa ? "حالت تعمیر" : "Maintenance"}
+                  on={store.maintenance}
+                  onClick={() => setS("maintenance", !store.maintenance)}
+                />
+              </div>
+              <div className="flex items-end">
+                <ToggleRow
+                  label={fa ? "پرداخت در محل" : "Cash on delivery"}
+                  on={store.cod}
+                  onClick={() => setS("cod", !store.cod)}
+                />
               </div>
             </div>
             <button
-              onClick={() => toast(t.saved)}
-              className="mt-1 cursor-pointer rounded-[12px] border-none py-3 text-[14px] font-extrabold text-white"
+              onClick={saveStore}
+              disabled={storeSaving}
+              className="mt-1 cursor-pointer rounded-[12px] border-none py-3 text-[14px] font-extrabold text-white disabled:opacity-60"
               style={{ background: "var(--accent)" }}
             >
-              {fa ? "ذخیره تنظیمات" : "Save settings"}
+              {storeSaving ? (fa ? "در حال ذخیره…" : "Saving…") : fa ? "ذخیره تنظیمات" : "Save settings"}
             </button>
           </div>
         </Card>
