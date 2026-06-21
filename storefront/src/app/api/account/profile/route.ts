@@ -10,6 +10,7 @@ export async function POST(req: Request) {
     u.profile.firstName = String(b.firstName ?? u.profile.firstName).slice(0, 60);
     u.profile.lastName = String(b.lastName ?? u.profile.lastName).slice(0, 60);
     u.profile.email = String(b.email ?? u.profile.email).slice(0, 120);
+    if (typeof b.avatar === "string") u.profile.avatar = b.avatar.slice(0, 500);
   });
   return NextResponse.json({ ok: true, user: u });
 }

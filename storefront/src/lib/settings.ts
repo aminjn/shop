@@ -42,10 +42,16 @@ export const writeAi = (patch: StoredAi) => writeJson<StoredAi>("ai.json", patch
 
 export interface StoreSettings {
   storeName?: string;
+  tagline?: string; // شعار سایت
   currencyFa?: string;
   currencyEn?: string;
   logoUrl?: string;
   faviconUrl?: string;
+  // SEO
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
+  ogImage?: string;
   shipFee?: number;
   freeShipThreshold?: number;
   taxRate?: number; // percent
@@ -54,10 +60,15 @@ export interface StoreSettings {
 }
 export const STORE_DEFAULTS: Required<StoreSettings> = {
   storeName: "",
+  tagline: "",
   currencyFa: "",
   currencyEn: "",
   logoUrl: "",
   faviconUrl: "",
+  metaTitle: "",
+  metaDescription: "",
+  metaKeywords: "",
+  ogImage: "",
   shipFee: 50000,
   freeShipThreshold: 2000000,
   taxRate: 9,

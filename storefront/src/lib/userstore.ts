@@ -61,7 +61,7 @@ export interface AppNotification {
 }
 export interface UserData {
   mobile: string;
-  profile: { firstName: string; lastName: string; email: string };
+  profile: { firstName: string; lastName: string; email: string; avatar?: string };
   addresses: Address[];
   wallet: { balance: number; txns: Txn[] };
   orders: Order[];

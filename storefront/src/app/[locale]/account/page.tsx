@@ -6,6 +6,7 @@ import { num, priceFmt, grad } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ProductCard } from "@/components/ProductCard";
+import { UploadButton } from "@/components/UploadButton";
 import {
   User, Cart, Heart, Download, Plus, Check, Send, Sparkle, Close,
 } from "@/components/Icons";
@@ -19,7 +20,7 @@ interface Ticket { id: string; subject: string; body: string; status: string; da
 interface Notif { id: string; text: string; date: string; read: boolean }
 interface UserData {
   mobile: string;
-  profile: { firstName: string; lastName: string; email: string };
+  profile: { firstName: string; lastName: string; email: string; avatar?: string };
   addresses: Address[];
   wallet: { balance: number; txns: Txn[] };
   orders: Order[];
@@ -541,11 +542,17 @@ export default function AccountPage() {
         <H>{t.profile}</H>
         <div className="max-w-[520px] p-5" style={card}>
           <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full text-[24px] font-extrabold text-white" style={{ background: grad(255, dark) }}>{(f.firstName || data!.mobile).charAt(0)}</span>
-            <div>
+            {data!.profile.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={data!.profile.avatar} alt="" className="h-16 w-16 rounded-full object-cover" />
+            ) : (
+              <span className="flex h-16 w-16 items-center justify-center rounded-full text-[24px] font-extrabold text-white" style={{ background: grad(255, dark) }}>{(f.firstName || data!.mobile).charAt(0)}</span>
+            )}
+            <div className="flex-1">
               <div className="text-[15px] font-extrabold">{`${f.firstName} ${f.lastName}`.trim() || (fa ? "کاربر" : "User")}</div>
               <div className="text-[12.5px]" dir="ltr" style={{ color: "var(--muted)" }}>{data!.mobile}</div>
             </div>
+            <UploadButton accept="image/*" label={fa ? "تغییر عکس" : "Change photo"} onUploaded={(url) => post("/api/account/profile", { ...f, avatar: url }, t.saved)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام" : "First name"}<input value={f.firstName} onChange={set("firstName")} className={inputCls} style={inputStyle} /></label>
@@ -564,9 +571,14 @@ export default function AccountPage() {
       {/* sidebar */}
       <aside className="h-fit p-4" style={card}>
         <div className="mb-4 flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full text-[18px] font-extrabold text-white" style={{ background: grad(255, dark) }}>
-            {(fullName || "?").charAt(0)}
-          </span>
+          {data.profile.avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={data.profile.avatar} alt="" className="h-12 w-12 rounded-full object-cover" />
+          ) : (
+            <span className="flex h-12 w-12 items-center justify-center rounded-full text-[18px] font-extrabold text-white" style={{ background: grad(255, dark) }}>
+              {(fullName || "?").charAt(0)}
+            </span>
+          )}
           <div className="min-w-0">
             <div className="truncate text-[14px] font-extrabold">{fullName}</div>
             <div className="text-[12px]" dir="ltr" style={{ color: "var(--muted)" }}>{data.mobile}</div>

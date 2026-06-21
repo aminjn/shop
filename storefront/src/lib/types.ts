@@ -37,6 +37,8 @@ export interface Product {
   shortEn?: string;
   sku?: string;
   variations?: Variation[];
+  images?: string[];
+  video?: string;
 }
 
 export interface CartLine {
