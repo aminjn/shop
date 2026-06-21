@@ -22,6 +22,7 @@ interface PostRow {
   publishAt?: string;
   date: string;
   genError?: string;
+  relatedProducts?: number[];
 }
 
 const blank = {
@@ -39,7 +40,7 @@ const LENGTHS = [
 const faNum = (n: number) => n.toLocaleString("fa-IR", { useGrouping: false });
 
 export function ArticleEditor() {
-  const { locale, toast } = useShop();
+  const { locale, toast, products, productById } = useShop();
   const fa = locale === "fa";
   const card = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16 } as const;
   const inputStyle = { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" } as const;
@@ -57,6 +58,8 @@ export function ArticleEditor() {
   const [publishAt, setPublishAt] = useState("");
   const [titleSug, setTitleSug] = useState<string[]>([]);
   const [cats, setCats] = useState<string[]>([]);
+  const [relatedIds, setRelatedIds] = useState<number[]>([]);
+  const [prodSearch, setProdSearch] = useState("");
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = () =>
@@ -87,13 +90,31 @@ export function ArticleEditor() {
   const set = (k: keyof typeof blank, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const slugify = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}-]/gu, "").slice(0, 80);
 
-  const newPost = () => { setForm({ ...blank }); setEditing(false); setPublishAt(""); setAiTopic(""); setTitleSug([]); };
+  const newPost = () => { setForm({ ...blank }); setEditing(false); setPublishAt(""); setAiTopic(""); setTitleSug([]); setRelatedIds([]); };
   const editPost = (p: PostRow) => {
     setForm({ id: p.id, title: p.fa, slug: p.slug, catFa: p.catFa, tags: (p.tags || []).join("، "), cover: p.cover || "", excerpt: p.excerptFa, body: p.bodyFa, keyword: "", seoTitle: "", metaDesc: "" });
     setEditing(true);
     setPublishAt(p.publishAt || "");
+    setRelatedIds(p.relatedProducts || []);
     setTab("editor");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // related products
+  const toggleRelated = (id: number) => setRelatedIds((ids) => ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+  const suggestRelated = () => run("related", async () => {
+    const q = form.title.trim() || aiTopic.trim();
+    if (!q) { toast(fa ? "اول عنوان مقاله را بنویس" : "Write a title first"); return; }
+    const r = await fetch(`/api/blog/related?q=${encodeURIComponent(q)}`);
+    const d = await r.json().catch(() => ({}));
+    if (Array.isArray(d?.ids) && d.ids.length) { setRelatedIds((cur) => Array.from(new Set([...cur, ...d.ids])).slice(0, 12)); toast(fa ? "محصولات مرتبط پیشنهاد شد ✓" : "Suggested ✓"); }
+    else toast(fa ? "محصول مرتبطی پیدا نشد" : "No matches");
+  });
+  const insertRelatedLinks = () => {
+    if (!relatedIds.length) { toast(fa ? "اول محصول انتخاب کن" : "Select products first"); return; }
+    const lines = relatedIds.map((id) => { const p = productById(id); return p ? `- [${fa ? p.fa : p.en}](/${locale}/product/${id})` : ""; }).filter(Boolean);
+    insertAt(`\n\n## ${fa ? "محصولات پیشنهادی" : "Suggested products"}\n\n${lines.join("\n")}\n\n`);
+    toast(fa ? "لینک‌ها در متن درج شد ✓" : "Links inserted ✓");
   };
 
   // generic AI helper – surfaces useful errors
@@ -212,6 +233,7 @@ export function ArticleEditor() {
         catFa: form.catFa.trim() || (fa ? "عمومی" : "General"),
         tags: form.tags.split(/[,،]/).map((x) => x.trim()).filter(Boolean),
         cover: form.cover || undefined,
+        relatedProducts: relatedIds,
       };
       const body = { action: editing ? "update" : "create", id: form.id, status, publishAt: status === "scheduled" ? new Date(publishAt).toISOString() : undefined, post };
       const r = await fetch("/api/posts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -420,6 +442,46 @@ export function ArticleEditor() {
                   <button onClick={genTags} disabled={!!busy} className="cursor-pointer border-none bg-transparent text-[11.5px] font-bold" style={{ color: "var(--accent)" }}>{busy === "tags" ? "…" : fa ? "✦ تولید" : "AI"}</button>
                 </div>
                 <input className={inputCls} style={inputStyle} value={form.tags} onChange={(e) => set("tags", e.target.value)} />
+              </div>
+
+              {/* related products */}
+              <div className="p-4" style={card}>
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-[13.5px] font-extrabold">{fa ? "محصولات مرتبط" : "Related products"}</h3>
+                  <button onClick={suggestRelated} disabled={!!busy} className="cursor-pointer border-none bg-transparent text-[11.5px] font-bold" style={{ color: "var(--accent)" }}>{busy === "related" ? "…" : fa ? "✦ پیشنهاد هوش مصنوعی" : "AI suggest"}</button>
+                </div>
+                {/* selected chips */}
+                {relatedIds.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    {relatedIds.map((id) => { const p = productById(id); return (
+                      <span key={id} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                        {p ? (fa ? p.fa : p.en) : `#${id}`}
+                        <button onClick={() => toggleRelated(id)} aria-label="remove" className="cursor-pointer border-none bg-transparent text-[12px] leading-none" style={{ color: "#e11d48" }}>×</button>
+                      </span>
+                    ); })}
+                  </div>
+                )}
+                {/* search + pick */}
+                <input className={`${inputCls} mb-2`} style={inputStyle} value={prodSearch} onChange={(e) => setProdSearch(e.target.value)} placeholder={fa ? "جستجوی محصول برای افزودن…" : "Search products…"} />
+                {prodSearch.trim() && (
+                  <div className="mb-2 max-h-44 overflow-auto rounded-[10px]" style={{ border: "1px solid var(--border)" }}>
+                    {products
+                      .filter((p) => { const q = prodSearch.trim().toLowerCase(); return (p.fa + " " + p.en + " " + p.brand).toLowerCase().includes(q); })
+                      .slice(0, 20)
+                      .map((p) => (
+                        <button key={p.id} onClick={() => { toggleRelated(p.id); }} className="flex w-full cursor-pointer items-center justify-between border-none px-3 py-2 text-start text-[12.5px]" style={{ background: relatedIds.includes(p.id) ? "var(--surface2)" : "transparent", color: "var(--text)" }}>
+                          <span className="truncate">{fa ? p.fa : p.en}</span>
+                          <span className="ms-2 flex-none text-[11px] font-bold" style={{ color: relatedIds.includes(p.id) ? "#1f8a5b" : "var(--accent)" }}>{relatedIds.includes(p.id) ? "✓" : "+"}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+                {relatedIds.length > 0 && (
+                  <button onClick={insertRelatedLinks} className="w-full cursor-pointer rounded-[10px] py-2 text-[12px] font-bold" style={inputStyle}>{fa ? "درج لینک محصولات در متن" : "Insert links into body"}</button>
+                )}
+                <p className="mt-2 text-[11px] leading-relaxed" style={{ color: "var(--muted)" }}>
+                  {fa ? "این محصولات زیر مقاله به‌صورت کارت نمایش داده می‌شوند." : "Shown as cards under the article."}
+                </p>
               </div>
 
               {/* SEO */}

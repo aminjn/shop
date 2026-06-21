@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
 import { postBySlug, POSTS, type Post } from "@/data/posts";
-import { grad, formatDate } from "@/lib/format";
+import { grad, formatDate, priceFmt } from "@/lib/format";
 import { renderMarkdown } from "@/lib/markdown";
 import { LocaleLink } from "./LocaleLink";
 import { Sparkle, Send, ArrowBack, ArrowForward } from "./Icons";
 
 export function BlogArticle({ slug }: { slug: string }) {
-  const { locale, t, dark, toast } = useShop();
+  const { locale, t, dark, toast, productById } = useShop();
   const [question, setQuestion] = useState("");
 
   // Prefer dynamic published posts; fall back to the seed list.
@@ -146,6 +146,42 @@ export function BlogArticle({ slug }: { slug: string }) {
         style={{ color: "var(--text)", textAlign: "start" }}
         dangerouslySetInnerHTML={{ __html: bodyHtml }}
       />
+
+      {/* related products */}
+      {(() => {
+        const rel = (p.relatedProducts || []).map((id) => productById(id)).filter(Boolean);
+        if (!rel.length) return null;
+        return (
+          <div className="mt-9">
+            <h3 className="mb-4 flex items-center gap-2 text-[18px] font-extrabold">
+              {locale === "fa" ? "محصولات مرتبط" : "Related products"}
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+              {rel.map((pr) => {
+                const prod = pr!;
+                const pName = locale === "fa" ? prod.fa : prod.en;
+                return (
+                  <LocaleLink
+                    key={prod.id}
+                    href={`/product/${prod.id}`}
+                    className="flex flex-col overflow-hidden rounded-[16px] no-underline"
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                  >
+                    <div className="flex h-[120px] items-center justify-center text-[44px] font-extrabold" style={{ background: grad(prod.hue, dark), color: "rgba(255,255,255,.5)" }}>
+                      {pName.charAt(0)}
+                    </div>
+                    <div className="flex flex-1 flex-col gap-1.5 p-4">
+                      {prod.brand && <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{prod.brand}</span>}
+                      <span className="text-[14px] font-extrabold leading-snug">{pName}</span>
+                      <span className="mt-auto text-[14px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(prod.price, locale, t.currency)}</span>
+                    </div>
+                  </LocaleLink>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* back to blog */}
       <div className="mt-8">

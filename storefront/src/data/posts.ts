@@ -14,6 +14,7 @@ export interface Post {
   date: string;
   hue: number;
   cover?: string;
+  relatedProducts?: number[];
 }
 
 export const POSTS: Post[] = [
