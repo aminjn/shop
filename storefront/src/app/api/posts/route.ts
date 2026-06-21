@@ -76,5 +76,6 @@ function sanitize(p: Record<string, unknown>) {
     catFa: str(p.catFa, 60) || "عمومی",
     catEn: str(p.catEn, 60) || "General",
     tags: Array.isArray(p.tags) ? (p.tags as unknown[]).map((x) => String(x)).slice(0, 8) : [],
+    cover: p.cover ? str(p.cover, 500) : undefined,
   };
 }

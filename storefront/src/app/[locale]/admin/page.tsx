@@ -11,6 +11,7 @@ import { AI_MODELS } from "@/data/aiModels";
 import { ProductModal } from "@/components/admin/ProductModal";
 import { LogoutButton } from "@/components/LogoutButton";
 import { UploadButton } from "@/components/UploadButton";
+import { ArticleEditor } from "@/components/admin/ArticleEditor";
 import {
   Grid,
   List,
@@ -1319,674 +1320,145 @@ function AiStudio() {
   const fa = locale === "fa";
   const aiToast = () => toast(fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured");
 
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState(CATEGORIES[0].id);
-  const [result, setResult] = useState<AiResult | null>(null);
-  const [busy, setBusy] = useState(false);
+  // product content generator
+  const [pName, setPName] = useState("");
+  const [pCat, setPCat] = useState(CATEGORIES[0].id);
+  const [pRes, setPRes] = useState<AiResult | null>(null);
+  const [pBusy, setPBusy] = useState(false);
+  const genProduct = async () => {
+    if (!pName.trim()) { toast(fa ? "نام محصول را وارد کنید" : "Enter a product name"); return; }
+    setPBusy(true); setPRes(null);
+    try {
+      const r = await fetch("/api/ai/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: pName.trim(), category: pCat }) });
+      const d = await r.json();
+      if (d.ok && d.result) { setPRes(d.result as AiResult); toast(fa ? "محتوا تولید شد ✓" : "Generated ✓"); }
+      else if (d.error === "ai-unavailable") aiToast();
+      else toast(fa ? "تولید ناموفق بود" : "Generation failed");
+    } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setPBusy(false); }
+  };
 
-  // --- article generator + scheduling ---
-  const [topic, setTopic] = useState("");
-  const [artBusy, setArtBusy] = useState(false);
-  const [art, setArt] = useState<AiArticle | null>(null);
-  const [artTitle, setArtTitle] = useState("");
-  const [artExcerpt, setArtExcerpt] = useState("");
-  const [artBody, setArtBody] = useState("");
-  const [schedAt, setSchedAt] = useState("");
-  const [pubBusy, setPubBusy] = useState(false);
-
-  // --- scheduled / draft list ---
-  const [scheduled, setScheduled] = useState<StoredPost[]>([]);
-  const loadScheduled = () =>
-    fetch("/api/posts?all=1")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (Array.isArray(d?.posts)) {
-          setScheduled((d.posts as StoredPost[]).filter((p) => p.status !== "published"));
-        }
-      })
-      .catch(() => {});
-
-  useEffect(() => {
-    loadScheduled();
-  }, []);
-
-  // --- image generator ---
+  // image generator
   const [imgPrompt, setImgPrompt] = useState("");
   const [imgSize, setImgSize] = useState("1024x1024");
   const [imgUrl, setImgUrl] = useState("");
   const [imgBusy, setImgBusy] = useState(false);
+  const genImage = async () => {
+    if (!imgPrompt.trim()) { toast(fa ? "توضیح تصویر را وارد کنید" : "Enter an image prompt"); return; }
+    setImgBusy(true); setImgUrl("");
+    try {
+      const r = await fetch("/api/ai/image", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: imgPrompt.trim(), size: imgSize }) });
+      const d = await r.json();
+      if (d.ok && d.url) { setImgUrl(d.url); toast(fa ? "تصویر تولید شد ✓" : "Image generated ✓"); }
+      else if (d.error === "ai-not-configured" || d.error === "ai-unavailable") aiToast();
+      else toast(fa ? "تولید تصویر ناموفق بود: " + (d.error || "") : "Image failed: " + (d.error || ""));
+    } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setImgBusy(false); }
+  };
 
-  // --- tool hub ---
-  const [toolCat, setToolCat] = useState<string>("همه");
+  // tool hub
+  const [toolCat, setToolCat] = useState("همه");
   const [activeTool, setActiveTool] = useState<AiTool | null>(null);
   const [toolInput, setToolInput] = useState("");
   const [toolOutput, setToolOutput] = useState("");
   const [toolBusy, setToolBusy] = useState(false);
-
-  const genImage = async () => {
-    if (!imgPrompt.trim()) { toast(fa ? "توضیح تصویر را وارد کنید" : "Enter an image prompt"); return; }
-    setImgBusy(true);
-    setImgUrl("");
-    try {
-      const r = await fetch("/api/ai/image", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: imgPrompt.trim(), size: imgSize }),
-      });
-      const d = await r.json();
-      if (d.ok && d.url) { setImgUrl(d.url); toast(fa ? "تصویر تولید شد ✓" : "Image generated ✓"); }
-      else if (d.error === "ai-not-configured" || d.error === "ai-unavailable") aiToast();
-      else toast(fa ? "تولید تصویر ناموفق بود: " + (d.error || "") : "Image generation failed: " + (d.error || ""));
-    } catch {
-      toast(fa ? "خطای شبکه" : "Network error");
-    } finally {
-      setImgBusy(false);
-    }
-  };
-
-  const generate = async () => {
-    if (!name.trim()) {
-      toast(fa ? "نام محصول را وارد کنید" : "Enter a product name");
-      return;
-    }
-    setBusy(true);
-    setResult(null);
-    try {
-      const r = await fetch("/api/ai/generate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), category }),
-      });
-      const d = await r.json();
-      if (d.ok && d.result) {
-        setResult(d.result as AiResult);
-        toast(fa ? "محتوا تولید شد ✓" : "Content generated ✓");
-      } else if (d.error === "ai-unavailable" || d.error === "ai-not-configured") {
-        aiToast();
-      } else {
-        toast(fa ? "تولید محتوا ناموفق بود" : "Generation failed");
-      }
-    } catch {
-      toast(fa ? "خطای شبکه" : "Network error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const generateArticle = async () => {
-    if (!topic.trim()) {
-      toast(fa ? "موضوع مقاله را وارد کنید" : "Enter an article topic");
-      return;
-    }
-    setArtBusy(true);
-    setArt(null);
-    try {
-      const r = await fetch("/api/ai/article", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic: topic.trim() }),
-      });
-      const d = await r.json();
-      if (d.ok && d.article) {
-        const a = d.article as AiArticle;
-        setArt(a);
-        setArtTitle(a.title || "");
-        setArtExcerpt(a.excerpt || "");
-        setArtBody(a.body || "");
-        toast(fa ? "مقاله تولید شد ✓" : "Article generated ✓");
-      } else if (d.error === "ai-unavailable" || d.error === "ai-not-configured") {
-        aiToast();
-      } else {
-        toast(fa ? "تولید مقاله ناموفق بود" : "Article generation failed");
-      }
-    } catch {
-      toast(fa ? "خطای شبکه" : "Network error");
-    } finally {
-      setArtBusy(false);
-    }
-  };
-
-  const postArticle = async (status: "published" | "scheduled") => {
-    if (!artTitle.trim()) {
-      toast(fa ? "عنوان مقاله را وارد کنید" : "Enter an article title");
-      return;
-    }
-    if (status === "scheduled" && !schedAt) {
-      toast(fa ? "زمان انتشار را انتخاب کنید" : "Pick a publish time");
-      return;
-    }
-    setPubBusy(true);
-    try {
-      const r = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "create",
-          status,
-          publishAt: status === "scheduled" ? new Date(schedAt).toISOString() : undefined,
-          post: {
-            fa: artTitle.trim(),
-            excerptFa: artExcerpt.trim(),
-            bodyFa: artBody.trim(),
-            catFa: art?.category || "",
-            tags: art?.tags || [],
-          },
-        }),
-      });
-      const d = await r.json();
-      if (d.ok) {
-        toast(status === "published" ? (fa ? "مقاله منتشر شد ✓" : "Article published ✓") : (fa ? "مقاله زمان‌بندی شد ✓" : "Article scheduled ✓"));
-        setArt(null);
-        setArtTitle("");
-        setArtExcerpt("");
-        setArtBody("");
-        setTopic("");
-        setSchedAt("");
-        await loadScheduled();
-      } else {
-        toast(fa ? "عملیات ناموفق بود" : "Operation failed");
-      }
-    } catch {
-      toast(fa ? "خطای شبکه" : "Network error");
-    } finally {
-      setPubBusy(false);
-    }
-  };
-
-  const deleteScheduled = async (id: number) => {
-    try {
-      const r = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "delete", id }),
-      });
-      const d = await r.json();
-      if (d.ok) {
-        toast(fa ? "حذف شد ✓" : "Deleted ✓");
-        await loadScheduled();
-      } else {
-        toast(fa ? "حذف ناموفق بود" : "Delete failed");
-      }
-    } catch {
-      toast(fa ? "خطای شبکه" : "Network error");
-    }
-  };
-
   const openTool = (tool: AiTool) => {
     if (tool.cat === "تصویر هوشمند") {
       setImgPrompt(tool.label);
-      const el = document.getElementById("ai-image-generator");
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById("ai-image-generator")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    setActiveTool(tool);
-    setToolInput("");
-    setToolOutput("");
+    setActiveTool(tool); setToolInput(""); setToolOutput("");
   };
-
   const runTool = async () => {
     if (!activeTool) return;
-    setToolBusy(true);
-    setToolOutput("");
+    setToolBusy(true); setToolOutput("");
     try {
-      const r = await fetch("/api/ai/tool", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tool: activeTool.label, input: toolInput.trim() || undefined }),
-      });
+      const r = await fetch("/api/ai/tool", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tool: activeTool.label, input: toolInput.trim() || undefined }) });
       const d = await r.json();
-      if (d.ok && typeof d.output === "string") {
-        setToolOutput(d.output);
-      } else if (d.error === "ai-unavailable" || d.error === "ai-not-configured") {
-        aiToast();
-      } else {
-        toast(fa ? "اجرای ابزار ناموفق بود" : "Tool run failed");
-      }
-    } catch {
-      toast(fa ? "خطای شبکه" : "Network error");
-    } finally {
-      setToolBusy(false);
-    }
+      if (d.ok && typeof d.output === "string") setToolOutput(d.output);
+      else if (d.error === "ai-unavailable" || d.error === "ai-not-configured") aiToast();
+      else toast(fa ? "اجرای ابزار ناموفق بود" : "Tool failed");
+    } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setToolBusy(false); }
   };
 
-  const copyOutput = async () => {
-    try {
-      await navigator.clipboard.writeText(toolOutput);
-      toast(fa ? "کپی شد ✓" : "Copied ✓");
-    } catch {
-      toast(fa ? "کپی ناموفق بود" : "Copy failed");
-    }
-  };
-
-  const statusBadge = (s: StoredPost["status"]) =>
-    s === "scheduled"
-      ? { label: fa ? "زمان‌بندی‌شده" : "Scheduled", color: "#2a6fdb" }
-      : { label: fa ? "پیش‌نویس" : "Draft", color: "#d97706" };
-
-  const visibleTools = toolCat === "همه" ? TOOLS : TOOLS.filter((x) => x.cat === toolCat);
+  const shownTools = TOOLS.filter((x) => toolCat === "همه" || x.cat === toolCat);
 
   return (
     <>
-      <div className="mb-5">
-        <h1 className="text-[24px] font-extrabold tracking-tight">{t.aiStudioTitle}</h1>
-        <p className="mt-1 text-[13.5px]" style={{ color: "var(--muted)" }}>
-          {t.aiStudioSub}
-        </p>
-      </div>
+      <H1>{t.aiStudioTitle}</H1>
+      <p className="mb-5 text-[13.5px]" style={{ color: "var(--muted)" }}>{t.aiStudioSub}</p>
 
-      {/* A) product content generator */}
-      <Card className="mb-6 p-5">
-        <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
-          <Sparkle size={16} /> {fa ? "تولیدکننده محتوای محصول" : "Product content generator"}
-        </h2>
-        <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
-          {fa
-            ? "مدل و سرویس‌دهنده در «تنظیمات ← هوش مصنوعی» پیکربندی می‌شود."
-            : "Model and provider are configured in Settings → AI."}
-        </p>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[200px] flex-1">
-            {lbl(fa ? "نام محصول" : "Product name")}
-            <input
-              className={inputCls}
-              style={inputStyle}
-              placeholder={fa ? "نام محصول..." : "Product name..."}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div className="min-w-[160px]">
-            {lbl(t.thCat)}
-            <select
-              className={inputCls}
-              style={inputStyle}
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {fa ? c.fa : c.en}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={generate}
-            disabled={busy}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60"
-            style={{ background: "var(--accent)" }}
-          >
-            <Sparkle size={15} /> {busy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید کن" : "Generate"}
-          </button>
+      {/* WordPress-like article editor */}
+      <ArticleEditor />
+
+      {/* product content generator */}
+      <Card className="mt-6 p-5">
+        <h2 className="mb-3 flex items-center gap-2 text-[15px] font-extrabold"><Sparkle size={16} /> {fa ? "تولید محتوای محصول" : "Product content generator"}</h2>
+        <div className="flex flex-wrap items-end gap-2.5">
+          <div className="min-w-[200px] flex-1">{lbl(fa ? "نام محصول" : "Product name")}<input className={inputCls} style={inputStyle} value={pName} onChange={(e) => setPName(e.target.value)} /></div>
+          <div className="min-w-[160px]">{lbl(t.thCat)}<select className={inputCls} style={inputStyle} value={pCat} onChange={(e) => setPCat(e.target.value)}>{CATEGORIES.map((c) => <option key={c.id} value={c.id}>{fa ? c.fa : c.en}</option>)}</select></div>
+          <button onClick={genProduct} disabled={pBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}><Sparkle size={15} /> {pBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید کن" : "Generate"}</button>
         </div>
-
-        {result && (
-          <div
-            className="mt-4 flex flex-col gap-3 rounded-[12px] p-4"
-            style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
-          >
-            {result.seoTitle && <Field label={fa ? "عنوان سئو" : "SEO title"} value={result.seoTitle} />}
-            {result.shortDesc && (
-              <Field label={fa ? "توضیح کوتاه" : "Short description"} value={result.shortDesc} />
-            )}
-            {result.longDesc && (
-              <Field label={fa ? "توضیح کامل" : "Long description"} value={result.longDesc} />
-            )}
-            {result.metaDesc && (
-              <Field label={fa ? "متا توضیحات" : "Meta description"} value={result.metaDesc} />
-            )}
-            {Array.isArray(result.keywords) && result.keywords.length > 0 && (
-              <Field label={fa ? "کلمات کلیدی" : "Keywords"} value={result.keywords.join("، ")} />
-            )}
-            {Array.isArray(result.specs) && result.specs.length > 0 && (
-              <div>
-                <div className="mb-1 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
-                  {fa ? "مشخصات" : "Specs"}
-                </div>
-                <div className="flex flex-col gap-1">
-                  {result.specs.map((sp, i) => (
-                    <div key={i} className="flex justify-between gap-3 text-[13px]">
-                      <span style={{ color: "var(--muted)" }}>{sp.k}</span>
-                      <span className="font-bold">{sp.v}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {Array.isArray(result.tags) && result.tags.length > 0 && (
-              <div>
-                <div className="mb-1 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
-                  {fa ? "برچسب‌ها" : "Tags"}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {result.tags.map((tg, i) => (
-                    <span
-                      key={i}
-                      className="rounded-full px-2.5 py-1 text-[11.5px] font-bold"
-                      style={{ background: "var(--accent)1f", color: "var(--accent)" }}
-                    >
-                      {tg}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+        {pRes && (
+          <div className="mt-4 flex flex-col gap-3 rounded-[12px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+            {pRes.seoTitle && <Field label={fa ? "عنوان سئو" : "SEO title"} value={pRes.seoTitle} />}
+            {pRes.shortDesc && <Field label={fa ? "توضیح کوتاه" : "Short"} value={pRes.shortDesc} />}
+            {pRes.longDesc && <Field label={fa ? "توضیح کامل" : "Long"} value={pRes.longDesc} />}
+            {pRes.metaDesc && <Field label={fa ? "متا" : "Meta"} value={pRes.metaDesc} />}
+            {Array.isArray(pRes.keywords) && pRes.keywords.length > 0 && <Field label={fa ? "کلمات کلیدی" : "Keywords"} value={pRes.keywords.join("، ")} />}
           </div>
         )}
       </Card>
 
-      {/* B) blog article generator + scheduling */}
-      <Card className="mb-6 p-5">
-        <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
-          <Sparkle size={16} /> {fa ? "تولید مقاله بلاگ با هوش مصنوعی" : "AI blog article generator"}
-        </h2>
-        <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
-          {fa
-            ? "موضوع را وارد کنید، مقاله را ویرایش و سپس فوری منتشر یا زمان‌بندی کنید (انتشار خودکار)."
-            : "Enter a topic, edit the article, then publish now or schedule it (auto-posts)."}
-        </p>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[220px] flex-1">
-            {lbl(fa ? "موضوع مقاله" : "Article topic")}
-            <input
-              className={inputCls}
-              style={inputStyle}
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder={fa ? "مثلاً: راهنمای انتخاب لپ‌تاپ گیمینگ" : "e.g. guide to choosing a gaming laptop"}
-            />
-          </div>
-          <button
-            onClick={generateArticle}
-            disabled={artBusy}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60"
-            style={{ background: "var(--accent)" }}
-          >
-            <Sparkle size={15} /> {artBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید مقاله" : "Generate"}
-          </button>
+      {/* image generator */}
+      <Card className="mt-6 p-5" >
+        <div id="ai-image-generator" />
+        <h2 className="mb-3 flex items-center gap-2 text-[15px] font-extrabold"><Sparkle size={16} /> {fa ? "تولید تصویر با هوش مصنوعی" : "AI image generator"}</h2>
+        <div className="flex flex-wrap items-end gap-2.5">
+          <div className="min-w-[220px] flex-1">{lbl(fa ? "توضیح تصویر" : "Prompt")}<input className={inputCls} style={inputStyle} value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} /></div>
+          <div className="min-w-[130px]">{lbl(fa ? "اندازه" : "Size")}<select className={inputCls} style={inputStyle} value={imgSize} onChange={(e) => setImgSize(e.target.value)}><option value="1024x1024">1024×1024</option><option value="1024x1536">1024×1536</option><option value="1536x1024">1536×1024</option></select></div>
+          <button onClick={genImage} disabled={imgBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}><Sparkle size={15} /> {imgBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید تصویر" : "Generate"}</button>
         </div>
-
-        {art && (
-          <div
-            className="mt-4 flex flex-col gap-3 rounded-[12px] p-4"
-            style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
-          >
-            {(art.category || (art.tags && art.tags.length > 0)) && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {art.category && (
-                  <span
-                    className="rounded-full px-2.5 py-1 text-[11.5px] font-bold"
-                    style={{ background: "var(--accent)1f", color: "var(--accent)" }}
-                  >
-                    {art.category}
-                  </span>
-                )}
-                {art.tags?.map((tg, i) => (
-                  <span key={i} className="rounded-full px-2.5 py-1 text-[11.5px] font-bold" style={{ background: "var(--surface)", color: "var(--muted)", border: "1px solid var(--border)" }}>
-                    {tg}
-                  </span>
-                ))}
-              </div>
-            )}
-            <div>
-              {lbl(fa ? "عنوان" : "Title")}
-              <input className={inputCls} style={inputStyle} value={artTitle} onChange={(e) => setArtTitle(e.target.value)} />
-            </div>
-            <div>
-              {lbl(fa ? "خلاصه" : "Excerpt")}
-              <textarea className={inputCls} style={{ ...inputStyle, minHeight: 64, resize: "vertical" }} value={artExcerpt} onChange={(e) => setArtExcerpt(e.target.value)} />
-            </div>
-            <div>
-              {lbl(fa ? "متن مقاله" : "Body")}
-              <textarea className={inputCls} style={{ ...inputStyle, minHeight: 180, resize: "vertical", lineHeight: "1.8" }} value={artBody} onChange={(e) => setArtBody(e.target.value)} />
-            </div>
-
-            {/* live preview */}
-            <div>
-              <div className="mb-1 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
-                {fa ? "پیش‌نمایش" : "Preview"}
-              </div>
-              <div className="flex flex-col gap-2 rounded-[10px] p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-                <div className="text-[15px] font-extrabold">{artTitle}</div>
-                {artExcerpt && <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>{artExcerpt}</div>}
-                {artBody.split("\n\n").filter(Boolean).map((para, i) => (
-                  <p key={i} className="text-[13.5px] leading-[1.9]" style={{ color: "var(--text)", textAlign: "start" }}>
-                    {para}
-                  </p>
-                ))}
-              </div>
-            </div>
-
-            {/* actions */}
-            <div className="flex flex-wrap items-end gap-2">
-              <button
-                onClick={() => postArticle("published")}
-                disabled={pubBusy}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-4 py-2.5 text-[13px] font-extrabold text-white disabled:opacity-60"
-                style={{ background: "var(--accent)" }}
-              >
-                {fa ? "انتشار فوری" : "Publish now"}
-              </button>
-              <div className="min-w-[200px]">
-                {lbl(fa ? "زمان انتشار" : "Publish time")}
-                <input
-                  type="datetime-local"
-                  className={inputCls}
-                  style={inputStyle}
-                  value={schedAt}
-                  onChange={(e) => setSchedAt(e.target.value)}
-                  dir="ltr"
-                />
-              </div>
-              <button
-                onClick={() => postArticle("scheduled")}
-                disabled={pubBusy}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-extrabold disabled:opacity-60"
-                style={{ background: "var(--surface)", color: "var(--accent)", border: "1px solid var(--border)" }}
-              >
-                {fa ? "زمان‌بندی انتشار" : "Schedule"}
-              </button>
-            </div>
+        {imgUrl && (
+          <div className="mt-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={imgUrl} alt="generated" className="max-h-[360px] rounded-[12px]" style={{ border: "1px solid var(--border)" }} />
           </div>
         )}
       </Card>
 
-      {/* C) scheduled / draft list */}
-      <Card className="mb-6 p-5">
-        <h2 className="mb-4 text-[15px] font-extrabold">
-          {fa ? "محتوای زمان‌بندی‌شده و پیش‌نویس" : "Scheduled & draft content"}
-        </h2>
-        {scheduled.length === 0 ? (
-          <p className="text-[13px]" style={{ color: "var(--muted)" }}>
-            {fa ? "محتوای زمان‌بندی‌شده‌ای وجود ندارد." : "No scheduled or draft content."}
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {scheduled.map((p) => {
-              const b = statusBadge(p.status);
-              return (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-3 rounded-[10px] p-3"
-                  style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13.5px] font-bold">{p.fa}</div>
-                    {p.publishAt && (
-                      <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-                        {fa ? "انتشار: " : "Publishes: "}
-                        {formatDate(p.publishAt, locale, { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </div>
-                    )}
-                  </div>
-                  <Badge label={b.label} color={b.color} />
-                  <ActBtn onClick={() => deleteScheduled(p.id)} color="#e11d48" label={t.del}>
-                    <Trash size={15} />
-                  </ActBtn>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      {/* D) image generator (gpt-image-2 via GapGPT) */}
-      <Card className="mb-6 p-5" >
-        <div id="ai-image-generator" className="scroll-mt-24">
-          <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
-            <Sparkle size={16} /> {fa ? "تولید تصویر با هوش مصنوعی" : "AI image generator"}
-          </h2>
-          <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
-            {fa ? "تصویر محصول یا بنر بساز (مدل gpt-image-2 از طریق گپ‌جی‌پی‌تی)." : "Generate product images or banners (gpt-image-2 via GapGPT)."}
-          </p>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[220px] flex-1">
-              {lbl(fa ? "توضیح تصویر (Prompt)" : "Image prompt")}
-              <input className={inputCls} style={inputStyle} value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} placeholder={fa ? "مثلاً: عکس محصول روی پس‌زمینه سفید" : "e.g. product photo on white background"} />
-            </div>
-            <div className="min-w-[130px]">
-              {lbl(fa ? "اندازه" : "Size")}
-              <select className={inputCls} style={inputStyle} value={imgSize} onChange={(e) => setImgSize(e.target.value)}>
-                <option value="1024x1024">1024×1024</option>
-                <option value="1024x1536">1024×1536</option>
-                <option value="1536x1024">1536×1024</option>
-              </select>
-            </div>
-            <button onClick={genImage} disabled={imgBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
-              <Sparkle size={15} /> {imgBusy ? (fa ? "در حال تولید…" : "Generating…") : fa ? "تولید تصویر" : "Generate"}
-            </button>
-          </div>
-          {imgUrl && (
-            <div className="mt-4 flex flex-col items-start gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imgUrl} alt="generated" className="max-h-[360px] rounded-[12px]" style={{ border: "1px solid var(--border)" }} />
-              <a href={imgUrl} target="_blank" rel="noreferrer" className="text-[12.5px] font-bold no-underline" style={{ color: "var(--accent)" }}>{fa ? "باز کردن تصویر" : "Open image"}</a>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* E) tool hub */}
-      <Card className="p-5">
-        <h2 className="mb-1 flex items-center gap-2 text-[15px] font-extrabold">
-          <Sparkle size={16} /> {fa ? "جعبه‌ابزار هوش مصنوعی" : "AI tool hub"}
-        </h2>
-        <p className="mb-4 text-[12px]" style={{ color: "var(--muted)" }}>
-          {fa ? "ابزارهای آماده برای محتوا، سئو، تصویر، فروش و مشتری." : "Ready-made tools for content, SEO, images, sales and customers."}
-        </p>
-
-        {/* category pills */}
+      {/* tool hub */}
+      <Card className="mt-6 p-5">
+        <h2 className="mb-3 flex items-center gap-2 text-[15px] font-extrabold"><Sparkle size={16} /> {fa ? "ابزارهای هوش مصنوعی" : "AI tools"}</h2>
         <div className="mb-4 flex flex-wrap gap-2">
-          {TOOL_CATS.map((c) => {
-            const active = toolCat === c;
-            return (
-              <button
-                key={c}
-                onClick={() => setToolCat(c)}
-                className="cursor-pointer rounded-full px-3.5 py-1.5 text-[12.5px] font-bold"
-                style={{
-                  background: active ? "var(--accent)" : "var(--surface2)",
-                  color: active ? "#fff" : "var(--text)",
-                  border: "1px solid " + (active ? "var(--accent)" : "var(--border)"),
-                }}
-              >
-                {c}
-              </button>
-            );
-          })}
+          {TOOL_CATS.map((c) => (
+            <button key={c} onClick={() => setToolCat(c)} className="cursor-pointer rounded-full px-3.5 py-1.5 text-[12.5px] font-bold" style={{ background: toolCat === c ? "var(--accent)" : "var(--surface2)", color: toolCat === c ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}>{c}</button>
+          ))}
         </div>
-
-        {/* tool grid */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleTools.map((tool) => (
-            <div
-              key={tool.id}
-              className="flex items-center gap-3 rounded-[12px] p-3.5"
-              style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
-            >
-              <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[10px] text-[20px]" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-                {tool.emoji}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-bold">{tool.label}</div>
-                <div className="truncate text-[11px]" style={{ color: "var(--muted)" }}>{tool.cat}</div>
-              </div>
-              <button
-                onClick={() => openTool(tool)}
-                className="flex-none cursor-pointer rounded-[9px] border-none px-3 py-1.5 text-[12px] font-bold text-white"
-                style={{ background: "var(--accent)" }}
-              >
-                {fa ? "اجرا" : "Run"}
-              </button>
+        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-4">
+          {shownTools.map((tool) => (
+            <div key={tool.id} className="flex items-center justify-between gap-2 rounded-[12px] p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+              <span className="flex min-w-0 items-center gap-2 text-[12.5px] font-bold"><span>{tool.emoji}</span><span className="truncate">{tool.label}</span></span>
+              <button onClick={() => openTool(tool)} className="flex-none cursor-pointer rounded-[8px] border-none px-3 py-1.5 text-[11.5px] font-bold text-white" style={{ background: "var(--accent)" }}>{fa ? "اجرا" : "Run"}</button>
             </div>
           ))}
         </div>
       </Card>
 
-      {/* tool modal */}
       {activeTool && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,.5)" }}
-          onClick={() => setActiveTool(null)}
-        >
-          <div
-            className="flex max-h-[85vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[16px]"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-              <h3 className="flex items-center gap-2 text-[15px] font-extrabold">
-                <span className="text-[18px]">{activeTool.emoji}</span> {activeTool.label}
-              </h3>
-              <button
-                onClick={() => setActiveTool(null)}
-                aria-label={fa ? "بستن" : "Close"}
-                className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-[9px] border-none"
-                style={{ background: "var(--surface2)", color: "var(--text)" }}
-              >
-                <Close size={16} />
-              </button>
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-5" style={{ background: "rgba(0,0,0,.55)" }} onClick={() => setActiveTool(null)}>
+          <div className="anim-pop w-full max-w-[560px] rounded-[16px] p-6" style={{ background: "var(--surface)", border: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-[16px] font-extrabold"><span>{activeTool.emoji}</span> {activeTool.label}</h2>
+              <button onClick={() => setActiveTool(null)} className="cursor-pointer border-none bg-transparent" style={{ color: "var(--muted)" }}><Sparkle size={0} /><span style={{ fontSize: 18 }}>✕</span></button>
             </div>
-            <div className="flex flex-col gap-3 overflow-y-auto p-5 scrollthin">
-              <div>
-                {lbl(fa ? "ورودی (اختیاری)" : "Input (optional)")}
-                <textarea
-                  className={inputCls}
-                  style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
-                  value={toolInput}
-                  onChange={(e) => setToolInput(e.target.value)}
-                  placeholder={fa ? "متن یا توضیح خود را وارد کنید..." : "Enter your text or prompt..."}
-                />
+            <textarea className={inputCls} style={{ ...inputStyle, minHeight: 90, resize: "vertical" }} value={toolInput} onChange={(e) => setToolInput(e.target.value)} placeholder={fa ? "ورودی (اختیاری) — مثلاً نام محصول یا متن…" : "Input (optional)…"} />
+            <button onClick={runTool} disabled={toolBusy} className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}><Sparkle size={15} /> {toolBusy ? (fa ? "در حال اجرا…" : "Running…") : fa ? "اجرا" : "Run"}</button>
+            {toolOutput && (
+              <div className="mt-4 rounded-[12px] p-4 text-[13.5px] leading-relaxed" style={{ background: "var(--surface2)", border: "1px solid var(--border)", whiteSpace: "pre-wrap", maxHeight: 320, overflow: "auto" }}>
+                {toolOutput}
+                <div className="mt-3"><button onClick={() => { navigator.clipboard?.writeText(toolOutput); toast(fa ? "کپی شد" : "Copied"); }} className="cursor-pointer rounded-[8px] border-none px-3 py-1.5 text-[12px] font-bold" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>{fa ? "کپی" : "Copy"}</button></div>
               </div>
-              <button
-                onClick={runTool}
-                disabled={toolBusy}
-                className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-5 py-2.5 text-[13px] font-extrabold text-white disabled:opacity-60"
-                style={{ background: "var(--accent)" }}
-              >
-                <Sparkle size={15} /> {toolBusy ? (fa ? "در حال اجرا…" : "Running…") : fa ? "اجرا" : "Run"}
-              </button>
-              {toolOutput && (
-                <div className="flex flex-col gap-2 rounded-[12px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-                  <div className="flex items-center justify-between">
-                    <div className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
-                      {fa ? "خروجی" : "Output"}
-                    </div>
-                    <button
-                      onClick={copyOutput}
-                      className="cursor-pointer rounded-[8px] border-none px-2.5 py-1 text-[11.5px] font-bold"
-                      style={{ background: "var(--accent)1f", color: "var(--accent)" }}
-                    >
-                      {fa ? "کپی" : "Copy"}
-                    </button>
-                  </div>
-                  <p className="whitespace-pre-wrap text-[13.5px] leading-[1.9]" style={{ color: "var(--text)", textAlign: "start" }}>
-                    {toolOutput}
-                  </p>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
       )}

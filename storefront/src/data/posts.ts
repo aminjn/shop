@@ -13,6 +13,7 @@ export interface Post {
   author: string;
   date: string;
   hue: number;
+  cover?: string;
 }
 
 export const POSTS: Post[] = [
