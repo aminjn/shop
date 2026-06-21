@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Vazirmatn } from "next/font/google";
+import localFont from "next/font/local";
 import "../globals.css";
 import { notFound } from "next/navigation";
 import { isLocale, locales, dir } from "@/i18n/config";
@@ -12,10 +12,11 @@ import { FloatingChat } from "@/components/FloatingChat";
 import { Toast } from "@/components/Toast";
 import { Onboarding } from "@/components/Onboarding";
 
-const vazir = Vazirmatn({
-  subsets: ["arabic", "latin"],
+const vazir = localFont({
+  src: "../fonts/Vazirmatn.woff2",
   variable: "--font-vazir",
   display: "swap",
+  weight: "100 900",
 });
 
 export function generateStaticParams() {

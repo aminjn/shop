@@ -5,7 +5,23 @@ import path from "node:path";
 /** Persisted settings live here. Mount a volume at this path in Docker so
  *  changes survive redeploys (e.g. -v /opt/shop-data:/app/data). */
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
-const SMS_FILE = path.join(DATA_DIR, "sms.json");
+
+function readJson<T extends object>(file: string): T {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), "utf8")) as T;
+  } catch {
+    return {} as T;
+  }
+}
+function writeJson<T extends object>(file: string, patch: Partial<T>): T {
+  const next = { ...readJson<T>(file), ...patch } as Record<string, unknown>;
+  for (const k of Object.keys(next)) {
+    if (next[k] === "" || next[k] == null) delete next[k];
+  }
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(next, null, 2), "utf8");
+  return next as T;
+}
 
 export interface StoredSms {
   apiKey?: string;
@@ -13,22 +29,13 @@ export interface StoredSms {
   patternCode?: string;
   otpVar?: string;
 }
+export const readSms = () => readJson<StoredSms>("sms.json");
+export const writeSms = (patch: StoredSms) => writeJson<StoredSms>("sms.json", patch);
 
-export function readSms(): StoredSms {
-  try {
-    return JSON.parse(fs.readFileSync(SMS_FILE, "utf8")) as StoredSms;
-  } catch {
-    return {};
-  }
+export interface StoredAi {
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
 }
-
-export function writeSms(patch: StoredSms): StoredSms {
-  const next = { ...readSms(), ...patch };
-  // drop empty strings so env fallbacks still apply
-  for (const k of Object.keys(next) as (keyof StoredSms)[]) {
-    if (next[k] === "" || next[k] == null) delete next[k];
-  }
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(SMS_FILE, JSON.stringify(next, null, 2), "utf8");
-  return next;
-}
+export const readAi = () => readJson<StoredAi>("ai.json");
+export const writeAi = (patch: StoredAi) => writeJson<StoredAi>("ai.json", patch);
