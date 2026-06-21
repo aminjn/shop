@@ -1,35 +1,68 @@
 import "server-only";
 import { PRODUCTS } from "@/data/products";
 import { catById } from "@/data/categories";
+import { readAi } from "./settings";
 import type { Locale } from "./types";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5";
+export const DEFAULT_AI_BASE_URL = "https://api.gapgpt.app/v1";
+export const DEFAULT_AI_MODEL = "gpt-4o";
+
+export interface AiConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  configured: boolean;
+}
+
+export function aiConfig(): AiConfig {
+  const s = readAi();
+  const apiKey = s.apiKey || process.env.AI_API_KEY || process.env.GAPGPT_API_KEY || "";
+  const baseUrl = (s.baseUrl || process.env.AI_BASE_URL || DEFAULT_AI_BASE_URL).replace(/\/+$/, "");
+  const model = s.model || process.env.AI_MODEL || DEFAULT_AI_MODEL;
+  return { apiKey, baseUrl, model, configured: Boolean(apiKey) };
+}
+
+export function aiConfigPublic() {
+  const c = aiConfig();
+  const mask = (v: string) =>
+    v ? v.slice(0, 3) + "•".repeat(Math.max(0, v.length - 6)) + v.slice(-3) : "";
+  return {
+    configured: c.configured,
+    hasKey: Boolean(c.apiKey),
+    baseUrl: c.baseUrl,
+    model: c.model,
+    apiKeyMasked: mask(c.apiKey),
+  };
+}
 
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-/** Calls the Anthropic Messages API. Returns text, or null when unavailable. */
-export async function callClaude(
+/** Calls an OpenAI-compatible chat API (GapGPT). Returns text, or null when unavailable. */
+export async function callAI(
   system: string,
   messages: ChatMessage[],
 ): Promise<string | null> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
+  const c = aiConfig();
+  if (!c.configured) return null;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(`${c.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
+        Authorization: `Bearer ${c.apiKey}`,
       },
-      body: JSON.stringify({ model: MODEL, max_tokens: 700, system, messages }),
+      body: JSON.stringify({
+        model: c.model,
+        messages: [{ role: "system", content: system }, ...messages],
+        max_tokens: 700,
+      }),
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const text = data?.content?.[0]?.text;
+    const text = data?.choices?.[0]?.message?.content;
     return typeof text === "string" ? text.trim() : null;
   } catch {
     return null;

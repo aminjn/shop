@@ -6,6 +6,7 @@ import { PRODUCTS } from "@/data/products";
 import { CATEGORIES, catById } from "@/data/categories";
 import type { Product } from "@/lib/types";
 import { grad, priceFmt, num } from "@/lib/format";
+import { AI_MODELS } from "@/data/aiModels";
 import { ProductModal } from "@/components/admin/ProductModal";
 import {
   Grid,
@@ -978,6 +979,64 @@ function Settings() {
     }
   };
 
+  // AI (GapGPT) settings — editable & saved server-side
+  type AiCfg = { configured: boolean; hasKey: boolean; baseUrl: string; model: string; apiKeyMasked: string };
+  const [ai, setAi] = useState<AiCfg | null>(null);
+  const [aiForm, setAiForm] = useState({ apiKey: "", baseUrl: "https://api.gapgpt.app/v1", model: "gpt-4o" });
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiTesting, setAiTesting] = useState(false);
+
+  const loadAi = () =>
+    fetch("/api/ai/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.config) return;
+        setAi(d.config);
+        setAiForm({ apiKey: "", baseUrl: d.config.baseUrl, model: d.config.model });
+      })
+      .catch(() => {});
+
+  useEffect(() => {
+    loadAi();
+  }, []);
+
+  const setAiF = (k: keyof typeof aiForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setAiForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const saveAi = async () => {
+    setAiSaving(true);
+    try {
+      const r = await fetch("/api/ai/config", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(aiForm),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(t.saved);
+        setAiForm((f) => ({ ...f, apiKey: "" }));
+        await loadAi();
+      } else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
+  const testAi = async () => {
+    setAiTesting(true);
+    try {
+      const r = await fetch("/api/ai/test", { method: "POST" });
+      const d = await r.json();
+      toast(d.ok ? (fa ? "اتصال هوش مصنوعی موفق ✓" : "AI connected ✓") : (fa ? "خطا: " : "Error: ") + (d.error || ""));
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setAiTesting(false);
+    }
+  };
+
   return (
     <>
       <H1>{t.aSettings}</H1>
@@ -1043,59 +1102,78 @@ function Settings() {
           </div>
         </Card>
 
-        {/* AI settings */}
+        {/* AI settings (GapGPT) */}
         <Card className="p-5">
-          <h2 className="mb-4 text-[15px] font-extrabold">{t.aiSettings}</h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-[15px] font-extrabold">{fa ? "تنظیمات هوش مصنوعی (گپ‌جی‌پی‌تی)" : "AI settings (GapGPT)"}</h2>
+            <span
+              className="rounded-full px-3 py-1 text-[11.5px] font-extrabold"
+              style={{
+                background: ai?.configured ? "rgba(31,138,91,.15)" : "rgba(225,29,72,.12)",
+                color: ai?.configured ? "#1f8a5b" : "#e11d48",
+              }}
+            >
+              {ai?.configured ? (fa ? "متصل و فعال" : "Connected") : fa ? "تنظیم نشده" : "Not configured"}
+            </span>
+          </div>
+
+          <p className="mb-4 text-[12.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
+            {fa
+              ? "کلید API گپ‌جی‌پی‌تی را وارد کن و مدل را انتخاب کن. این تنظیمات برای جستجوی هوشمند و چت فروشگاه استفاده می‌شود. سازگار با OpenAI."
+              : "Enter your GapGPT API key and pick a model. Used for smart search and the store chat. OpenAI-compatible."}
+          </p>
+
           <div className="flex flex-col gap-3.5">
+            <div>
+              {lbl(fa ? "کلید API" : "API key")}
+              <input
+                className={inputCls}
+                style={inputStyle}
+                type="password"
+                autoComplete="off"
+                value={aiForm.apiKey}
+                onChange={setAiF("apiKey")}
+                placeholder={ai?.hasKey ? ai.apiKeyMasked : fa ? "کلید را وارد کن" : "enter key"}
+                dir="ltr"
+              />
+            </div>
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div>
-                {lbl(fa ? "ارائه‌دهنده" : "Provider")}
-                <select className={inputCls} style={inputStyle} defaultValue="Claude">
-                  {["OpenAI", "Claude", "Gemini", "Ollama", "vLLM", "Custom"].map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
+                {lbl(fa ? "آدرس سرویس (Base URL)" : "Base URL")}
+                <input className={inputCls} style={inputStyle} value={aiForm.baseUrl} onChange={setAiF("baseUrl")} dir="ltr" placeholder="https://api.gapgpt.app/v1" />
               </div>
               <div>
                 {lbl(fa ? "مدل" : "Model")}
-                <select className={inputCls} style={inputStyle} defaultValue="claude-opus-4.6">
-                  {["claude-opus-4.6", "claude-sonnet-4.6", "gpt-5", "gemini-2.5-pro"].map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
+                <input className={inputCls} style={inputStyle} value={aiForm.model} onChange={setAiF("model")} dir="ltr" list="ai-models" placeholder="gpt-4o" />
+                <datalist id="ai-models">
+                  {AI_MODELS.flatMap((g) => g.models).map((m) => (
+                    <option key={m} value={m} />
                   ))}
-                </select>
+                </datalist>
               </div>
             </div>
-            <div>
-              {lbl(fa ? "کلید API" : "API key")}
-              <input className={inputCls} style={inputStyle} type="password" defaultValue="sk-************************" />
+            <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
+              {fa ? "مدل‌های پیشنهادی:" : "Suggested models:"}{" "}
+              {AI_MODELS.map((g) => g.group).join(" • ")}
             </div>
-            <div>
-              {lbl(fa ? "قالب پرامپت" : "Prompt template")}
-              <textarea
-                className="w-full rounded-[10px] px-3 py-2.5 text-[13.5px] outline-none"
-                style={{ ...inputStyle, minHeight: 96, resize: "vertical" }}
-                defaultValue={
-                  fa
-                    ? "شما دستیار محتوای فروشگاه هستید. برای محصول {name} عنوان سئو، توضیح و کلمات کلیدی تولید کن."
-                    : "You are the store content assistant. For product {name}, generate an SEO title, description and keywords."
-                }
-              />
+            <div className="flex gap-3">
+              <button
+                onClick={saveAi}
+                disabled={aiSaving}
+                className="flex-1 cursor-pointer rounded-[12px] border-none py-3 text-[14px] font-extrabold text-white disabled:opacity-60"
+                style={{ background: "var(--accent)" }}
+              >
+                {aiSaving ? (fa ? "در حال ذخیره…" : "Saving…") : fa ? "ذخیره تنظیمات" : "Save settings"}
+              </button>
+              <button
+                onClick={testAi}
+                disabled={aiTesting || !ai?.configured}
+                className="cursor-pointer rounded-[12px] px-5 py-3 text-[14px] font-extrabold disabled:opacity-50"
+                style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                {aiTesting ? (fa ? "تست…" : "Testing…") : fa ? "تست اتصال" : "Test"}
+              </button>
             </div>
-            <div className="flex items-center justify-between rounded-[10px] px-3 py-2.5 text-[13px]" style={inputStyle}>
-              <span style={{ color: "var(--muted)" }}>{fa ? "مصرف ماهانه" : "Monthly usage"}</span>
-              <span className="font-bold">{num(184250, locale)} {fa ? "توکن" : "tokens"}</span>
-            </div>
-            <button
-              onClick={() => toast(t.saved)}
-              className="mt-1 cursor-pointer rounded-[12px] border-none py-3 text-[14px] font-extrabold text-white"
-              style={{ background: "var(--accent)" }}
-            >
-              {fa ? "ذخیره تنظیمات" : "Save settings"}
-            </button>
           </div>
         </Card>
 
