@@ -1,5 +1,6 @@
 import "server-only";
 import { toE164 } from "./auth";
+import { readSms } from "./settings";
 
 const BASE = process.env.IPPANEL_BASE_URL || "https://edge.ippanel.com/v1";
 
@@ -12,16 +13,17 @@ export interface SmsConfig {
 }
 
 export function smsConfig(): SmsConfig {
+  const s = readSms();
+  const apiKey = s.apiKey || process.env.IPPANEL_API_KEY || "";
+  const from = s.from || process.env.IPPANEL_FROM || "";
+  const patternCode = s.patternCode || process.env.IPPANEL_PATTERN_CODE || "";
+  const otpVar = s.otpVar || process.env.IPPANEL_OTP_VAR || "code";
   return {
-    apiKey: process.env.IPPANEL_API_KEY || "",
-    from: process.env.IPPANEL_FROM || "",
-    patternCode: process.env.IPPANEL_PATTERN_CODE || "",
-    otpVar: process.env.IPPANEL_OTP_VAR || "code",
-    configured: Boolean(
-      process.env.IPPANEL_API_KEY &&
-        process.env.IPPANEL_FROM &&
-        process.env.IPPANEL_PATTERN_CODE,
-    ),
+    apiKey,
+    from,
+    patternCode,
+    otpVar,
+    configured: Boolean(apiKey && from && patternCode),
   };
 }
 
@@ -32,6 +34,7 @@ export function smsConfigPublic() {
     v ? v.slice(0, 3) + "•".repeat(Math.max(0, v.length - 6)) + v.slice(-3) : "";
   return {
     configured: c.configured,
+    hasKey: Boolean(c.apiKey),
     from: c.from,
     patternCode: c.patternCode,
     otpVar: c.otpVar,

@@ -913,18 +913,53 @@ function Settings() {
 
   const [maintenance, setMaintenance] = useState(false);
 
-  // IPPanel SMS settings (read from server env, masked)
-  type SmsCfg = { configured: boolean; from: string; patternCode: string; otpVar: string; apiKeyMasked: string };
+  // IPPanel SMS settings — editable & saved server-side
+  type SmsCfg = { configured: boolean; hasKey: boolean; from: string; patternCode: string; otpVar: string; apiKeyMasked: string };
   const [sms, setSms] = useState<SmsCfg | null>(null);
+  const [form, setForm] = useState({ apiKey: "", from: "", patternCode: "", otpVar: "code" });
   const [testMobile, setTestMobile] = useState("");
   const [smsBusy, setSmsBusy] = useState(false);
+  const [smsSaving, setSmsSaving] = useState(false);
 
-  useEffect(() => {
+  const loadSms = () =>
     fetch("/api/sms/config")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.config && setSms(d.config))
+      .then((d) => {
+        if (!d?.config) return;
+        setSms(d.config);
+        setForm({ apiKey: "", from: d.config.from || "", patternCode: d.config.patternCode || "", otpVar: d.config.otpVar || "code" });
+      })
       .catch(() => {});
+
+  useEffect(() => {
+    loadSms();
   }, []);
+
+  const setF = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const saveSms = async () => {
+    setSmsSaving(true);
+    try {
+      const r = await fetch("/api/sms/config", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(t.saved);
+        setForm((f) => ({ ...f, apiKey: "" }));
+        await loadSms();
+      } else {
+        toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally {
+      setSmsSaving(false);
+    }
+  };
 
   const sendTest = async () => {
     setSmsBusy(true);
@@ -1081,28 +1116,48 @@ function Settings() {
 
           <p className="mb-4 text-[12.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
             {fa
-              ? "اعتبارهای IPPanel از متغیرهای محیطی سرور خوانده می‌شوند (IPPANEL_API_KEY، IPPANEL_FROM، IPPANEL_PATTERN_CODE، IPPANEL_OTP_VAR). از طریق الگوی پیامکی، کد تأیید ورود برای کاربران ارسال می‌شود."
-              : "IPPanel credentials are read from server environment variables (IPPANEL_API_KEY, IPPANEL_FROM, IPPANEL_PATTERN_CODE, IPPANEL_OTP_VAR). Login OTP codes are sent via the SMS pattern."}
+              ? "اعتبارهای IPPanel را همین‌جا وارد و ذخیره کن. از طریق الگوی پیامکی، کد تأیید ورود برای کاربران ارسال می‌شود. الگوی OTP را در پنل IPPanel بساز و کد و نام متغیر آن را اینجا بگذار."
+              : "Enter and save your IPPanel credentials here. Login OTP codes are sent via the SMS pattern. Create the OTP pattern in your IPPanel panel and put its code and variable name here."}
           </p>
 
           <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               {lbl(fa ? "کلید API" : "API key")}
-              <input className={inputCls} style={inputStyle} value={sms?.apiKeyMasked || "—"} readOnly dir="ltr" />
+              <input
+                className={inputCls}
+                style={inputStyle}
+                value={form.apiKey}
+                onChange={setF("apiKey")}
+                placeholder={sms?.hasKey ? sms.apiKeyMasked : fa ? "کلید را وارد کن" : "enter key"}
+                dir="ltr"
+                type="password"
+                autoComplete="off"
+              />
             </div>
             <div>
               {lbl(fa ? "شماره فرستنده" : "Sender (from)")}
-              <input className={inputCls} style={inputStyle} value={sms?.from || "—"} readOnly dir="ltr" />
+              <input className={inputCls} style={inputStyle} value={form.from} onChange={setF("from")} placeholder="+983000505" dir="ltr" />
             </div>
             <div>
               {lbl(fa ? "کد الگو (Pattern)" : "Pattern code")}
-              <input className={inputCls} style={inputStyle} value={sms?.patternCode || "—"} readOnly dir="ltr" />
+              <input className={inputCls} style={inputStyle} value={form.patternCode} onChange={setF("patternCode")} placeholder="xxxxxxxxxxxxxxx" dir="ltr" />
             </div>
             <div>
               {lbl(fa ? "نام متغیر کد" : "OTP variable")}
-              <input className={inputCls} style={inputStyle} value={sms?.otpVar || "code"} readOnly dir="ltr" />
+              <input className={inputCls} style={inputStyle} value={form.otpVar} onChange={setF("otpVar")} placeholder="code" dir="ltr" />
             </div>
           </div>
+
+          <button
+            onClick={saveSms}
+            disabled={smsSaving}
+            className="mt-4 cursor-pointer rounded-[12px] border-none px-5 py-3 text-[14px] font-extrabold text-white disabled:opacity-60"
+            style={{ background: "var(--accent)" }}
+          >
+            {smsSaving ? (fa ? "در حال ذخیره…" : "Saving…") : fa ? "ذخیره تنظیمات پیامک" : "Save SMS settings"}
+          </button>
+
+          <div className="mt-5 h-px" style={{ background: "var(--border)" }} />
 
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <div className="flex-1" style={{ minWidth: 220 }}>
