@@ -39,6 +39,10 @@ export interface Product {
   variations?: Variation[];
   images?: string[];
   video?: string;
+  // per-centimeter pricing (e.g. rolls/fabric sold by length)
+  pricingType?: "unit" | "per_cm";
+  pricePerCm?: number; // price for 1 cm of length
+  width?: number; // roll/sheet width in cm
 }
 
 export interface CartLine {

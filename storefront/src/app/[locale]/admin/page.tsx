@@ -206,6 +206,28 @@ export default function AdminPage() {
     }
   };
 
+  // bulk delete / update on selected products
+  const bulkProducts = async (ids: number[], op: "delete" | "update", patch?: Record<string, unknown>): Promise<boolean> => {
+    try {
+      const r = await fetch("/api/products", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "bulk", op, ids, patch }),
+      });
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.products)) {
+        setProducts(d.products);
+        toast(op === "delete" ? (fa ? `${num(ids.length, locale)} محصول حذف شد ✓` : "Deleted ✓") : (fa ? `${num(ids.length, locale)} محصول ویرایش شد ✓` : "Updated ✓"));
+        return true;
+      }
+      toast(fa ? "عملیات ناموفق بود" : "Failed");
+      return false;
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+      return false;
+    }
+  };
+
   return (
     <div className="mx-auto max-w-[1280px] px-[22px] py-7">
       <div className="grid gap-6 md:grid-cols-[240px_1fr]">
@@ -255,6 +277,7 @@ export default function AdminPage() {
               onAdd={openAdd}
               onEdit={openEdit}
               onDelete={deleteProduct}
+              onBulk={bulkProducts}
             />
           )}
           {section === "orders" && <Orders />}
@@ -572,87 +595,189 @@ function Products({
   onAdd,
   onEdit,
   onDelete,
+  onBulk,
 }: {
   products: Product[];
   statusOf: (s: number) => { label: string; color: string };
   onAdd: () => void;
   onEdit: (p: Product) => void;
   onDelete: (id: number) => void;
+  onBulk: (ids: number[], op: "delete" | "update", patch?: Record<string, unknown>) => Promise<boolean>;
 }) {
   const { locale, t, dark, toast } = useShop();
   const fa = locale === "fa";
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [stockFilter, setStockFilter] = useState<"" | "in" | "low" | "out">("");
+  const [typeFilter, setTypeFilter] = useState<"" | "per_cm" | "unit">("");
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkEdit, setBulkEdit] = useState(false);
+  const [confirmBulkDel, setConfirmBulkDel] = useState(false);
+  const [patch, setPatch] = useState({ cat: "", brand: "", stock: "", price: "", discountPct: "", pricePerCm: "", width: "" });
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return products.filter((p) => {
+      if (catFilter && p.cat !== catFilter) return false;
+      if (stockFilter === "in" && p.stock <= 20) return false;
+      if (stockFilter === "low" && !(p.stock > 0 && p.stock <= 20)) return false;
+      if (stockFilter === "out" && p.stock !== 0) return false;
+      if (typeFilter === "per_cm" && p.pricingType !== "per_cm") return false;
+      if (typeFilter === "unit" && p.pricingType === "per_cm") return false;
+      if (q && !(`${p.fa} ${p.en} ${p.brand} ${p.sku ?? ""}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [products, query, catFilter, stockFilter, typeFilter]);
+
+  const filteredIds = filtered.map((p) => p.id);
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
+  const toggle = (id: number) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAll = () => setSelected((s) => { if (allSelected) { const n = new Set(s); filteredIds.forEach((id) => n.delete(id)); return n; } return new Set([...s, ...filteredIds]); });
+  const clearSel = () => { setSelected(new Set()); setBulkEdit(false); setConfirmBulkDel(false); };
+
+  const ids = [...selected];
+  const applyBulkEdit = async () => {
+    if (!patch.cat && !patch.brand && !patch.stock && !patch.price && !patch.discountPct && !patch.pricePerCm && !patch.width) { toast(fa ? "حداقل یک فیلد را پر کن" : "Fill a field"); return; }
+    const ok = await onBulk(ids, "update", { ...patch });
+    if (ok) { setPatch({ cat: "", brand: "", stock: "", price: "", discountPct: "", pricePerCm: "", width: "" }); setBulkEdit(false); clearSel(); }
+  };
+  const doBulkDelete = async () => { const ok = await onBulk(ids, "delete"); if (ok) clearSel(); };
 
   const onDeleteClick = (p: Product) => {
-    if (confirmId === p.id) {
-      setConfirmId(null);
-      onDelete(p.id);
-    } else {
-      setConfirmId(p.id);
-      toast(fa ? "برای حذف دوباره بزنید" : "Tap again to delete");
-    }
+    if (confirmId === p.id) { setConfirmId(null); onDelete(p.id); }
+    else { setConfirmId(p.id); toast(fa ? "برای حذف دوباره بزنید" : "Tap again to delete"); }
   };
+
+  const selStyle = { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" } as const;
+  const fieldCls = "rounded-[10px] px-3 py-2 text-[13px] outline-none";
 
   return (
     <>
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <H1>{t.aProducts}</H1>
-        <button
-          onClick={onAdd}
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] border-none px-4 py-2.5 text-[13.5px] font-extrabold text-white"
-          style={{ background: "var(--accent)" }}
-        >
+        <button onClick={onAdd} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] border-none px-4 py-2.5 text-[13.5px] font-extrabold text-white" style={{ background: "var(--accent)" }}>
           <Plus size={16} /> {fa ? "افزودن محصول" : "Add product"}
         </button>
       </div>
 
-      {products.length === 0 ? (
-        <Empty text={fa ? "هنوز محصولی ثبت نشده است." : "No products yet."} />
+      {/* filters */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={fa ? "جستجوی نام، برند یا SKU…" : "Search…"} className={`${fieldCls} min-w-[200px] flex-1`} style={selStyle} />
+        <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className={fieldCls} style={selStyle}>
+          <option value="">{fa ? "همهٔ دسته‌ها" : "All categories"}</option>
+          {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{fa ? c.fa : c.en}</option>)}
+        </select>
+        <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)} className={fieldCls} style={selStyle}>
+          <option value="">{fa ? "همهٔ موجودی‌ها" : "All stock"}</option>
+          <option value="in">{fa ? "موجود" : "In stock"}</option>
+          <option value="low">{fa ? "موجودی کم" : "Low"}</option>
+          <option value="out">{fa ? "ناموجود" : "Out"}</option>
+        </select>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)} className={fieldCls} style={selStyle}>
+          <option value="">{fa ? "همهٔ انواع" : "All types"}</option>
+          <option value="per_cm">{fa ? "سانتی (متراژی)" : "Per-cm"}</option>
+          <option value="unit">{fa ? "واحدی" : "Unit"}</option>
+        </select>
+        <span className="text-[12.5px]" style={{ color: "var(--muted)" }}>{fa ? `${num(filtered.length, locale)} محصول` : `${filtered.length} items`}</span>
+      </div>
+
+      {/* bulk action bar */}
+      {selected.size > 0 && (
+        <div className="mb-3 rounded-[12px] p-3" style={{ background: "var(--surface2)", border: "1px solid var(--accent)" }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-extrabold">{fa ? `${num(selected.size, locale)} مورد انتخاب شده` : `${selected.size} selected`}</span>
+            <span className="flex-1" />
+            <button onClick={() => { setBulkEdit((v) => !v); setConfirmBulkDel(false); }} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ background: "var(--accent)", color: "#fff", border: "none" }}>{fa ? "ویرایش دسته‌ای" : "Bulk edit"}</button>
+            {confirmBulkDel ? (
+              <button onClick={doBulkDelete} className="cursor-pointer rounded-[9px] border-none px-3 py-1.5 text-[12.5px] font-bold text-white" style={{ background: "#e11d48" }}>{fa ? "تأیید حذف؟" : "Confirm delete?"}</button>
+            ) : (
+              <button onClick={() => { setConfirmBulkDel(true); setBulkEdit(false); }} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ ...selStyle, color: "#e11d48" }}>{fa ? "حذف انتخاب‌شده‌ها" : "Delete selected"}</button>
+            )}
+            <button onClick={clearSel} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={selStyle}>{fa ? "لغو انتخاب" : "Clear"}</button>
+          </div>
+
+          {bulkEdit && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              <div>
+                <label className="mb-1 block text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته" : "Category"}</label>
+                <select value={patch.cat} onChange={(e) => setPatch((p) => ({ ...p, cat: e.target.value }))} className={`${fieldCls} w-full`} style={selStyle}>
+                  <option value="">{fa ? "— بدون تغییر —" : "— keep —"}</option>
+                  {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{fa ? c.fa : c.en}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "برند" : "Brand"}</label>
+                <input value={patch.brand} onChange={(e) => setPatch((p) => ({ ...p, brand: e.target.value }))} className={`${fieldCls} w-full`} style={selStyle} placeholder={fa ? "بدون تغییر" : "keep"} />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "موجودی" : "Stock"}</label>
+                <input value={patch.stock} onChange={(e) => setPatch((p) => ({ ...p, stock: e.target.value }))} className={`${fieldCls} w-full`} style={selStyle} placeholder={fa ? "بدون تغییر" : "keep"} dir="ltr" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "قیمت (تومان)" : "Price"}</label>
+                <input value={patch.price} onChange={(e) => setPatch((p) => ({ ...p, price: e.target.value }))} className={`${fieldCls} w-full`} style={selStyle} placeholder={fa ? "بدون تغییر" : "keep"} dir="ltr" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "٪ تخفیف" : "Discount %"}</label>
+                <input value={patch.discountPct} onChange={(e) => setPatch((p) => ({ ...p, discountPct: e.target.value }))} className={`${fieldCls} w-full`} style={selStyle} placeholder={fa ? "مثلاً ۲۰" : "e.g. 20"} dir="ltr" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "قیمت هر سانت" : "Price / cm"}</label>
+                <input value={patch.pricePerCm} onChange={(e) => setPatch((p) => ({ ...p, pricePerCm: e.target.value }))} className={`${fieldCls} w-full`} style={selStyle} placeholder={fa ? "فقط سانتی‌ها" : "per-cm only"} dir="ltr" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "عرض (سانت)" : "Width (cm)"}</label>
+                <input value={patch.width} onChange={(e) => setPatch((p) => ({ ...p, width: e.target.value }))} className={`${fieldCls} w-full`} style={selStyle} placeholder={fa ? "اختیاری" : "optional"} dir="ltr" />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-5">
+                <button onClick={applyBulkEdit} className="cursor-pointer rounded-[10px] border-none px-5 py-2 text-[13px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{fa ? "اعمال روی انتخاب‌شده‌ها" : "Apply"}</button>
+                <span className="ms-2 text-[11.5px]" style={{ color: "var(--muted)" }}>{fa ? "فقط فیلدهای پرشده اعمال می‌شوند. «قیمت هر سانت» محصول را به نوع سانتی تبدیل می‌کند. درصد تخفیف، قیمت قبلی را به‌عنوان قیمت خط‌خورده ثبت می‌کند." : "Only filled fields apply."}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <Empty text={fa ? "محصولی با این فیلترها پیدا نشد." : "No products match."} />
       ) : (
-        <Table
-          head={[t.thProduct, t.thCat, t.thPrice, t.thStock, t.thStatus, t.thActions]}
-        >
-          {products.map((p) => {
+        <Table head={["", t.thProduct, t.thCat, t.thPrice, t.thStock, t.thStatus, t.thActions]}>
+          {/* select-all row */}
+          <tr style={{ borderTop: "1px solid var(--border)", background: "var(--surface2)" }}>
+            <td className="px-4 py-2"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="select all" style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} /></td>
+            <td className="px-4 py-2 text-[12px] font-bold" colSpan={6} style={{ textAlign: "start", color: "var(--muted)" }}>{fa ? "انتخاب همه (در این فیلتر)" : "Select all (filtered)"}</td>
+          </tr>
+          {filtered.map((p) => {
             const st = statusOf(p.stock);
             const c = catById(p.cat);
+            const isSel = selected.has(p.id);
             return (
-              <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+              <tr key={p.id} style={{ borderTop: "1px solid var(--border)", background: isSel ? "var(--surface2)" : undefined }}>
+                <td className="px-4 py-3"><input type="checkbox" checked={isSel} onChange={() => toggle(p.id)} aria-label="select" style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} /></td>
                 <td className="px-4 py-3" style={{ textAlign: "start" }}>
                   <div className="flex items-center gap-3">
-                    <span
-                      className="flex h-10 w-10 flex-none items-center justify-center rounded-[9px] text-[14px] font-extrabold"
-                      style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}
-                    >
+                    <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[9px] text-[14px] font-extrabold" style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}>
                       {(fa ? p.fa : p.en).charAt(0)}
                     </span>
                     <div className="min-w-0">
                       <div className="truncate text-[13px] font-bold">{fa ? p.fa : p.en}</div>
-                      <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>
-                        {p.brand}
-                      </div>
+                      <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>{p.brand}</div>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
-                  {c ? (fa ? c.fa : c.en) : p.cat}
-                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>{c ? (fa ? c.fa : c.en) : p.cat}</td>
                 <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-                  {priceFmt(p.price, locale, t.currency)}
+                  {p.pricingType === "per_cm"
+                    ? <span>{priceFmt(p.pricePerCm ?? 0, locale, t.currency)}<span className="text-[11px] font-normal" style={{ color: "var(--muted)" }}> /{fa ? "سانت" : "cm"}{p.width ? ` • ${num(p.width, locale)}${fa ? "س عرض" : "cm"}` : ""}</span></span>
+                    : priceFmt(p.price, locale, t.currency)}
                 </td>
-                <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                  {num(p.stock, locale)}
-                </td>
-                <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                  <Badge label={st.label} color={st.color} />
-                </td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>{num(p.stock, locale)}</td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}><Badge label={st.label} color={st.color} /></td>
                 <td className="px-4 py-3" style={{ textAlign: "start" }}>
                   <div className="flex gap-2">
-                    <ActBtn onClick={() => onEdit(p)} color="var(--accent)" label={t.edit}>
-                      <List size={15} />
-                    </ActBtn>
-                    <ActBtn onClick={() => onDeleteClick(p)} color="#e11d48" label={t.del}>
-                      <Trash size={15} />
-                    </ActBtn>
+                    <ActBtn onClick={() => onEdit(p)} color="var(--accent)" label={t.edit}><List size={15} /></ActBtn>
+                    <ActBtn onClick={() => onDeleteClick(p)} color="#e11d48" label={t.del}><Trash size={15} /></ActBtn>
                   </div>
                 </td>
               </tr>

@@ -40,6 +40,9 @@ export function ProductModal({
   const [vars, setVars] = useState<Variation[]>(initial?.variations ?? []);
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
   const [video, setVideo] = useState(initial?.video ?? "");
+  const [perCm, setPerCm] = useState(initial?.pricingType === "per_cm");
+  const [pricePerCm, setPricePerCm] = useState(String(initial?.pricePerCm ?? ""));
+  const [width, setWidth] = useState(String(initial?.width ?? ""));
 
   const lbl = (s: string) => (
     <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>
@@ -84,6 +87,9 @@ export function ProductModal({
       variations: vars.length ? vars : undefined,
       images: images.length ? images : undefined,
       video: video || undefined,
+      pricingType: perCm ? "per_cm" : undefined,
+      pricePerCm: perCm ? Number(pricePerCm) || 0 : undefined,
+      width: perCm && width ? Number(width) || undefined : undefined,
     };
     // The parent persists to the API and shows the success/failure toast.
     onSave(product);
@@ -165,6 +171,28 @@ export function ProductModal({
           <div>
             {lbl(t.thStock)}
             <input className={inputCls} style={inputStyle} inputMode="numeric" value={stock} onChange={(e) => setStock(e.target.value)} />
+          </div>
+          {/* per-cm pricing (rolls/fabric sold by length) */}
+          <div className="sm:col-span-2 rounded-[12px] p-3.5" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+            <label className="flex cursor-pointer items-center gap-2 text-[13px] font-extrabold">
+              <input type="checkbox" checked={perCm} onChange={(e) => setPerCm(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} />
+              {locale === "fa" ? "قیمت‌گذاری بر اساس سانت (محصول سانتی/متراژی)" : "Per-centimeter pricing"}
+            </label>
+            {perCm && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  {lbl(locale === "fa" ? "قیمت هر سانت (تومان)" : "Price per cm")}
+                  <input className={inputCls} style={inputStyle} inputMode="numeric" value={pricePerCm} onChange={(e) => setPricePerCm(e.target.value)} dir="ltr" />
+                </div>
+                <div>
+                  {lbl(locale === "fa" ? "عرض (سانت)" : "Width (cm)")}
+                  <input className={inputCls} style={inputStyle} inputMode="numeric" value={width} onChange={(e) => setWidth(e.target.value)} dir="ltr" />
+                </div>
+                <p className="text-[11.5px] sm:col-span-2" style={{ color: "var(--muted)" }}>
+                  {locale === "fa" ? "این محصول‌ها بر اساس طول (سانت) فروخته می‌شوند. می‌توانی قیمت هر سانت را به‌صورت دسته‌ای هم در فهرست محصولات تغییر دهی." : "Sold by length; per-cm price is bulk-editable in the product list."}
+                </p>
+              </div>
+            )}
           </div>
           <div>
             {lbl(t.origin)}
