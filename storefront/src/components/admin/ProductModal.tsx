@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useShop } from "@/lib/store";
-import { CATEGORIES, BRANDS } from "@/data/categories";
+import { CATEGORIES as SEED_CATS, BRANDS } from "@/data/categories";
 import type { Product, Variation } from "@/lib/types";
 import { Plus, Trash, Close, Play } from "@/components/Icons";
 import { UploadButton } from "@/components/UploadButton";
@@ -23,7 +23,8 @@ export function ProductModal({
   onClose: () => void;
   onSave: (p: Product) => void | Promise<void>;
 }) {
-  const { locale, t, toast } = useShop();
+  const { locale, t, toast, categories: liveCats } = useShop();
+  const CATEGORIES = liveCats.length ? liveCats : SEED_CATS;
 
   const [fa, setFa] = useState(initial?.fa ?? "");
   const [en, setEn] = useState(initial?.en ?? "");

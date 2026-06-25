@@ -84,21 +84,20 @@ export async function callAIDetailed(
   // many models cap output tokens; keep within a widely-supported ceiling
   const caps = [Math.min(4096, Math.max(256, maxTokens)), 2048, 1024];
   let lastErr = "";
+  let tokenParam: "max_tokens" | "max_completion_tokens" = "max_tokens";
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
     const cap = caps[Math.min(attempt, caps.length - 1)];
     try {
+      const body: Record<string, unknown> = {
+        model: model || c.model,
+        messages: [{ role: "system", content: system }, ...messages],
+      };
+      body[tokenParam] = cap;
       const res = await fetch(`${c.baseUrl}/chat/completions`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          Authorization: `Bearer ${c.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: model || c.model,
-          messages: [{ role: "system", content: system }, ...messages],
-          max_tokens: cap,
-        }),
+        headers: { "content-type": "application/json", Authorization: `Bearer ${c.apiKey}` },
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const data = await res.json();
@@ -114,16 +113,19 @@ export async function callAIDetailed(
           /* ignore */
         }
         lastErr = msg;
-        // 4xx other than rate limit won't fix themselves — stop early
+        // some models require max_completion_tokens instead of max_tokens
+        if (tokenParam === "max_tokens" && /max_completion_tokens|unsupported.*max_tokens|'max_tokens'/i.test(msg)) {
+          tokenParam = "max_completion_tokens";
+          continue; // retry immediately with the other param name
+        }
+        // other 4xx (bad model/auth) won't fix themselves — stop, unless token-size
         if (res.status >= 400 && res.status < 500 && res.status !== 429) {
-          // but a token-size complaint may pass with a smaller cap → keep retrying
           if (!/token|length|max|context/i.test(msg)) return { text: null, error: msg };
         }
       }
     } catch (e) {
       lastErr = e instanceof Error ? e.message : "network";
     }
-    // small backoff before retrying
     await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
   }
   return { text: null, error: lastErr || "ai-error" };

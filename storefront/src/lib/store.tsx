@@ -9,10 +9,13 @@ import {
   useRef,
   useState,
 } from "react";
-import type { CartLine, Coupon, Locale, Product } from "./types";
+import type { CartLine, Category, Coupon, Locale, Product } from "./types";
 import { getDict, type Dict } from "@/i18n/dictionaries";
 import { ROUNDNESS } from "./format";
 import { PRODUCTS as SEED_PRODUCTS } from "@/data/products";
+import { CATEGORIES as SEED_CATEGORIES } from "@/data/categories";
+
+export interface MenuLink { id: string; fa: string; en: string; href: string; }
 
 type Roundness = "sharp" | "soft" | "round";
 
@@ -51,6 +54,9 @@ interface ShopState {
   // live catalog (defaults to the seed, refreshed from /api/products)
   products: Product[];
   productById: (id: number) => Product | undefined;
+  // live taxonomy & navigation (admin-editable)
+  categories: Category[];
+  menu: MenuLink[];
   // store branding
   logoUrl: string;
 }
@@ -106,6 +112,8 @@ export function ShopProvider({
   const [toastMsg, setToastMsg] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
+  const [categories, setCategories] = useState<Category[]>(SEED_CATEGORIES);
+  const [menu, setMenu] = useState<MenuLink[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // hydrate from localStorage on mount
@@ -121,6 +129,15 @@ export function ShopProvider({
     fetch("/api/products")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
+      .catch(() => {});
+    // live categories & custom menu (admin-editable)
+    fetch("/api/categories")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) setCategories(d.categories); })
+      .catch(() => {});
+    fetch("/api/menu")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
       .catch(() => {});
     // apply store branding (name / currency / logo) saved in admin
     fetch("/api/settings/store")
@@ -297,6 +314,8 @@ export function ShopProvider({
     setChatOpen,
     products,
     productById: (id: number) => products.find((p) => p.id === id),
+    categories,
+    menu,
     logoUrl,
   };
 

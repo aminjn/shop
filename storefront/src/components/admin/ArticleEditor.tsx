@@ -686,7 +686,7 @@ function BulkScheduler({
             </div>
             <div>
               <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "تعداد مقاله" : "Count"}</label>
-              <input className={inputCls} style={inputStyle} type="number" min={1} max={50} value={count} onChange={(e) => setCount(Math.min(50, Math.max(1, Number(e.target.value) || 1)))} dir="ltr" />
+              <input className={inputCls} style={inputStyle} type="number" min={1} max={365} value={count} onChange={(e) => setCount(Math.max(1, Math.floor(Number(e.target.value)) || 1))} dir="ltr" />
             </div>
           </div>
         ) : (

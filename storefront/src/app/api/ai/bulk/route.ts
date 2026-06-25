@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     : [];
 
   const theme = String(b.theme || "").trim();
-  const count = Math.min(100, Math.max(1, Number(b.count) || topics.length || 10));
+  const count = Math.min(365, Math.max(1, Number(b.count) || topics.length || 10));
 
   // scheduling params: perDay posts spread across [startHour, endHour]
   const perDay = Math.min(24, Math.max(1, Number(b.perDay) || 3));
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
   // PREVIEW: just return the computed schedule (no AI, no save)
   if (b.preview) {
     const want = topics.length || count;
-    const schedule = computeSchedule({ count: Math.min(want, 100), perDay, startHour, endHour, weekdays, sy, sm, sd });
+    const schedule = computeSchedule({ count: Math.min(want, 365), perDay, startHour, endHour, weekdays, sy, sm, sd });
     return NextResponse.json({ ok: true, preview: true, schedule, count: schedule.length });
   }
 

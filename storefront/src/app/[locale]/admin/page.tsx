@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useShop } from "@/lib/store";
-import { CATEGORIES, catById } from "@/data/categories";
+import { CATEGORIES } from "@/data/categories";
 import type { Product } from "@/lib/types";
 import type { Post } from "@/data/posts";
 import type { OrderStatus } from "@/lib/userstore";
@@ -25,6 +25,8 @@ import {
 type Section =
   | "dashboard"
   | "products"
+  | "categories"
+  | "menu"
   | "orders"
   | "customers"
   | "discounts"
@@ -139,6 +141,8 @@ export default function AdminPage() {
   const NAV: { id: Section; label: string }[] = [
     { id: "dashboard", label: t.aDashboard },
     { id: "products", label: t.aProducts },
+    { id: "categories", label: fa ? "دسته‌بندی‌ها" : "Categories" },
+    { id: "menu", label: fa ? "منوها" : "Menus" },
     { id: "orders", label: t.aOrders },
     { id: "customers", label: t.aCustomers },
     { id: "discounts", label: t.aDiscounts },
@@ -283,6 +287,8 @@ export default function AdminPage() {
               onBulk={bulkProducts}
             />
           )}
+          {section === "categories" && <CategoriesAdmin />}
+          {section === "menu" && <MenuAdmin />}
           {section === "orders" && <Orders />}
           {section === "customers" && <Customers />}
           {section === "discounts" && <Discounts />}
@@ -608,8 +614,10 @@ function Products({
   onDelete: (id: number) => void;
   onBulk: (ids: number[], op: "delete" | "update", patch?: Record<string, unknown>) => Promise<boolean>;
 }) {
-  const { locale, t, dark, toast } = useShop();
+  const { locale, t, dark, toast, categories: liveCats } = useShop();
   const fa = locale === "fa";
+  const cats = liveCats.length ? liveCats : CATEGORIES;
+  const catName = (id: string) => { const c = cats.find((x) => x.id === id); return c ? (fa ? c.fa : c.en) : id; };
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState("");
@@ -670,7 +678,7 @@ function Products({
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={fa ? "جستجوی نام، برند یا SKU…" : "Search…"} className={`${fieldCls} min-w-[200px] flex-1`} style={selStyle} />
         <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className={fieldCls} style={selStyle}>
           <option value="">{fa ? "همهٔ دسته‌ها" : "All categories"}</option>
-          {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{fa ? c.fa : c.en}</option>)}
+          {cats.map((c) => <option key={c.id} value={c.id}>{fa ? c.fa : c.en}</option>)}
         </select>
         <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)} className={fieldCls} style={selStyle}>
           <option value="">{fa ? "همهٔ موجودی‌ها" : "All stock"}</option>
@@ -707,7 +715,7 @@ function Products({
                 <label className="mb-1 block text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "دسته" : "Category"}</label>
                 <select value={patch.cat} onChange={(e) => setPatch((p) => ({ ...p, cat: e.target.value }))} className={`${fieldCls} w-full`} style={selStyle}>
                   <option value="">{fa ? "— بدون تغییر —" : "— keep —"}</option>
-                  {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{fa ? c.fa : c.en}</option>)}
+                  {cats.map((c) => <option key={c.id} value={c.id}>{fa ? c.fa : c.en}</option>)}
                 </select>
               </div>
               <div>
@@ -754,7 +762,6 @@ function Products({
           </tr>
           {filtered.map((p) => {
             const st = statusOf(p.stock);
-            const c = catById(p.cat);
             const isSel = selected.has(p.id);
             return (
               <tr key={p.id} style={{ borderTop: "1px solid var(--border)", background: isSel ? "var(--surface2)" : undefined }}>
@@ -770,7 +777,7 @@ function Products({
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>{c ? (fa ? c.fa : c.en) : p.cat}</td>
+                <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>{catName(p.cat)}</td>
                 <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
                   {p.pricingType === "per_cm"
                     ? <span>{priceFmt(p.pricePerCm ?? 0, locale, t.currency)}<span className="text-[11px] font-normal" style={{ color: "var(--muted)" }}> /{fa ? "سانت" : "cm"}{p.width ? ` • ${num(p.width, locale)}${fa ? "س عرض" : "cm"}` : ""}</span></span>
@@ -1359,6 +1366,162 @@ function Reviews({ products }: { products: Product[] }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------- categories management ---------- */
+
+type CatRow = { id: string; fa: string; en: string; hue: number; subs: [string, string][] };
+
+function CategoriesAdmin() {
+  const { locale, toast } = useShop();
+  const fa = locale === "fa";
+  const [cats, setCats] = useState<CatRow[]>([]);
+  const [editing, setEditing] = useState<CatRow | null>(null);
+  const blank: CatRow = { id: "", fa: "", en: "", hue: 215, subs: [] };
+  const [form, setForm] = useState<CatRow>(blank);
+  const [subFa, setSubFa] = useState("");
+  const [subEn, setSubEn] = useState("");
+
+  const load = () => fetch("/api/categories").then((r) => r.json()).then((d) => Array.isArray(d?.categories) && setCats(d.categories)).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const startNew = () => { setEditing(null); setForm(blank); };
+  const startEdit = (c: CatRow) => { setEditing(c); setForm({ ...c, subs: [...c.subs] }); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const addSub = () => { if (!subFa.trim()) return; setForm((f) => ({ ...f, subs: [...f.subs, [subFa.trim(), subEn.trim() || subFa.trim()]] })); setSubFa(""); setSubEn(""); };
+  const rmSub = (i: number) => setForm((f) => ({ ...f, subs: f.subs.filter((_, x) => x !== i) }));
+
+  const save = async () => {
+    if (!form.fa.trim()) { toast(fa ? "نام دسته الزامی است" : "Name required"); return; }
+    const body = { action: editing ? "update" : "add", id: form.id, fa: form.fa.trim(), en: form.en.trim(), hue: form.hue, subs: form.subs };
+    const r = await fetch("/api/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) { setCats(d.categories); startNew(); toast(fa ? "ذخیره شد ✓ (برای دیدن در سایت صفحه را تازه کن)" : "Saved ✓"); }
+    else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+  };
+  const del = async (id: string) => {
+    const r = await fetch("/api/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "delete", id }) });
+    const d = await r.json();
+    if (d.ok) { setCats(d.categories); toast(fa ? "حذف شد" : "Deleted"); }
+  };
+
+  return (
+    <>
+      <H1>{fa ? "دسته‌بندی‌ها" : "Categories"}</H1>
+      <p className="mb-5 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "دسته‌های اصلی و زیردسته‌ها را اینجا مدیریت کن. این‌ها در منوی سایت، فیلتر فروشگاه و فرم محصول استفاده می‌شوند." : "Manage categories and subcategories used across the site."}</p>
+
+      <Card className="mb-6 p-5">
+        <h2 className="mb-3 text-[15px] font-extrabold">{editing ? (fa ? "ویرایش دسته" : "Edit category") : fa ? "افزودن دستهٔ جدید" : "Add category"}</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>{lbl(fa ? "نام (فارسی)" : "Name (FA)")}<input className={inputCls} style={inputStyle} value={form.fa} onChange={(e) => setForm((f) => ({ ...f, fa: e.target.value }))} /></div>
+          <div>{lbl(fa ? "نام (انگلیسی)" : "Name (EN)")}<input className={inputCls} style={inputStyle} value={form.en} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" /></div>
+          <div>{lbl(fa ? "رنگ (۰ تا ۳۶۰)" : "Hue")}<input className={inputCls} style={inputStyle} type="number" min={0} max={360} value={form.hue} onChange={(e) => setForm((f) => ({ ...f, hue: Number(e.target.value) || 0 }))} dir="ltr" /></div>
+        </div>
+        {/* subs */}
+        <div className="mt-3">
+          {lbl(fa ? "زیردسته‌ها" : "Subcategories")}
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {form.subs.map(([f1, e1], i) => (
+              <span key={i} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                {fa ? f1 : e1}
+                <button onClick={() => rmSub(i)} className="cursor-pointer border-none bg-transparent text-[12px]" style={{ color: "#e11d48" }}>×</button>
+              </span>
+            ))}
+            {form.subs.length === 0 && <span className="text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "زیردسته‌ای اضافه نشده" : "none"}</span>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} value={subFa} onChange={(e) => setSubFa(e.target.value)} placeholder={fa ? "نام زیردسته (فارسی)" : "Sub (FA)"} onKeyDown={(e) => { if (e.key === "Enter") addSub(); }} />
+            <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} value={subEn} onChange={(e) => setSubEn(e.target.value)} placeholder={fa ? "انگلیسی (اختیاری)" : "Sub (EN)"} dir="ltr" onKeyDown={(e) => { if (e.key === "Enter") addSub(); }} />
+            <button onClick={addSub} className="cursor-pointer rounded-[10px] px-4 text-[13px] font-bold" style={inputStyle}>+ {fa ? "افزودن" : "Add"}</button>
+          </div>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button onClick={save} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره تغییرات" : "Save") : fa ? "افزودن دسته" : "Add"}</button>
+          {editing && <button onClick={startNew} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>}
+        </div>
+      </Card>
+
+      {cats.length === 0 ? <Empty text={fa ? "دسته‌ای نیست." : "No categories."} /> : (
+        <div className="flex flex-col gap-2">
+          {cats.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-[12px] p-3" style={{ ...cardStyle }}>
+              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] text-[13px] font-extrabold text-white" style={{ background: `hsl(${c.hue} 70% 55%)` }}>{(fa ? c.fa : c.en).charAt(0)}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-bold">{fa ? c.fa : c.en}</div>
+                <div className="truncate text-[12px]" style={{ color: "var(--muted)" }}>{c.subs.map(([f1, e1]) => (fa ? f1 : e1)).join("، ") || (fa ? "بدون زیردسته" : "no subs")}</div>
+              </div>
+              <button onClick={() => startEdit(c)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
+              <button onClick={() => del(c.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------- menu management ---------- */
+
+type MenuRow = { id: string; fa: string; en: string; href: string };
+
+function MenuAdmin() {
+  const { locale, toast } = useShop();
+  const fa = locale === "fa";
+  const [items, setItems] = useState<MenuRow[]>([]);
+  const [editing, setEditing] = useState<MenuRow | null>(null);
+  const blank: MenuRow = { id: "", fa: "", en: "", href: "" };
+  const [form, setForm] = useState<MenuRow>(blank);
+
+  const load = () => fetch("/api/menu").then((r) => r.json()).then((d) => Array.isArray(d?.menu) && setItems(d.menu)).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const startNew = () => { setEditing(null); setForm(blank); };
+  const save = async () => {
+    if (!form.fa.trim()) { toast(fa ? "عنوان الزامی است" : "Label required"); return; }
+    const body = { action: editing ? "update" : "add", id: form.id, fa: form.fa.trim(), en: form.en.trim(), href: form.href.trim() };
+    const r = await fetch("/api/menu", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) { setItems(d.menu); startNew(); toast(fa ? "ذخیره شد ✓ (برای دیدن در سایت صفحه را تازه کن)" : "Saved ✓"); }
+  };
+  const del = async (id: string) => {
+    const r = await fetch("/api/menu", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "delete", id }) });
+    const d = await r.json();
+    if (d.ok) { setItems(d.menu); toast(fa ? "حذف شد" : "Deleted"); }
+  };
+
+  return (
+    <>
+      <H1>{fa ? "منوهای سایت" : "Site menus"}</H1>
+      <p className="mb-5 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "لینک‌های دلخواه نوار بالای سایت (مثل «تماس با ما»، «دربارهٔ ما» یا لینک بیرونی). این‌ها کنار «خانه»، دسته‌ها و «بلاگ» نمایش داده می‌شوند." : "Custom header links shown alongside Home, categories and Blog."}</p>
+
+      <Card className="mb-6 p-5">
+        <h2 className="mb-3 text-[15px] font-extrabold">{editing ? (fa ? "ویرایش لینک" : "Edit link") : fa ? "افزودن لینک منو" : "Add menu link"}</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>{lbl(fa ? "عنوان (فارسی)" : "Label (FA)")}<input className={inputCls} style={inputStyle} value={form.fa} onChange={(e) => setForm((f) => ({ ...f, fa: e.target.value }))} /></div>
+          <div>{lbl(fa ? "عنوان (انگلیسی)" : "Label (EN)")}<input className={inputCls} style={inputStyle} value={form.en} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" /></div>
+          <div>{lbl(fa ? "آدرس (مثلاً /blog یا https://…)" : "URL")}<input className={inputCls} style={inputStyle} value={form.href} onChange={(e) => setForm((f) => ({ ...f, href: e.target.value }))} dir="ltr" placeholder="/about" /></div>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button onClick={save} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره" : "Save") : fa ? "افزودن" : "Add"}</button>
+          {editing && <button onClick={startNew} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>}
+        </div>
+      </Card>
+
+      {items.length === 0 ? <Empty text={fa ? "لینکی اضافه نشده." : "No links."} /> : (
+        <div className="flex flex-col gap-2">
+          {items.map((m) => (
+            <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-[12px] p-3" style={{ ...cardStyle }}>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-bold">{fa ? m.fa : m.en}</div>
+                <div className="truncate text-[12px]" style={{ color: "var(--muted)" }} dir="ltr">{m.href}</div>
+              </div>
+              <button onClick={() => { setEditing(m); setForm(m); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
+              <button onClick={() => del(m.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
+            </div>
+          ))}
         </div>
       )}
     </>

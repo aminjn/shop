@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
-import { CATEGORIES } from "@/data/categories";
 import { grad, priceFmt, num } from "@/lib/format";
 import { LocaleLink } from "./LocaleLink";
 import {
@@ -45,6 +44,8 @@ export function Header() {
     compare,
     setChatOpen,
     products,
+    categories: CATEGORIES,
+    menu,
     logoUrl,
   } = useShop();
   const [query, setQuery] = useState("");
@@ -310,6 +311,17 @@ export function Header() {
           <LocaleLink href="/blog" className="flex h-full items-center px-3.5 text-[14px] font-semibold no-underline" style={{ color: "var(--text)" }}>
             {t.navBlog}
           </LocaleLink>
+          {menu.map((m) =>
+            /^https?:\/\//.test(m.href) ? (
+              <a key={m.id} href={m.href} target="_blank" rel="noreferrer" className="flex h-full items-center px-3.5 text-[14px] font-semibold no-underline" style={{ color: "var(--text)" }}>
+                {locale === "fa" ? m.fa : m.en}
+              </a>
+            ) : (
+              <LocaleLink key={m.id} href={m.href} className="flex h-full items-center px-3.5 text-[14px] font-semibold no-underline" style={{ color: "var(--text)" }}>
+                {locale === "fa" ? m.fa : m.en}
+              </LocaleLink>
+            ),
+          )}
           <span className="flex-1" />
           {role === "super_admin" && (
             <LocaleLink
