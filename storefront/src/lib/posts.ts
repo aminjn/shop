@@ -1,6 +1,6 @@
 import "server-only";
 import { POSTS, type Post } from "@/data/posts";
-import { readArray, writeArray } from "./settings";
+import { readArray, writeArray, hasFile } from "./settings";
 
 export type PostStatus = "published" | "scheduled" | "draft" | "queued";
 export interface StoredPost extends Post {
@@ -19,8 +19,13 @@ const seed = (): StoredPost[] =>
   POSTS.map((p) => ({ ...p, status: "published" as PostStatus }));
 
 function read(): StoredPost[] {
-  const arr = readArray<StoredPost>("posts.json", []);
-  return arr.length ? arr : seed();
+  // seed ONCE on first run; afterwards trust the file even if emptied by admin
+  if (!hasFile("posts.json")) {
+    const s = seed();
+    write(s);
+    return s;
+  }
+  return readArray<StoredPost>("posts.json", []);
 }
 function write(list: StoredPost[]) {
   return writeArray<StoredPost>("posts.json", list);

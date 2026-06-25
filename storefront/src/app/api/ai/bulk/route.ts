@@ -14,26 +14,36 @@ function tehranISO(y: number, m: number, d: number, hour: number, minute: number
   return new Date(Date.UTC(y, m - 1, d, hour, minute) - TEHRAN_OFFSET_MIN * 60000).toISOString();
 }
 
-/** Compute `count` publish times honoring per-day count, hours of day, allowed
- *  weekdays (0=Sun..6=Sat, empty = all days) and a Shamsi-derived start date. */
+/** Spread `perDay` publish times evenly across the [startHour, endHour] window. */
+function spreadHours(perDay: number, startHour: number, endHour: number): { h: number; m: number }[] {
+  if (perDay <= 1) return [{ h: startHour, m: 0 }];
+  const span = Math.max(0, endHour - startHour);
+  const step = span / (perDay - 1);
+  return Array.from({ length: perDay }, (_, i) => {
+    const t = startHour + step * i;
+    return { h: Math.min(23, Math.floor(t)), m: Math.round((t - Math.floor(t)) * 60) % 60 };
+  });
+}
+
+/** Compute `count` publish times: `perDay` posts spread over [startHour,endHour]
+ *  on allowed weekdays (0=Sun..6=Sat, empty = every day), from a Shamsi start. */
 function computeSchedule(opts: {
-  count: number; perDay: number; hours: number[];
+  count: number; perDay: number; startHour: number; endHour: number;
   weekdays: number[]; sy: number; sm: number; sd: number;
 }): string[] {
-  const { count, perDay, hours, weekdays, sy, sm, sd } = opts;
+  const { count, perDay, startHour, endHour, weekdays, sy, sm, sd } = opts;
   const allow = new Set(weekdays);
+  const slots = spreadHours(perDay, startHour, endHour);
   const out: string[] = [];
   let dayOff = 0;
   let guard = 0;
-  while (out.length < count && guard < 2000) {
+  while (out.length < count && guard < 3000) {
     guard++;
     const dt = new Date(Date.UTC(sy, sm - 1, sd + dayOff));
     const wd = dt.getUTCDay();
     if (allow.size === 0 || allow.has(wd)) {
-      for (let slot = 0; slot < perDay && out.length < count; slot++) {
-        const hour = hours[slot % hours.length];
-        const minute = (slot * 9 + (out.length % 3) * 5) % 60;
-        out.push(tehranISO(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), hour, minute));
+      for (let i = 0; i < slots.length && out.length < count; i++) {
+        out.push(tehranISO(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), slots[i].h, slots[i].m));
       }
     }
     dayOff++;
@@ -79,12 +89,10 @@ export async function POST(req: Request) {
   const theme = String(b.theme || "").trim();
   const count = Math.min(100, Math.max(1, Number(b.count) || topics.length || 10));
 
-  // scheduling params
-  const perDay = Math.min(24, Math.max(1, Number(b.perDay) || 5));
-  const rawHours: number[] = Array.isArray(b.hours) && b.hours.length
-    ? (b.hours as unknown[]).map((h) => Math.min(23, Math.max(0, Math.floor(Number(h) || 0))))
-    : [9, 12, 15, 18, 21];
-  const hours: number[] = Array.from(new Set(rawHours)).sort((a, c) => a - c);
+  // scheduling params: perDay posts spread across [startHour, endHour]
+  const perDay = Math.min(24, Math.max(1, Number(b.perDay) || 3));
+  const startHour = Math.min(23, Math.max(0, Math.floor(Number(b.startHour ?? 9))));
+  const endHour = Math.min(23, Math.max(startHour, Math.floor(Number(b.endHour ?? 21))));
   const weekdays: number[] = Array.isArray(b.weekdays)
     ? (b.weekdays as unknown[]).map((d) => Math.floor(Number(d))).filter((d) => Number.isFinite(d) && d >= 0 && d <= 6)
     : [];
@@ -107,7 +115,7 @@ export async function POST(req: Request) {
   // PREVIEW: just return the computed schedule (no AI, no save)
   if (b.preview) {
     const want = topics.length || count;
-    const schedule = computeSchedule({ count: Math.min(want, 100), perDay, hours, weekdays, sy, sm, sd });
+    const schedule = computeSchedule({ count: Math.min(want, 100), perDay, startHour, endHour, weekdays, sy, sm, sd });
     return NextResponse.json({ ok: true, preview: true, schedule, count: schedule.length });
   }
 
@@ -124,7 +132,7 @@ export async function POST(req: Request) {
 
   if (topics.length === 0) return NextResponse.json({ ok: false, error: "topics-required" }, { status: 400 });
 
-  const schedule = computeSchedule({ count: topics.length, perDay, hours, weekdays, sy, sm, sd });
+  const schedule = computeSchedule({ count: topics.length, perDay, startHour, endHour, weekdays, sy, sm, sd });
   const list = getAllPosts();
   let id = nextPostId();
   const created: StoredPost[] = topics.map((topic, i) => {

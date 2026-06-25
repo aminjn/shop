@@ -1,11 +1,16 @@
 import "server-only";
 import { PRODUCTS as SEED } from "@/data/products";
-import { readArray, writeArray } from "./settings";
+import { readArray, writeArray, hasFile } from "./settings";
 import type { Product } from "./types";
 
-/** The live catalog: persisted products.json, or the seed on first run. */
+/** The live catalog: persisted products.json. Seeded ONCE on first run; after
+ *  that the stored file is authoritative even if the admin emptied it. */
 export function getCatalog(): Product[] {
-  return readArray<Product>("products.json", SEED);
+  if (!hasFile("products.json")) {
+    writeArray<Product>("products.json", SEED);
+    return SEED;
+  }
+  return readArray<Product>("products.json", []);
 }
 export function saveCatalog(list: Product[]): Product[] {
   return writeArray<Product>("products.json", list);

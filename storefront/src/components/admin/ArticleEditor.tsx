@@ -591,8 +591,11 @@ function BulkScheduler({
   const [theme, setTheme] = useState("");
   const [count, setCount] = useState(30);
   const [topicsText, setTopicsText] = useState("");
-  const [hours, setHours] = useState<number[]>([9, 13, 17, 20, 22]);
+  const [perDay, setPerDay] = useState(3);
+  const [startHour, setStartHour] = useState(9);
+  const [endHour, setEndHour] = useState(21);
   const [weekdays, setWeekdays] = useState<number[]>([6, 0, 1, 2, 3, 4]); // skip Friday(5)
+  const [advanced, setAdvanced] = useState(false);
   const [words, setWords] = useState(1200);
   const [tone, setTone] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -613,33 +616,37 @@ function BulkScheduler({
     fetch("/api/ai/bulk").then((r) => (r.ok ? r.json() : null)).then((d) => d?.ok && setStatus({ queued: d.queued, failed: d.failed, scheduled: d.scheduled })).catch(() => {});
   useEffect(() => { loadStatus(); const t = setInterval(loadStatus, 15000); return () => clearInterval(t); }, []);
 
-  const toggleHour = (h: number) => { setPreview(null); setHours((hs) => hs.includes(h) ? hs.filter((x) => x !== h) : [...hs, h].sort((a, b) => a - b)); };
-  const toggleDay = (d: number) => { setPreview(null); setWeekdays((ds) => ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d]); };
+  const toggleDay = (d: number) => setWeekdays((ds) => ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d]);
+
+  const total = mode === "manual" ? topicsText.split("\n").filter((s) => s.trim()).length : count;
 
   const buildPayload = (extra: Record<string, unknown>) => {
     const g = toGregorian(jy, jm, jd);
     const startDate = `${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}`;
     const topics = topicsText.split("\n").map((s) => s.trim()).filter(Boolean);
-    const base = { perDay: hours.length, hours, weekdays, words, tone, keyword, category, genCover, startDate, ...extra };
+    const base = { perDay, startHour, endHour, weekdays, words, tone, keyword, category, genCover, startDate, ...extra };
     return mode === "manual" ? { topics, ...base } : { theme: theme.trim(), count, ...base };
   };
 
-  const doPreview = async () => {
-    if (hours.length === 0) { toast(fa ? "حداقل یک ساعت انتخاب کن" : "Pick an hour"); return; }
-    if (weekdays.length === 0) { toast(fa ? "حداقل یک روز هفته انتخاب کن" : "Pick a weekday"); return; }
-    try {
-      const r = await fetch("/api/ai/bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(buildPayload({ preview: true })) });
-      const d = await r.json().catch(() => ({}));
-      if (d.ok && Array.isArray(d.schedule)) setPreview(d.schedule);
-      else toast(fa ? "پیش‌نمایش ناموفق بود" : "Preview failed");
-    } catch { toast(fa ? "خطای شبکه" : "Network error"); }
-  };
+  // live preview: recompute the schedule whenever the timing settings change
+  useEffect(() => {
+    if (weekdays.length === 0 || total === 0) { setPreview(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch("/api/ai/bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(buildPayload({ preview: true })) });
+        const d = await r.json().catch(() => ({}));
+        if (!cancelled && d.ok && Array.isArray(d.schedule)) setPreview(d.schedule);
+      } catch { /* ignore */ }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perDay, startHour, endHour, weekdays.join(","), jy, jm, jd, total, mode]);
 
   const submit = async () => {
     const topics = topicsText.split("\n").map((s) => s.trim()).filter(Boolean);
     if (mode === "manual" && topics.length === 0) { toast(fa ? "حداقل یک موضوع وارد کن" : "Enter topics"); return; }
     if (mode === "auto" && !theme.trim()) { toast(fa ? "موضوع کلی را وارد کن" : "Enter a theme"); return; }
-    if (hours.length === 0) { toast(fa ? "حداقل یک ساعت انتشار انتخاب کن" : "Pick at least one hour"); return; }
     if (weekdays.length === 0) { toast(fa ? "حداقل یک روز هفته انتخاب کن" : "Pick at least one weekday"); return; }
     setBusy(true);
     try {
@@ -647,18 +654,14 @@ function BulkScheduler({
       const d = await r.json().catch(() => ({}));
       if (d.ok) {
         toast(fa ? `${faNum(d.count)} مقاله در صف تولید و زمان‌بندی شد ✓` : `${d.count} articles queued ✓`);
-        setTopicsText(""); setPreview(null); loadStatus(); onChanged();
+        setTopicsText(""); loadStatus(); onChanged();
       } else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در تنظیمات کلید را ذخیره کن" : "AI not configured");
       else toast((fa ? "خطا: " : "Error: ") + (d.detail || d.error || ""));
     } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setBusy(false); }
   };
 
   const WEEKDAYS: [number, string][] = [[6, "شنبه"], [0, "یکشنبه"], [1, "دوشنبه"], [2, "سه‌شنبه"], [3, "چهارشنبه"], [4, "پنجشنبه"], [5, "جمعه"]];
-  const perDay = hours.length;
-  const total = mode === "manual" ? topicsText.split("\n").filter((s) => s.trim()).length : count;
-  const publishDays = perDay ? Math.ceil(total / perDay) : 0;        // how many publishing days needed
-  const wdCount = weekdays.length || 7;                              // active weekdays per week
-  const weeks = wdCount ? Math.ceil(publishDays / wdCount) : 0;      // calendar weeks it spans
+  const lastDate = preview && preview.length ? preview[preview.length - 1] : null;
   const sel = "rounded-[10px] px-2 py-2.5 text-[13.5px] outline-none";
 
   return (
@@ -693,15 +696,7 @@ function BulkScheduler({
           </div>
         )}
 
-        {/* publish hours */}
-        <label className="mb-1.5 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "ساعت‌های انتشار در روز (روزی " + faNum(perDay) + " مقاله)" : "Publish hours per day"}</label>
-        <div className="mb-4 flex flex-wrap gap-1.5" dir="ltr">
-          {Array.from({ length: 24 }, (_, h) => h).map((h) => (
-            <button key={h} onClick={() => toggleHour(h)} className="cursor-pointer rounded-[8px] px-2 py-1 text-[12px] font-bold" style={hours.includes(h) ? { background: "var(--accent)", color: "#fff", border: "none" } : inputStyle}>{String(h).padStart(2, "0")}</button>
-          ))}
-        </div>
-
-        {/* options */}
+        {/* content options */}
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "طول هر مقاله" : "Length"}</label>
@@ -737,55 +732,93 @@ function BulkScheduler({
           {fa ? "هنگام تولید هر مقاله، یک تصویر شاخص مرتبط هم با هوش مصنوعی ساخته و روی مقاله گذاشته می‌شود." : "A relevant cover image is generated per article during processing."}
         </p>
 
-        {/* start date */}
-        <label className="mb-1.5 mt-4 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "تاریخ شروع انتشار (شمسی)" : "Start date"}</label>
-        <div className="flex flex-wrap gap-2" dir="rtl">
-          <select className={sel} style={inputStyle} value={jd} onChange={(e) => setJd(+e.target.value)}>
-            {Array.from({ length: jalaliMonthLength(jy, jm) }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{faNum(d)}</option>)}
-          </select>
-          <select className={`${sel} flex-1`} style={inputStyle} value={jm} onChange={(e) => setJm(+e.target.value)}>
-            {JALALI_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-          </select>
-          <select className={sel} style={inputStyle} value={jy} onChange={(e) => { setPreview(null); setJy(+e.target.value); }}>
-            {Array.from({ length: 3 }, (_, i) => yNow + i).map((y) => <option key={y} value={y}>{faNum(y)}</option>)}
-          </select>
-        </div>
+        {/* ───── scheduling (one cohesive block) ───── */}
+        <div className="mt-5 rounded-[14px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          <h3 className="mb-3 text-[13.5px] font-extrabold">{fa ? "زمان‌بندی انتشار" : "Publishing schedule"}</h3>
 
-        {/* weekdays */}
-        <label className="mb-1.5 mt-4 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "روزهای انتشار در هفته" : "Publish weekdays"}</label>
-        <div className="flex flex-wrap gap-1.5">
-          {WEEKDAYS.map(([d, label]) => (
-            <button key={d} onClick={() => toggleDay(d)} className="cursor-pointer rounded-[8px] px-2.5 py-1.5 text-[12px] font-bold" style={weekdays.includes(d) ? { background: "var(--accent)", color: "#fff", border: "none" } : inputStyle}>{label}</button>
-          ))}
-        </div>
+          {/* start date */}
+          <label className="mb-1.5 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "از تاریخ (شمسی)" : "Start date"}</label>
+          <div className="mb-3 flex flex-wrap gap-2" dir="rtl">
+            <select className={sel} style={inputStyle} value={jd} onChange={(e) => setJd(+e.target.value)}>
+              {Array.from({ length: jalaliMonthLength(jy, jm) }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{faNum(d)}</option>)}
+            </select>
+            <select className={`${sel} flex-1`} style={inputStyle} value={jm} onChange={(e) => setJm(+e.target.value)}>
+              {JALALI_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+            <select className={sel} style={inputStyle} value={jy} onChange={(e) => setJy(+e.target.value)}>
+              {Array.from({ length: 3 }, (_, i) => yNow + i).map((y) => <option key={y} value={y}>{faNum(y)}</option>)}
+            </select>
+          </div>
 
-        <p className="mt-3 text-[12px] leading-relaxed" style={{ color: "var(--muted)" }}>
-          {fa
-            ? `جمعاً ${faNum(total)} مقاله • روزی ${faNum(perDay)} تا (${faNum(hours.length)} ساعت انتخابی) • ${faNum(weekdays.length)} روز در هفته → حدود ${faNum(publishDays)} روزِ انتشار، تقریباً ${faNum(weeks)} هفته.`
-            : `${total} articles • ${perDay}/day (${hours.length} hours) • ${weekdays.length} weekdays → ~${publishDays} publishing days, about ${weeks} weeks.`}
-        </p>
+          {/* per-day + time window */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "روزی چند مقاله؟" : "Per day"}</label>
+              <input type="number" min={1} max={24} className={`${inputCls}`} style={inputStyle} value={perDay} onChange={(e) => setPerDay(Math.min(24, Math.max(1, Number(e.target.value) || 1)))} dir="ltr" />
+            </div>
+            <div>
+              <label className="mb-1 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "از ساعت" : "From hour"}</label>
+              <select className={inputCls} style={inputStyle} value={startHour} onChange={(e) => { const v = +e.target.value; setStartHour(v); if (endHour < v) setEndHour(v); }} dir="ltr">
+                {Array.from({ length: 24 }, (_, h) => h).map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[12px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "تا ساعت" : "To hour"}</label>
+              <select className={inputCls} style={inputStyle} value={endHour} onChange={(e) => setEndHour(Math.max(startHour, +e.target.value))} dir="ltr">
+                {Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= startHour).map((h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+              </select>
+            </div>
+          </div>
+          <p className="mt-2 text-[11.5px]" style={{ color: "var(--muted)" }}>
+            {fa ? `روزی ${faNum(perDay)} مقاله، با فاصلهٔ یکنواخت بین ساعت ${faNum(startHour)} تا ${faNum(endHour)} منتشر می‌شود.` : `${perDay}/day, evenly spread between ${startHour}:00 and ${endHour}:00.`}
+          </p>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button onClick={submit} disabled={busy} className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
-            <Sparkle size={16} /> {busy ? (fa ? "در حال ثبت…" : "Submitting…") : fa ? "شروع تولید و زمان‌بندی" : "Generate & schedule"}
+          {/* advanced: weekdays */}
+          <button type="button" onClick={() => setAdvanced((v) => !v)} className="mt-3 cursor-pointer border-none bg-transparent p-0 text-[12px] font-bold" style={{ color: "var(--accent)" }}>
+            {advanced ? "▾ " : "▸ "}{fa ? "روزهای هفته (پیشرفته)" : "Weekdays (advanced)"}
           </button>
-          <button onClick={doPreview} disabled={busy} className="cursor-pointer rounded-[12px] px-5 py-3 text-[14px] font-bold disabled:opacity-60" style={inputStyle}>{fa ? "پیش‌نمایش زمان‌بندی" : "Preview schedule"}</button>
+          {advanced && (
+            <div className="mt-2">
+              <p className="mb-1.5 text-[11.5px]" style={{ color: "var(--muted)" }}>{fa ? "فقط در این روزهای هفته منتشر شود (پیش‌فرض: همه به‌جز جمعه):" : "Publish only on these weekdays:"}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAYS.map(([d, label]) => (
+                  <button key={d} onClick={() => toggleDay(d)} className="cursor-pointer rounded-[8px] px-2.5 py-1.5 text-[12px] font-bold" style={weekdays.includes(d) ? { background: "var(--accent)", color: "#fff", border: "none" } : inputStyle}>{label}</button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* schedule preview */}
-        {preview && (
-          <div className="mt-4 rounded-[12px] p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-            <div className="mb-2 text-[12.5px] font-extrabold">{fa ? `زمان‌بندی ${faNum(preview.length)} مقالهٔ اول:` : `Schedule (first ${preview.length}):`}</div>
-            <div className="grid max-h-56 gap-1 overflow-auto sm:grid-cols-2" style={{ scrollbarWidth: "thin" }}>
-              {preview.map((iso, i) => (
-                <div key={i} className="flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-[12px]" style={{ background: "var(--surface)" }}>
+        {/* live preview */}
+        <div className="mt-4 rounded-[12px] p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[12.5px] font-extrabold">{fa ? "پیش‌نمایش زمان‌بندی" : "Schedule preview"}</span>
+            {lastDate && <span className="text-[11.5px]" style={{ color: "var(--muted)" }}>{fa ? "آخرین انتشار: " : "Last: "}{formatDate(lastDate, locale as "fa" | "en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+          </div>
+          {total === 0 ? (
+            <p className="text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "اول موضوع/تعداد را مشخص کن." : "Set topics/count first."}</p>
+          ) : weekdays.length === 0 ? (
+            <p className="text-[12px]" style={{ color: "#e11d48" }}>{fa ? "حداقل یک روز هفته انتخاب کن." : "Pick a weekday."}</p>
+          ) : preview && preview.length ? (
+            <div className="grid max-h-52 gap-1 overflow-auto sm:grid-cols-2" style={{ scrollbarWidth: "thin" }}>
+              {preview.slice(0, 30).map((iso, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-[12px]" style={{ background: "var(--surface2)" }}>
                   <span className="flex-none font-bold" style={{ color: "var(--accent)" }}>{faNum(i + 1)}.</span>
                   <span>{formatDate(iso, locale as "fa" | "en", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-[12px]" style={{ color: "var(--muted)" }}>…</p>
+          )}
+          <p className="mt-2 text-[11.5px]" style={{ color: "var(--muted)" }}>
+            {fa ? `جمعاً ${faNum(total)} مقاله • روزی ${faNum(perDay)} تا • ${weekdays.length === 7 || weekdays.length === 0 ? "همهٔ روزها" : faNum(weekdays.length) + " روز در هفته"}` : `${total} articles • ${perDay}/day`}
+          </p>
+        </div>
+
+        <button onClick={submit} disabled={busy} className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+          <Sparkle size={16} /> {busy ? (fa ? "در حال ثبت…" : "Submitting…") : fa ? "شروع تولید و زمان‌بندی" : "Generate & schedule"}
+        </button>
       </div>
 
       {/* status */}

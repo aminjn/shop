@@ -99,6 +99,15 @@ export function writeStore(patch: StoreSettings) {
   return readStore();
 }
 
+/** Whether a data file already exists (used to seed only on first run). */
+export function hasFile(file: string): boolean {
+  try {
+    return fs.existsSync(path.join(DATA_DIR, file));
+  } catch {
+    return false;
+  }
+}
+
 /** Generic raw JSON array read/write (used for products & coupons). */
 export function readArray<T>(file: string, fallback: T[]): T[] {
   try {

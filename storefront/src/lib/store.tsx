@@ -120,7 +120,7 @@ export function ShopProvider({
     // refresh catalog with any admin edits (falls back to seed on failure)
     fetch("/api/products")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => Array.isArray(d?.products) && d.products.length && setProducts(d.products))
+      .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
       .catch(() => {});
     // apply store branding (name / currency / logo) saved in admin
     fetch("/api/settings/store")
