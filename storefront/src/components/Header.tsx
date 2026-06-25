@@ -296,7 +296,7 @@ export function Header() {
           <LocaleLink href="/" className="flex h-full items-center px-3.5 text-[14px] font-semibold no-underline" style={{ color: "var(--text)" }}>
             {t.navHome}
           </LocaleLink>
-          {CATEGORIES.map((c) => (
+          {CATEGORIES.filter((c) => !c.hidden).map((c) => (
             <LocaleLink
               key={c.id}
               href={`/shop?cat=${c.id}`}

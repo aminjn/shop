@@ -26,6 +26,10 @@ export async function POST(req: Request) {
 
   if (action === "delete") {
     list = list.filter((c) => c.id !== String(b.id));
+  } else if (action === "patch") {
+    // lightweight update (toggle nav visibility) without touching other fields
+    const i = list.findIndex((c) => c.id === String(b.id));
+    if (i >= 0 && typeof b.hidden === "boolean") list[i] = { ...list[i], hidden: b.hidden };
   } else if (action === "reorder" && Array.isArray(b.ids)) {
     const order = (b.ids as unknown[]).map(String);
     list = [...list].sort((a, c) => order.indexOf(a.id) - order.indexOf(c.id));
@@ -33,18 +37,22 @@ export async function POST(req: Request) {
     const fa = String(b.fa || "").trim();
     const en = String(b.en || "").trim() || fa;
     if (!fa) return NextResponse.json({ ok: false, error: "name-required" }, { status: 400 });
-    const cat: Category = {
-      id: action === "update" ? String(b.id) : (slug(b.en || b.fa) || `cat-${Date.now()}`),
-      fa, en,
-      hue: typeof b.hue === "number" ? b.hue : Math.floor(Math.random() * 360),
-      subs: sanitizeSubs(b.subs),
-    };
     if (action === "update") {
-      const i = list.findIndex((c) => c.id === cat.id);
-      if (i >= 0) list[i] = { ...list[i], ...cat };
+      const i = list.findIndex((c) => c.id === String(b.id));
+      if (i >= 0) {
+        // merge: only overwrite fields that were actually provided (don't wipe subs)
+        list[i] = {
+          ...list[i],
+          fa, en,
+          hue: typeof b.hue === "number" ? b.hue : list[i].hue,
+          subs: Array.isArray(b.subs) ? sanitizeSubs(b.subs) : list[i].subs,
+          hidden: typeof b.hidden === "boolean" ? b.hidden : list[i].hidden,
+        };
+      }
     } else {
-      if (list.some((c) => c.id === cat.id)) cat.id = `${cat.id}-${Date.now().toString(36)}`;
-      list.push(cat);
+      let id = slug(b.en || b.fa) || `cat-${Date.now()}`;
+      if (list.some((c) => c.id === id)) id = `${id}-${Date.now().toString(36)}`;
+      list.push({ id, fa, en, hue: typeof b.hue === "number" ? b.hue : Math.floor(Math.random() * 360), subs: sanitizeSubs(b.subs), hidden: typeof b.hidden === "boolean" ? b.hidden : undefined });
     }
   }
   saveCategories(list);

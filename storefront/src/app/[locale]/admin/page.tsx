@@ -1374,7 +1374,7 @@ function Reviews({ products }: { products: Product[] }) {
 
 /* ---------- categories management ---------- */
 
-type CatRow = { id: string; fa: string; en: string; hue: number; subs: [string, string][] };
+type CatRow = { id: string; fa: string; en: string; hue: number; subs: [string, string][]; hidden?: boolean };
 
 function CategoriesAdmin() {
   const { locale, toast } = useShop();
@@ -1463,68 +1463,137 @@ function CategoriesAdmin() {
   );
 }
 
-/* ---------- menu management ---------- */
+/* ---------- menu / navigation management ---------- */
 
 type MenuRow = { id: string; fa: string; en: string; href: string };
 
 function MenuAdmin() {
   const { locale, toast } = useShop();
   const fa = locale === "fa";
+
+  // main nav = categories (order + visibility + names)
+  const [cats, setCats] = useState<CatRow[]>([]);
+  const loadCats = () => fetch("/api/categories").then((r) => r.json()).then((d) => Array.isArray(d?.categories) && setCats(d.categories)).catch(() => {});
+
+  // extra custom links
   const [items, setItems] = useState<MenuRow[]>([]);
   const [editing, setEditing] = useState<MenuRow | null>(null);
   const blank: MenuRow = { id: "", fa: "", en: "", href: "" };
   const [form, setForm] = useState<MenuRow>(blank);
+  const loadMenu = () => fetch("/api/menu").then((r) => r.json()).then((d) => Array.isArray(d?.menu) && setItems(d.menu)).catch(() => {});
 
-  const load = () => fetch("/api/menu").then((r) => r.json()).then((d) => Array.isArray(d?.menu) && setItems(d.menu)).catch(() => {});
-  useEffect(() => { load(); }, []);
+  useEffect(() => { loadCats(); loadMenu(); }, []);
 
+  // category nav ops
+  const catPost = async (body: Record<string, unknown>) => {
+    const r = await fetch("/api/categories", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) setCats(d.categories);
+    return d.ok;
+  };
+  const move = async (idx: number, dir: -1 | 1) => {
+    const j = idx + dir;
+    if (j < 0 || j >= cats.length) return;
+    const next = [...cats];
+    [next[idx], next[j]] = [next[j], next[idx]];
+    setCats(next);
+    await catPost({ action: "reorder", ids: next.map((c) => c.id) });
+  };
+  const toggleHide = (c: CatRow) => catPost({ action: "patch", id: c.id, hidden: !c.hidden });
+  const renameCat = async (c: CatRow, fa2: string, en2: string) => {
+    if (!fa2.trim()) return;
+    const ok = await catPost({ action: "update", id: c.id, fa: fa2.trim(), en: (en2 || fa2).trim(), hue: c.hue, subs: c.subs, hidden: c.hidden });
+    if (ok) toast(fa ? "ذخیره شد ✓" : "Saved ✓");
+  };
+
+  // custom links ops
   const startNew = () => { setEditing(null); setForm(blank); };
-  const save = async () => {
+  const saveLink = async () => {
     if (!form.fa.trim()) { toast(fa ? "عنوان الزامی است" : "Label required"); return; }
     const body = { action: editing ? "update" : "add", id: form.id, fa: form.fa.trim(), en: form.en.trim(), href: form.href.trim() };
     const r = await fetch("/api/menu", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const d = await r.json();
-    if (d.ok) { setItems(d.menu); startNew(); toast(fa ? "ذخیره شد ✓ (برای دیدن در سایت صفحه را تازه کن)" : "Saved ✓"); }
+    if (d.ok) { setItems(d.menu); startNew(); toast(fa ? "ذخیره شد ✓ (صفحه را تازه کن)" : "Saved ✓"); }
   };
-  const del = async (id: string) => {
+  const delLink = async (id: string) => {
     const r = await fetch("/api/menu", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "delete", id }) });
     const d = await r.json();
-    if (d.ok) { setItems(d.menu); toast(fa ? "حذف شد" : "Deleted"); }
+    if (d.ok) setItems(d.menu);
   };
 
   return (
     <>
-      <H1>{fa ? "منوهای سایت" : "Site menus"}</H1>
-      <p className="mb-5 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "لینک‌های دلخواه نوار بالای سایت (مثل «تماس با ما»، «دربارهٔ ما» یا لینک بیرونی). این‌ها کنار «خانه»، دسته‌ها و «بلاگ» نمایش داده می‌شوند." : "Custom header links shown alongside Home, categories and Blog."}</p>
+      <H1>{fa ? "منوی سایت" : "Site navigation"}</H1>
+      <p className="mb-5 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "منوی بالای سایت را اینجا مدیریت کن: ترتیب و نمایش دسته‌ها را تغییر بده، نامشان را ویرایش کن، و لینک‌های دلخواه (مثل «تماس با ما») اضافه کن. تغییرات پس از تازه‌کردن صفحه روی سایت دیده می‌شوند." : "Manage the top navigation: reorder/show-hide categories, rename them, and add custom links."}</p>
 
+      {/* main nav: categories */}
       <Card className="mb-6 p-5">
-        <h2 className="mb-3 text-[15px] font-extrabold">{editing ? (fa ? "ویرایش لینک" : "Edit link") : fa ? "افزودن لینک منو" : "Add menu link"}</h2>
+        <h2 className="mb-1 text-[15px] font-extrabold">{fa ? "منوی اصلی (دسته‌ها)" : "Main menu (categories)"}</h2>
+        <p className="mb-3 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "ترتیب با فلش‌ها، نمایش/پنهان با چشم. برای زیردسته‌ها و رنگ به بخش «دسته‌بندی‌ها» برو." : "Reorder with arrows, show/hide with the eye."}</p>
+        {cats.length === 0 ? <Empty text={fa ? "دسته‌ای نیست." : "No categories."} /> : (
+          <div className="flex flex-col gap-2">
+            {cats.map((c, i) => (
+              <NavCatRow key={c.id} c={c} fa={fa} first={i === 0} last={i === cats.length - 1}
+                onUp={() => move(i, -1)} onDown={() => move(i, 1)} onToggle={() => toggleHide(c)} onRename={(f2, e2) => renameCat(c, f2, e2)} />
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* custom links */}
+      <Card className="mb-4 p-5">
+        <h2 className="mb-1 text-[15px] font-extrabold">{fa ? "لینک‌های سفارشی" : "Custom links"}</h2>
+        <p className="mb-3 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "لینک‌های اضافه کنار دسته‌ها (مثل «تماس با ما» یا لینک بیرونی)." : "Extra links beside categories."}</p>
         <div className="grid gap-3 sm:grid-cols-3">
           <div>{lbl(fa ? "عنوان (فارسی)" : "Label (FA)")}<input className={inputCls} style={inputStyle} value={form.fa} onChange={(e) => setForm((f) => ({ ...f, fa: e.target.value }))} /></div>
           <div>{lbl(fa ? "عنوان (انگلیسی)" : "Label (EN)")}<input className={inputCls} style={inputStyle} value={form.en} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" /></div>
-          <div>{lbl(fa ? "آدرس (مثلاً /blog یا https://…)" : "URL")}<input className={inputCls} style={inputStyle} value={form.href} onChange={(e) => setForm((f) => ({ ...f, href: e.target.value }))} dir="ltr" placeholder="/about" /></div>
+          <div>{lbl(fa ? "آدرس (/about یا https://…)" : "URL")}<input className={inputCls} style={inputStyle} value={form.href} onChange={(e) => setForm((f) => ({ ...f, href: e.target.value }))} dir="ltr" placeholder="/about" /></div>
         </div>
-        <div className="mt-4 flex gap-2">
-          <button onClick={save} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره" : "Save") : fa ? "افزودن" : "Add"}</button>
+        <div className="mt-3 flex gap-2">
+          <button onClick={saveLink} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره" : "Save") : fa ? "افزودن لینک" : "Add link"}</button>
           {editing && <button onClick={startNew} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>}
         </div>
-      </Card>
-
-      {items.length === 0 ? <Empty text={fa ? "لینکی اضافه نشده." : "No links."} /> : (
-        <div className="flex flex-col gap-2">
-          {items.map((m) => (
-            <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-[12px] p-3" style={{ ...cardStyle }}>
-              <div className="min-w-0 flex-1">
-                <div className="text-[14px] font-bold">{fa ? m.fa : m.en}</div>
-                <div className="truncate text-[12px]" style={{ color: "var(--muted)" }} dir="ltr">{m.href}</div>
+        {items.length > 0 && (
+          <div className="mt-4 flex flex-col gap-2">
+            {items.map((m) => (
+              <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-[10px] p-2.5" style={{ background: "var(--surface2)" }}>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-bold">{fa ? m.fa : m.en}</div>
+                  <div className="truncate text-[12px]" style={{ color: "var(--muted)" }} dir="ltr">{m.href}</div>
+                </div>
+                <button onClick={() => { setEditing(m); setForm(m); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
+                <button onClick={() => delLink(m.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
               </div>
-              <button onClick={() => { setEditing(m); setForm(m); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
-              <button onClick={() => del(m.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </Card>
     </>
+  );
+}
+
+function NavCatRow({ c, fa, first, last, onUp, onDown, onToggle, onRename }: {
+  c: CatRow; fa: boolean; first: boolean; last: boolean;
+  onUp: () => void; onDown: () => void; onToggle: () => void; onRename: (fa: string, en: string) => void;
+}) {
+  const [f2, setF2] = useState(c.fa);
+  const [e2, setE2] = useState(c.en);
+  const dirty = f2 !== c.fa || e2 !== c.en;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-[10px] p-2.5" style={{ background: "var(--surface2)", opacity: c.hidden ? 0.55 : 1 }}>
+      <div className="flex flex-col">
+        <button onClick={onUp} disabled={first} className="cursor-pointer border-none bg-transparent text-[12px] disabled:opacity-30" style={{ color: "var(--muted)" }}>▲</button>
+        <button onClick={onDown} disabled={last} className="cursor-pointer border-none bg-transparent text-[12px] disabled:opacity-30" style={{ color: "var(--muted)" }}>▼</button>
+      </div>
+      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[12px] font-extrabold text-white" style={{ background: `hsl(${c.hue} 70% 55%)` }}>{(fa ? c.fa : c.en).charAt(0)}</span>
+      <input className="rounded-[8px] px-2.5 py-1.5 text-[13px] outline-none" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", maxWidth: 160 }} value={f2} onChange={(e) => setF2(e.target.value)} />
+      <input className="rounded-[8px] px-2.5 py-1.5 text-[13px] outline-none" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", maxWidth: 140 }} value={e2} onChange={(e) => setE2(e.target.value)} dir="ltr" />
+      {dirty && <button onClick={() => onRename(f2, e2)} className="cursor-pointer rounded-[8px] border-none px-3 py-1.5 text-[12px] font-bold text-white" style={{ background: "var(--accent)" }}>{fa ? "ذخیره" : "Save"}</button>}
+      <span className="flex-1" />
+      <button onClick={onToggle} className="cursor-pointer rounded-[8px] px-3 py-1.5 text-[12px] font-bold" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: c.hidden ? "#e11d48" : "#1f8a5b" }}>
+        {c.hidden ? (fa ? "پنهان (نمایش بده)" : "Hidden") : (fa ? "نمایش (پنهان کن)" : "Visible")}
+      </button>
+    </div>
   );
 }
 

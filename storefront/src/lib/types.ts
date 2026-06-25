@@ -6,6 +6,7 @@ export interface Category {
   en: string;
   hue: number;
   subs: [string, string][]; // [fa, en]
+  hidden?: boolean; // hide from the site navigation menu
 }
 
 export interface Variation {
