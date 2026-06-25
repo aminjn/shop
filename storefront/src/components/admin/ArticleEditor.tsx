@@ -60,6 +60,7 @@ export function ArticleEditor() {
   const [cats, setCats] = useState<string[]>([]);
   const [relatedIds, setRelatedIds] = useState<number[]>([]);
   const [prodSearch, setProdSearch] = useState("");
+  const [listFilter, setListFilter] = useState<"all" | "published" | "scheduled" | "queued" | "draft">("all");
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = () =>
@@ -523,14 +524,31 @@ export function ArticleEditor() {
       {/* posts list (always visible) */}
       <div className="mt-6 p-5" style={card}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-[15px] font-extrabold">{fa ? "همهٔ مقالات" : "All articles"}</h2>
+          <h2 className="text-[15px] font-extrabold">{fa ? "مدیریت مقالات" : "Manage articles"}</h2>
           <button onClick={() => { newPost(); setTab("editor"); }} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold text-white" style={{ background: "var(--accent)" }}><Plus size={14} /> {fa ? "مقالهٔ جدید" : "New"}</button>
         </div>
-        {posts.length === 0 ? (
+        {/* status filter */}
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {([
+            ["all", fa ? "همه" : "All"],
+            ["published", fa ? "منتشرشده" : "Published"],
+            ["scheduled", fa ? "زمان‌بندی‌شده" : "Scheduled"],
+            ["queued", fa ? "در صف تولید" : "Queued"],
+            ["draft", fa ? "پیش‌نویس" : "Draft"],
+          ] as const).map(([k, label]) => {
+            const c = k === "all" ? posts.length : posts.filter((p) => p.status === k).length;
+            return (
+              <button key={k} onClick={() => setListFilter(k)} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12px] font-bold" style={listFilter === k ? { background: "var(--accent)", color: "#fff", border: "none" } : inputStyle}>
+                {label} <span style={{ opacity: 0.7 }}>({faNum(c)})</span>
+              </button>
+            );
+          })}
+        </div>
+        {(() => { const shown = posts.filter((p) => listFilter === "all" || p.status === listFilter); return shown.length === 0 ? (
           <div className="py-6 text-center text-[13.5px]" style={{ color: "var(--muted)" }}>{fa ? "مقاله‌ای نیست" : "No articles"}</div>
         ) : (
           <div className="flex flex-col gap-2">
-            {posts.map((p) => (
+            {shown.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-[10px] px-3 py-2.5" style={{ background: "var(--surface2)" }}>
                 <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{p.fa}</span>
                 {statusBadge(p.status, p.genError)}
@@ -540,7 +558,7 @@ export function ArticleEditor() {
               </div>
             ))}
           </div>
-        )}
+        ); })()}
       </div>
     </>
   );
@@ -624,7 +642,9 @@ function BulkScheduler({
   const WEEKDAYS: [number, string][] = [[6, "شنبه"], [0, "یکشنبه"], [1, "دوشنبه"], [2, "سه‌شنبه"], [3, "چهارشنبه"], [4, "پنجشنبه"], [5, "جمعه"]];
   const perDay = hours.length;
   const total = mode === "manual" ? topicsText.split("\n").filter((s) => s.trim()).length : count;
-  const days = perDay ? Math.ceil(total / perDay) : 0;
+  const publishDays = perDay ? Math.ceil(total / perDay) : 0;        // how many publishing days needed
+  const wdCount = weekdays.length || 7;                              // active weekdays per week
+  const weeks = wdCount ? Math.ceil(publishDays / wdCount) : 0;      // calendar weeks it spans
   const sel = "rounded-[10px] px-2 py-2.5 text-[13.5px] outline-none";
 
   return (
@@ -725,8 +745,10 @@ function BulkScheduler({
           ))}
         </div>
 
-        <p className="mt-3 text-[12px]" style={{ color: "var(--muted)" }}>
-          {fa ? `جمعاً ${faNum(total)} مقاله، روزی ${faNum(perDay)} تا، در روزهای انتخاب‌شده منتشر می‌شود.` : `${total} articles, ${perDay}/day on selected weekdays.`}
+        <p className="mt-3 text-[12px] leading-relaxed" style={{ color: "var(--muted)" }}>
+          {fa
+            ? `جمعاً ${faNum(total)} مقاله • روزی ${faNum(perDay)} تا (${faNum(hours.length)} ساعت انتخابی) • ${faNum(weekdays.length)} روز در هفته → حدود ${faNum(publishDays)} روزِ انتشار، تقریباً ${faNum(weeks)} هفته.`
+            : `${total} articles • ${perDay}/day (${hours.length} hours) • ${weekdays.length} weekdays → ~${publishDays} publishing days, about ${weeks} weeks.`}
         </p>
 
         <div className="mt-4 flex flex-wrap gap-2">

@@ -29,6 +29,7 @@ type Section =
   | "customers"
   | "discounts"
   | "reviews"
+  | "blog"
   | "reports"
   | "ai"
   | "settings";
@@ -142,6 +143,7 @@ export default function AdminPage() {
     { id: "customers", label: t.aCustomers },
     { id: "discounts", label: t.aDiscounts },
     { id: "reviews", label: t.aReviews },
+    { id: "blog", label: fa ? "مقالات" : "Articles" },
     { id: "reports", label: t.aReports },
     { id: "ai", label: t.aAi },
     { id: "settings", label: t.aSettings },
@@ -285,6 +287,7 @@ export default function AdminPage() {
           {section === "customers" && <Customers />}
           {section === "discounts" && <Discounts />}
           {section === "reviews" && <Reviews products={products} />}
+          {section === "blog" && <ArticleEditor />}
           {section === "reports" && <Reports />}
           {section === "ai" && <AiStudio />}
           {section === "settings" && <Settings />}
@@ -1592,9 +1595,9 @@ function AiStudio() {
     <>
       <H1>{t.aiStudioTitle}</H1>
       <p className="mb-5 text-[13.5px]" style={{ color: "var(--muted)" }}>{t.aiStudioSub}</p>
-
-      {/* WordPress-like article editor */}
-      <ArticleEditor />
+      <p className="mb-5 text-[12.5px]" style={{ color: "var(--muted)" }}>
+        {fa ? "برای نوشتن، تولید انبوه و مدیریت مقالات به منوی «مقالات» بروید." : "Use the “Articles” menu to write, bulk-generate and manage posts."}
+      </p>
 
       {/* product content generator */}
       <Card className="mt-6 p-5">
