@@ -78,6 +78,7 @@ export async function POST(req: Request) {
   const tone = String(b.tone || "").trim();
   const keyword = String(b.keyword || "").trim();
   const category = String(b.category || "").trim();
+  const genCover = Boolean(b.genCover);
 
   // start date: gregorian yyyy-mm-dd (client converts from Shamsi). Default: tomorrow Tehran.
   let sy: number, sm: number, sd: number;
@@ -135,6 +136,7 @@ export async function POST(req: Request) {
       genWords: words,
       genTone: tone || undefined,
       genKeyword: keyword || undefined,
+      genCover: genCover || undefined,
     } satisfies StoredPost;
   });
 

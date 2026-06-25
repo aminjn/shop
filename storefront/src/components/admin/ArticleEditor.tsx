@@ -566,6 +566,7 @@ function BulkScheduler({
   const [tone, setTone] = useState("");
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("");
+  const [genCover, setGenCover] = useState(true);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string[] | null>(null);
   const [status, setStatus] = useState<{ queued: number; failed: number; scheduled: number } | null>(null);
@@ -587,7 +588,7 @@ function BulkScheduler({
     const g = toGregorian(jy, jm, jd);
     const startDate = `${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}`;
     const topics = topicsText.split("\n").map((s) => s.trim()).filter(Boolean);
-    const base = { perDay: hours.length, hours, weekdays, words, tone, keyword, category, startDate, ...extra };
+    const base = { perDay: hours.length, hours, weekdays, words, tone, keyword, category, genCover, startDate, ...extra };
     return mode === "manual" ? { topics, ...base } : { theme: theme.trim(), count, ...base };
   };
 
@@ -692,6 +693,15 @@ function BulkScheduler({
             </select>
           </div>
         </div>
+
+        {/* AI cover per article */}
+        <label className="mt-4 flex cursor-pointer items-center gap-2 text-[13px] font-bold">
+          <input type="checkbox" checked={genCover} onChange={(e) => setGenCover(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} />
+          {fa ? "ساخت تصویر شاخص با هوش مصنوعی برای هر مقاله" : "Generate an AI cover image for each article"}
+        </label>
+        <p className="mt-1 text-[11.5px]" style={{ color: "var(--muted)" }}>
+          {fa ? "هنگام تولید هر مقاله، یک تصویر شاخص مرتبط هم با هوش مصنوعی ساخته و روی مقاله گذاشته می‌شود." : "A relevant cover image is generated per article during processing."}
+        </p>
 
         {/* start date */}
         <label className="mb-1.5 mt-4 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "تاریخ شروع انتشار (شمسی)" : "Start date"}</label>

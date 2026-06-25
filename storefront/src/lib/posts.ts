@@ -11,6 +11,7 @@ export interface StoredPost extends Post {
   genWords?: number;
   genTone?: string;
   genKeyword?: string;
+  genCover?: boolean; // generate an AI cover image during queue processing
   genError?: string;
 }
 
@@ -97,6 +98,13 @@ export async function processQueue(): Promise<boolean> {
     const j = r.text ? parseJson<{ title: string; excerpt: string; body: string; category: string; tags: string[]; seoTitle?: string; metaDesc?: string; keyword?: string }>(r.text) : null;
     if (j && j.body) j.body = stripFence(j.body);
 
+    // optional AI cover image (best-effort)
+    let cover = next.cover;
+    if (j && j.title && next.genCover && !cover) {
+      const { generateImage } = await import("./ai");
+      cover = (await generateImage(`تصویر شاخص حرفه‌ای، تمیز و مرتبط برای مقاله: ${j.title}`)) || cover;
+    }
+
     const fresh = getAllPosts();
     const idx = fresh.findIndex((p) => p.id === next.id);
     if (idx < 0) return false;
@@ -112,11 +120,13 @@ export async function processQueue(): Promise<boolean> {
         catFa: (j.category || fresh[idx].catFa || "عمومی").slice(0, 60),
         catEn: (j.category || "General").slice(0, 60),
         tags: Array.isArray(j.tags) ? j.tags.map(String).slice(0, 8) : fresh[idx].tags,
+        cover: cover || fresh[idx].cover,
         status: "scheduled",
         genTopic: undefined,
         genWords: undefined,
         genTone: undefined,
         genKeyword: undefined,
+        genCover: undefined,
       };
     } else {
       // mark error so we don't loop forever; keep it queued-visible

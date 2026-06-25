@@ -12,6 +12,7 @@ import { ProductModal } from "@/components/admin/ProductModal";
 import { LogoutButton } from "@/components/LogoutButton";
 import { UploadButton } from "@/components/UploadButton";
 import { ArticleEditor } from "@/components/admin/ArticleEditor";
+import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
 import {
   Grid,
   List,
@@ -1117,15 +1118,19 @@ function Discounts() {
             />
           </div>
           <div>
-            {lbl(fa ? "انقضا" : "Expiry")}
-            <input
-              className={inputCls}
-              style={inputStyle}
-              type="date"
-              value={form.expiry}
-              onChange={(e) => setForm((f) => ({ ...f, expiry: e.target.value }))}
-              dir="ltr"
-            />
+            {lbl(fa ? "انقضا (شمسی)" : "Expiry")}
+            {form.expiry ? (
+              <div>
+                <JalaliDateTimePicker value={form.expiry} onChange={(iso) => setForm((f) => ({ ...f, expiry: iso }))} />
+                <button type="button" onClick={() => setForm((f) => ({ ...f, expiry: "" }))} className="mt-1.5 cursor-pointer border-none bg-transparent text-[12px] font-bold" style={{ color: "#e11d48" }}>
+                  {fa ? "حذف تاریخ انقضا" : "Remove expiry"}
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setForm((f) => ({ ...f, expiry: new Date(Date.now() + 7 * 86400000).toISOString() }))} className={inputCls} style={{ ...inputStyle, cursor: "pointer", textAlign: "start" }}>
+                {fa ? "+ تعیین تاریخ انقضا (شمسی)" : "+ Set expiry"}
+              </button>
+            )}
           </div>
           <div>
             {lbl(fa ? "حداقل خرید" : "Min purchase")}

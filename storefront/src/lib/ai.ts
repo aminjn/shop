@@ -129,6 +129,26 @@ export async function callAIDetailed(
   return { text: null, error: lastErr || "ai-error" };
 }
 
+/** Generate an image via the OpenAI-compatible images endpoint. Returns a URL
+ *  (remote or data:) or null. Best-effort; never throws. */
+export async function generateImage(prompt: string, size = "1536x1024"): Promise<string | null> {
+  const c = aiConfig();
+  if (!c.configured) return null;
+  try {
+    const res = await fetch(`${c.baseUrl}/images/generations`, {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${c.apiKey}` },
+      body: JSON.stringify({ model: modelFor("image", "gpt-image-2"), prompt, size }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    const item = data?.data?.[0];
+    return item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : null);
+  } catch {
+    return null;
+  }
+}
+
 export function catalog(locale: Locale) {
   return PRODUCTS.map((p) => ({
     id: p.id,
