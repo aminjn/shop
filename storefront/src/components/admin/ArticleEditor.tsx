@@ -561,11 +561,13 @@ function BulkScheduler({
   const [count, setCount] = useState(30);
   const [topicsText, setTopicsText] = useState("");
   const [hours, setHours] = useState<number[]>([9, 13, 17, 20, 22]);
+  const [weekdays, setWeekdays] = useState<number[]>([6, 0, 1, 2, 3, 4]); // skip Friday(5)
   const [words, setWords] = useState(1200);
   const [tone, setTone] = useState("");
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("");
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<string[] | null>(null);
   const [status, setStatus] = useState<{ queued: number; failed: number; scheduled: number } | null>(null);
 
   // start date (shamsi)
@@ -578,30 +580,47 @@ function BulkScheduler({
     fetch("/api/ai/bulk").then((r) => (r.ok ? r.json() : null)).then((d) => d?.ok && setStatus({ queued: d.queued, failed: d.failed, scheduled: d.scheduled })).catch(() => {});
   useEffect(() => { loadStatus(); const t = setInterval(loadStatus, 15000); return () => clearInterval(t); }, []);
 
-  const toggleHour = (h: number) => setHours((hs) => hs.includes(h) ? hs.filter((x) => x !== h) : [...hs, h].sort((a, b) => a - b));
+  const toggleHour = (h: number) => { setPreview(null); setHours((hs) => hs.includes(h) ? hs.filter((x) => x !== h) : [...hs, h].sort((a, b) => a - b)); };
+  const toggleDay = (d: number) => { setPreview(null); setWeekdays((ds) => ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d]); };
+
+  const buildPayload = (extra: Record<string, unknown>) => {
+    const g = toGregorian(jy, jm, jd);
+    const startDate = `${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}`;
+    const topics = topicsText.split("\n").map((s) => s.trim()).filter(Boolean);
+    const base = { perDay: hours.length, hours, weekdays, words, tone, keyword, category, startDate, ...extra };
+    return mode === "manual" ? { topics, ...base } : { theme: theme.trim(), count, ...base };
+  };
+
+  const doPreview = async () => {
+    if (hours.length === 0) { toast(fa ? "حداقل یک ساعت انتخاب کن" : "Pick an hour"); return; }
+    if (weekdays.length === 0) { toast(fa ? "حداقل یک روز هفته انتخاب کن" : "Pick a weekday"); return; }
+    try {
+      const r = await fetch("/api/ai/bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(buildPayload({ preview: true })) });
+      const d = await r.json().catch(() => ({}));
+      if (d.ok && Array.isArray(d.schedule)) setPreview(d.schedule);
+      else toast(fa ? "پیش‌نمایش ناموفق بود" : "Preview failed");
+    } catch { toast(fa ? "خطای شبکه" : "Network error"); }
+  };
 
   const submit = async () => {
     const topics = topicsText.split("\n").map((s) => s.trim()).filter(Boolean);
     if (mode === "manual" && topics.length === 0) { toast(fa ? "حداقل یک موضوع وارد کن" : "Enter topics"); return; }
     if (mode === "auto" && !theme.trim()) { toast(fa ? "موضوع کلی را وارد کن" : "Enter a theme"); return; }
     if (hours.length === 0) { toast(fa ? "حداقل یک ساعت انتشار انتخاب کن" : "Pick at least one hour"); return; }
+    if (weekdays.length === 0) { toast(fa ? "حداقل یک روز هفته انتخاب کن" : "Pick at least one weekday"); return; }
     setBusy(true);
     try {
-      const g = toGregorian(jy, jm, jd);
-      const startDate = `${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}`;
-      const payload = mode === "manual"
-        ? { topics, perDay: hours.length, hours, words, tone, keyword, category, startDate }
-        : { theme: theme.trim(), count, perDay: hours.length, hours, words, tone, keyword, category, startDate };
-      const r = await fetch("/api/ai/bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const r = await fetch("/api/ai/bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(buildPayload({})) });
       const d = await r.json().catch(() => ({}));
       if (d.ok) {
         toast(fa ? `${faNum(d.count)} مقاله در صف تولید و زمان‌بندی شد ✓` : `${d.count} articles queued ✓`);
-        setTopicsText(""); loadStatus(); onChanged();
+        setTopicsText(""); setPreview(null); loadStatus(); onChanged();
       } else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در تنظیمات کلید را ذخیره کن" : "AI not configured");
       else toast((fa ? "خطا: " : "Error: ") + (d.detail || d.error || ""));
     } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setBusy(false); }
   };
 
+  const WEEKDAYS: [number, string][] = [[6, "شنبه"], [0, "یکشنبه"], [1, "دوشنبه"], [2, "سه‌شنبه"], [3, "چهارشنبه"], [4, "پنجشنبه"], [5, "جمعه"]];
   const perDay = hours.length;
   const total = mode === "manual" ? topicsText.split("\n").filter((s) => s.trim()).length : count;
   const days = perDay ? Math.ceil(total / perDay) : 0;
@@ -683,18 +702,44 @@ function BulkScheduler({
           <select className={`${sel} flex-1`} style={inputStyle} value={jm} onChange={(e) => setJm(+e.target.value)}>
             {JALALI_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
           </select>
-          <select className={sel} style={inputStyle} value={jy} onChange={(e) => setJy(+e.target.value)}>
+          <select className={sel} style={inputStyle} value={jy} onChange={(e) => { setPreview(null); setJy(+e.target.value); }}>
             {Array.from({ length: 3 }, (_, i) => yNow + i).map((y) => <option key={y} value={y}>{faNum(y)}</option>)}
           </select>
         </div>
 
+        {/* weekdays */}
+        <label className="mb-1.5 mt-4 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "روزهای انتشار در هفته" : "Publish weekdays"}</label>
+        <div className="flex flex-wrap gap-1.5">
+          {WEEKDAYS.map(([d, label]) => (
+            <button key={d} onClick={() => toggleDay(d)} className="cursor-pointer rounded-[8px] px-2.5 py-1.5 text-[12px] font-bold" style={weekdays.includes(d) ? { background: "var(--accent)", color: "#fff", border: "none" } : inputStyle}>{label}</button>
+          ))}
+        </div>
+
         <p className="mt-3 text-[12px]" style={{ color: "var(--muted)" }}>
-          {fa ? `جمعاً ${faNum(total)} مقاله، روزی ${faNum(perDay)} تا، در ${faNum(days)} روز منتشر می‌شود.` : `${total} articles, ${perDay}/day over ${days} days.`}
+          {fa ? `جمعاً ${faNum(total)} مقاله، روزی ${faNum(perDay)} تا، در روزهای انتخاب‌شده منتشر می‌شود.` : `${total} articles, ${perDay}/day on selected weekdays.`}
         </p>
 
-        <button onClick={submit} disabled={busy} className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
-          <Sparkle size={16} /> {busy ? (fa ? "در حال ثبت…" : "Submitting…") : fa ? "شروع تولید و زمان‌بندی" : "Generate & schedule"}
-        </button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button onClick={submit} disabled={busy} className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+            <Sparkle size={16} /> {busy ? (fa ? "در حال ثبت…" : "Submitting…") : fa ? "شروع تولید و زمان‌بندی" : "Generate & schedule"}
+          </button>
+          <button onClick={doPreview} disabled={busy} className="cursor-pointer rounded-[12px] px-5 py-3 text-[14px] font-bold disabled:opacity-60" style={inputStyle}>{fa ? "پیش‌نمایش زمان‌بندی" : "Preview schedule"}</button>
+        </div>
+
+        {/* schedule preview */}
+        {preview && (
+          <div className="mt-4 rounded-[12px] p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+            <div className="mb-2 text-[12.5px] font-extrabold">{fa ? `زمان‌بندی ${faNum(preview.length)} مقالهٔ اول:` : `Schedule (first ${preview.length}):`}</div>
+            <div className="grid max-h-56 gap-1 overflow-auto sm:grid-cols-2" style={{ scrollbarWidth: "thin" }}>
+              {preview.map((iso, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-[12px]" style={{ background: "var(--surface)" }}>
+                  <span className="flex-none font-bold" style={{ color: "var(--accent)" }}>{faNum(i + 1)}.</span>
+                  <span>{formatDate(iso, locale as "fa" | "en", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* status */}

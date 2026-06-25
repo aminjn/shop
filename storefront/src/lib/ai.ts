@@ -70,7 +70,9 @@ export async function callAI(
   return r.text;
 }
 
-/** Like callAI but returns the error reason for surfacing in the UI. */
+/** Like callAI but returns the error reason for surfacing in the UI.
+ *  Retries transient upstream/network failures, and once more with a smaller
+ *  max_tokens if the model rejects the requested size. */
 export async function callAIDetailed(
   system: string,
   messages: ChatMessage[],
@@ -79,35 +81,52 @@ export async function callAIDetailed(
 ): Promise<{ text: string | null; error?: string }> {
   const c = aiConfig();
   if (!c.configured) return { text: null, error: "not-configured" };
-  try {
-    const res = await fetch(`${c.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        Authorization: `Bearer ${c.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: model || c.model,
-        messages: [{ role: "system", content: system }, ...messages],
-        max_tokens: maxTokens,
-      }),
-    });
-    if (!res.ok) {
-      let msg = `http ${res.status}`;
-      try {
-        const e = await res.json();
-        msg = e?.error?.message || msg;
-      } catch {
-        /* ignore */
+  // many models cap output tokens; keep within a widely-supported ceiling
+  const caps = [Math.min(4096, Math.max(256, maxTokens)), 2048, 1024];
+  let lastErr = "";
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const cap = caps[Math.min(attempt, caps.length - 1)];
+    try {
+      const res = await fetch(`${c.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: `Bearer ${c.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: model || c.model,
+          messages: [{ role: "system", content: system }, ...messages],
+          max_tokens: cap,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (typeof text === "string" && text.trim()) return { text: text.trim() };
+        lastErr = "empty";
+      } else {
+        let msg = `http ${res.status}`;
+        try {
+          const e = await res.json();
+          msg = e?.error?.message || msg;
+        } catch {
+          /* ignore */
+        }
+        lastErr = msg;
+        // 4xx other than rate limit won't fix themselves — stop early
+        if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+          // but a token-size complaint may pass with a smaller cap → keep retrying
+          if (!/token|length|max|context/i.test(msg)) return { text: null, error: msg };
+        }
       }
-      return { text: null, error: msg };
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : "network";
     }
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content;
-    return { text: typeof text === "string" ? text.trim() : null };
-  } catch (e) {
-    return { text: null, error: e instanceof Error ? e.message : "network" };
+    // small backoff before retrying
+    await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
   }
+  return { text: null, error: lastErr || "ai-error" };
 }
 
 export function catalog(locale: Locale) {
