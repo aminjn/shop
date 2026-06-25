@@ -58,6 +58,20 @@ export async function POST(req: Request) {
   if (s?.role !== "super_admin") return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   const b = await req.json().catch(() => ({}));
 
+  // retry failed generations: clear genError so the worker re-picks them
+  if (b.retry) {
+    const list = getAllPosts();
+    let retried = 0;
+    for (const p of list) {
+      if (p.status === "queued" && p.genError && (b.id == null || p.id === Number(b.id))) {
+        delete p.genError;
+        retried++;
+      }
+    }
+    if (retried) savePosts(list);
+    return NextResponse.json({ ok: true, retried });
+  }
+
   let topics: string[] = Array.isArray(b.topics)
     ? b.topics.map((x: unknown) => String(x).trim()).filter(Boolean)
     : [];

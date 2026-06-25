@@ -6,7 +6,7 @@ import { formatDate } from "@/lib/format";
 import { renderMarkdown } from "@/lib/markdown";
 import { UploadButton } from "@/components/UploadButton";
 import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
-import { JALALI_MONTHS, jalaliMonthLength, jalaliYearNow, toGregorian } from "@/lib/jalali";
+import { JALALI_MONTHS, jalaliMonthLength, jalaliYearNow, toGregorian, dateToJalaliParts } from "@/lib/jalali";
 import { Sparkle, Plus, Trash } from "@/components/Icons";
 
 interface PostRow {
@@ -251,6 +251,13 @@ export function ArticleEditor() {
     const r = await fetch("/api/posts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "delete", id }) });
     const d = await r.json();
     if (d.ok) { setPosts(d.posts || []); toast(fa ? "حذف شد" : "Deleted"); }
+  };
+
+  const retryGen = async (id?: number) => {
+    const r = await fetch("/api/ai/bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ retry: true, id }) });
+    const d = await r.json().catch(() => ({}));
+    if (d.ok) { toast(fa ? `${faNum(d.retried || 0)} مقاله دوباره در صف قرار گرفت ✓` : "Re-queued ✓"); setTimeout(load, 500); }
+    else toast(fa ? "خطا" : "Error");
   };
 
   // SEO scoring
@@ -525,7 +532,12 @@ export function ArticleEditor() {
       <div className="mt-6 p-5" style={card}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-[15px] font-extrabold">{fa ? "مدیریت مقالات" : "Manage articles"}</h2>
-          <button onClick={() => { newPost(); setTab("editor"); }} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold text-white" style={{ background: "var(--accent)" }}><Plus size={14} /> {fa ? "مقالهٔ جدید" : "New"}</button>
+          <div className="flex gap-2">
+            {posts.some((p) => p.genError) && (
+              <button onClick={() => retryGen()} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] px-3 py-2 text-[12.5px] font-bold" style={{ background: "var(--surface2)", border: "1px solid #e11d48", color: "#e11d48" }}>↻ {fa ? "تلاش مجدد همهٔ خطاها" : "Retry failed"}</button>
+            )}
+            <button onClick={() => { newPost(); setTab("editor"); }} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold text-white" style={{ background: "var(--accent)" }}><Plus size={14} /> {fa ? "مقالهٔ جدید" : "New"}</button>
+          </div>
         </div>
         {/* status filter */}
         <div className="mb-3 flex flex-wrap gap-1.5">
@@ -550,9 +562,10 @@ export function ArticleEditor() {
           <div className="flex flex-col gap-2">
             {shown.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-[10px] px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{p.fa}</span>
+                <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold" title={p.genError ? (fa ? "علت خطا: " : "Error: ") + p.genError : undefined}>{p.fa}</span>
                 {statusBadge(p.status, p.genError)}
                 <span className="text-[12px]" style={{ color: "var(--muted)" }}>{(p.status === "scheduled" || p.status === "queued") && p.publishAt ? formatDate(p.publishAt, locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : formatDate(p.date, locale, { month: "short", day: "numeric" })}</span>
+                {p.genError && <button onClick={() => retryGen(p.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>↻ {fa ? "تلاش مجدد" : "Retry"}</button>}
                 <button onClick={() => editPost(p)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
                 <button onClick={() => del(p.id)} aria-label="delete" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[8px] border-none" style={{ background: "var(--surface)", color: "#e11d48" }}><Trash size={14} /></button>
               </div>
@@ -589,11 +602,12 @@ function BulkScheduler({
   const [preview, setPreview] = useState<string[] | null>(null);
   const [status, setStatus] = useState<{ queued: number; failed: number; scheduled: number } | null>(null);
 
-  // start date (shamsi)
+  // start date (shamsi) — default to *today* in the Jalali calendar
   const yNow = jalaliYearNow();
-  const [jy, setJy] = useState(yNow);
-  const [jm, setJm] = useState(() => { const d = new Date(); return Math.min(12, d.getMonth() + 1); });
-  const [jd, setJd] = useState(() => new Date().getDate());
+  const todayJ = dateToJalaliParts(new Date());
+  const [jy, setJy] = useState(todayJ.jy);
+  const [jm, setJm] = useState(todayJ.jm);
+  const [jd, setJd] = useState(todayJ.jd);
 
   const loadStatus = () =>
     fetch("/api/ai/bulk").then((r) => (r.ok ? r.json() : null)).then((d) => d?.ok && setStatus({ queued: d.queued, failed: d.failed, scheduled: d.scheduled })).catch(() => {});
