@@ -26,12 +26,19 @@ export async function POST(req: Request) {
   }, 0);
   const coupon = b.coupon ? findCoupon(String(b.coupon), subtotalForCoupon) : null;
 
-  const totals = computeTotals(lines, coupon, {
-    products,
-    config: { shipFee: store.shipFee, freeShipThreshold: store.freeShipThreshold, taxRate: store.taxRate },
-  });
   const payment = String(b.payment || "online");
   const shipping = String(b.shipping || "standard");
+  // resolve the chosen shipping method's price (falls back to the legacy flat fee)
+  const shipMethod = (store.shippingMethods || []).find((m) => m.id === shipping && m.enabled);
+  const shipFee = shipMethod ? shipMethod.price : store.shipFee;
+  // resolve payment behaviour by the method's kind (supports custom methods)
+  const payMethod = (store.paymentMethods || []).find((m) => m.id === payment);
+  const payKind = payMethod?.kind || (payment === "wallet" ? "wallet" : payment === "cod" ? "cod" : "online");
+
+  const totals = computeTotals(lines, coupon, {
+    products,
+    config: { shipFee, freeShipThreshold: store.freeShipThreshold, taxRate: store.taxRate },
+  });
 
   const items: OrderItem[] = lines.map((l) => {
     const p = getProduct(l.id)!;
@@ -41,7 +48,7 @@ export async function POST(req: Request) {
   let error = "";
   let orderId = "";
   const u = updateUser(s.mobile, (u) => {
-    if (payment === "wallet") {
+    if (payKind === "wallet") {
       if (u.wallet.balance < totals.grand) { error = "insufficient-wallet"; return; }
       u.wallet.balance -= totals.grand;
       u.wallet.txns.unshift({ id: uid(), type: "order", amount: totals.grand, date: nowIso(), note: "پرداخت سفارش" });

@@ -5,6 +5,7 @@ import { useShop } from "@/lib/store";
 import { CATEGORIES } from "@/data/categories";
 import type { Product } from "@/lib/types";
 import type { HomeContent, BiText, HomeFeature, HomeTestimonial, HomeFaq } from "@/lib/home";
+import type { ShipMethod, PayMethod } from "@/lib/settings";
 import type { Post } from "@/data/posts";
 import type { OrderStatus } from "@/lib/userstore";
 import { grad, priceFmt, num, formatDate } from "@/lib/format";
@@ -94,6 +95,8 @@ type StoreSettings = {
   taxRate: number;
   maintenance: boolean;
   cod: boolean;
+  shippingMethods?: ShipMethod[];
+  paymentMethods?: PayMethod[];
 };
 
 const cardStyle = {
@@ -2444,6 +2447,17 @@ function Settings() {
   const setS = <K extends keyof StoreSettings>(k: K, v: StoreSettings[K]) =>
     setStore((s) => ({ ...s, [k]: v }));
 
+  // shipping & payment method editors
+  const shipList = store.shippingMethods || [];
+  const payList = store.paymentMethods || [];
+  const updShip = (i: number, patch: Partial<ShipMethod>) => setS("shippingMethods", shipList.map((m, x) => (x === i ? { ...m, ...patch } : m)));
+  const addShip = () => setS("shippingMethods", [...shipList, { id: "ship-" + Date.now().toString(36), fa: "", en: "", price: 0, etaFa: "", etaEn: "", enabled: true }]);
+  const rmShip = (i: number) => setS("shippingMethods", shipList.filter((_, x) => x !== i));
+  const updPay = (i: number, patch: Partial<PayMethod>) => setS("paymentMethods", payList.map((m, x) => (x === i ? { ...m, ...patch } : m)));
+  const addPay = () => setS("paymentMethods", [...payList, { id: "pay-" + Date.now().toString(36), fa: "", en: "", kind: "online", enabled: true }]);
+  const rmPay = (i: number) => setS("paymentMethods", payList.filter((_, x) => x !== i));
+  const miniInput = "w-full rounded-[8px] px-2.5 py-1.5 text-[12.5px] outline-none";
+
   const saveStore = async () => {
     setStoreSaving(true);
     try {
@@ -2767,6 +2781,62 @@ function Settings() {
                 />
               </div>
             </div>
+
+            {/* shipping methods */}
+            <div className="mt-2 rounded-[12px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-[14px] font-extrabold">🚚 {fa ? "روش‌های ارسال" : "Shipping methods"}</h3>
+                <button onClick={addShip} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--accent)" }}>+ {fa ? "افزودن" : "Add"}</button>
+              </div>
+              <p className="mb-3 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "هر روش ارسال با قیمت و زمان تحویل. کاربر در تسویه‌حساب از همین‌ها انتخاب می‌کند." : "Each method with price & ETA shown at checkout."}</p>
+              {shipList.length === 0 && <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>{fa ? "روشی اضافه نشده." : "None."}</div>}
+              <div className="flex flex-col gap-2">
+                {shipList.map((m, i) => (
+                  <div key={m.id} className="rounded-[10px] p-2.5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input className={miniInput} style={inputStyle} value={m.fa} placeholder={fa ? "نام (فارسی)" : "Name FA"} onChange={(e) => updShip(i, { fa: e.target.value })} />
+                      <input className={miniInput} style={inputStyle} dir="ltr" value={m.en} placeholder="Name EN" onChange={(e) => updShip(i, { en: e.target.value })} />
+                      <input className={miniInput} style={inputStyle} inputMode="numeric" value={String(m.price)} placeholder={fa ? "قیمت (تومان)" : "Price"} onChange={(e) => updShip(i, { price: Number(e.target.value.replace(/[^\d]/g, "")) || 0 })} />
+                      <input className={miniInput} style={inputStyle} value={m.etaFa} placeholder={fa ? "زمان تحویل (فارسی)" : "ETA FA"} onChange={(e) => updShip(i, { etaFa: e.target.value })} />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-bold"><input type="checkbox" checked={m.enabled !== false} onChange={(e) => updShip(i, { enabled: e.target.checked })} style={{ accentColor: "var(--accent)" }} />{fa ? "فعال" : "Enabled"}</label>
+                      <button onClick={() => rmShip(i)} className="cursor-pointer border-none bg-transparent text-[12px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* payment methods */}
+            <div className="mt-3 rounded-[12px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-[14px] font-extrabold">💳 {fa ? "روش‌های پرداخت" : "Payment methods"}</h3>
+                <button onClick={addPay} className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--accent)" }}>+ {fa ? "افزودن" : "Add"}</button>
+              </div>
+              <p className="mb-3 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "نوع «کیف پول» موجودی کاربر را کم می‌کند، «در محل» پرداخت هنگام تحویل، «آنلاین» درگاه پرداخت." : "Kind controls behaviour: wallet deducts balance, COD pays on delivery, online uses the gateway."}</p>
+              {payList.length === 0 && <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>{fa ? "روشی اضافه نشده." : "None."}</div>}
+              <div className="flex flex-col gap-2">
+                {payList.map((m, i) => (
+                  <div key={m.id} className="rounded-[10px] p-2.5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <input className={miniInput} style={inputStyle} value={m.fa} placeholder={fa ? "نام (فارسی)" : "Name FA"} onChange={(e) => updPay(i, { fa: e.target.value })} />
+                      <input className={miniInput} style={inputStyle} dir="ltr" value={m.en} placeholder="Name EN" onChange={(e) => updPay(i, { en: e.target.value })} />
+                      <select className={miniInput} style={inputStyle} value={m.kind} onChange={(e) => updPay(i, { kind: e.target.value as PayMethod["kind"] })}>
+                        <option value="online">{fa ? "آنلاین (درگاه)" : "Online"}</option>
+                        <option value="wallet">{fa ? "کیف پول" : "Wallet"}</option>
+                        <option value="cod">{fa ? "پرداخت در محل" : "Cash on delivery"}</option>
+                      </select>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-bold"><input type="checkbox" checked={m.enabled !== false} onChange={(e) => updPay(i, { enabled: e.target.checked })} style={{ accentColor: "var(--accent)" }} />{fa ? "فعال" : "Enabled"}</label>
+                      <button onClick={() => rmPay(i)} className="cursor-pointer border-none bg-transparent text-[12px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <button
               onClick={saveStore}
               disabled={storeSaving}

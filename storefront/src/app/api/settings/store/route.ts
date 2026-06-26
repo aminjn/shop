@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { readStore, writeStore } from "@/lib/settings";
+import { readStore, writeStore, type ShipMethod, type PayMethod } from "@/lib/settings";
 
 export async function GET() {
   // public subset is fine; everything here is non-secret
@@ -16,6 +16,20 @@ export async function POST(req: Request) {
     return Number.isFinite(x) ? x : d;
   };
   const cur = readStore();
+  const str = (v: unknown, max: number) => String(v ?? "").slice(0, max);
+  const ship: ShipMethod[] | undefined = Array.isArray(b.shippingMethods)
+    ? (b.shippingMethods as unknown[]).map((x, i) => {
+        const m = (x || {}) as Record<string, unknown>;
+        return { id: str(m.id, 30) || `ship-${i}`, fa: str(m.fa, 60), en: str(m.en, 60), price: num(m.price, 0), etaFa: str(m.etaFa, 60), etaEn: str(m.etaEn, 60), enabled: m.enabled !== false } as ShipMethod;
+      }).filter((m) => m.fa.trim())
+    : undefined;
+  const pay: PayMethod[] | undefined = Array.isArray(b.paymentMethods)
+    ? (b.paymentMethods as unknown[]).map((x, i) => {
+        const m = (x || {}) as Record<string, unknown>;
+        const kind = m.kind === "wallet" || m.kind === "cod" ? m.kind : "online";
+        return { id: str(m.id, 30) || `pay-${i}`, fa: str(m.fa, 60), en: str(m.en, 60), kind, enabled: m.enabled !== false } as PayMethod;
+      }).filter((m) => m.fa.trim())
+    : undefined;
   const settings = writeStore({
     storeName: String(b.storeName ?? cur.storeName).slice(0, 80),
     tagline: String(b.tagline ?? cur.tagline).slice(0, 160),
@@ -32,6 +46,8 @@ export async function POST(req: Request) {
     taxRate: num(b.taxRate, cur.taxRate),
     maintenance: Boolean(b.maintenance),
     cod: Boolean(b.cod),
+    ...(ship ? { shippingMethods: ship } : {}),
+    ...(pay ? { paymentMethods: pay } : {}),
   });
   return NextResponse.json({ ok: true, settings });
 }

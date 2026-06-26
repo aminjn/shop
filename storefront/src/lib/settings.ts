@@ -53,6 +53,9 @@ export function writeAi(patch: StoredAi) {
   return next;
 }
 
+export interface ShipMethod { id: string; fa: string; en: string; price: number; etaFa: string; etaEn: string; enabled: boolean }
+export interface PayMethod { id: string; fa: string; en: string; kind: "online" | "wallet" | "cod"; enabled: boolean }
+
 export interface StoreSettings {
   storeName?: string;
   tagline?: string; // شعار سایت
@@ -70,6 +73,8 @@ export interface StoreSettings {
   taxRate?: number; // percent
   maintenance?: boolean;
   cod?: boolean;
+  shippingMethods?: ShipMethod[];
+  paymentMethods?: PayMethod[];
 }
 export const STORE_DEFAULTS: Required<StoreSettings> = {
   storeName: "",
@@ -87,6 +92,15 @@ export const STORE_DEFAULTS: Required<StoreSettings> = {
   taxRate: 9,
   maintenance: false,
   cod: true,
+  shippingMethods: [
+    { id: "standard", fa: "ارسال عادی", en: "Standard", price: 50000, etaFa: "۳ تا ۵ روز کاری", etaEn: "3–5 business days", enabled: true },
+    { id: "express", fa: "ارسال اکسپرس", en: "Express", price: 120000, etaFa: "تحویل ۲۴ ساعته", etaEn: "24-hour delivery", enabled: true },
+  ],
+  paymentMethods: [
+    { id: "online", fa: "پرداخت آنلاین", en: "Online payment", kind: "online", enabled: true },
+    { id: "wallet", fa: "کیف پول", en: "Wallet", kind: "wallet", enabled: true },
+    { id: "cod", fa: "پرداخت در محل", en: "Cash on delivery", kind: "cod", enabled: true },
+  ],
 };
 export function readStore(): Required<StoreSettings> {
   return { ...STORE_DEFAULTS, ...readJson<StoreSettings>("store.json") };

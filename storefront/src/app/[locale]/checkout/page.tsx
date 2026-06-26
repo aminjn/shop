@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useShop } from "@/lib/store";
 import { computeTotals } from "@/lib/cart";
+import type { ShipMethod, PayMethod } from "@/lib/settings";
 import { grad, priceFmt, num } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Sparkle, Check } from "@/components/Icons";
@@ -11,15 +12,37 @@ const field =
   "rounded-[10px] px-3 py-3 text-[14px] outline-none w-full";
 
 export default function CheckoutPage() {
-  const { locale, t, dark, cart, clearCart, coupon, toast, productById } = useShop();
-  const totals = computeTotals(cart, coupon);
+  const { locale, t, dark, cart, clearCart, coupon, toast, productById, products } = useShop();
   const [orderId, setOrderId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "", phone: "", email: "", province: "", city: "", postal: "", address: "", notes: "",
   });
-  const [ship, setShip] = useState("standard");
-  const [pay, setPay] = useState("online");
+  const [ship, setShip] = useState("");
+  const [pay, setPay] = useState("");
   const [placing, setPlacing] = useState(false);
+  // shipping/payment methods + totals config come from store settings (admin-managed)
+  const [shipMethods, setShipMethods] = useState<ShipMethod[]>([]);
+  const [payMethods, setPayMethods] = useState<PayMethod[]>([]);
+  const [cfg, setCfg] = useState({ freeShipThreshold: 2_000_000, taxRate: 9 });
+
+  useEffect(() => {
+    fetch("/api/settings/store").then((r) => r.json()).then((d) => {
+      const sset = d?.settings;
+      if (!sset) return;
+      const sm: ShipMethod[] = (sset.shippingMethods || []).filter((m: ShipMethod) => m.enabled);
+      const pm: PayMethod[] = (sset.paymentMethods || []).filter((m: PayMethod) => m.enabled);
+      setShipMethods(sm); setPayMethods(pm);
+      setCfg({ freeShipThreshold: sset.freeShipThreshold ?? 2_000_000, taxRate: sset.taxRate ?? 9 });
+      setShip((s) => s || sm[0]?.id || "standard");
+      setPay((p) => p || pm[0]?.id || "online");
+    }).catch(() => {});
+  }, []);
+
+  const selShip = shipMethods.find((m) => m.id === ship);
+  const totals = useMemo(
+    () => computeTotals(cart, coupon, { products, config: { shipFee: selShip?.price ?? 50000, freeShipThreshold: cfg.freeShipThreshold, taxRate: cfg.taxRate } }),
+    [cart, coupon, products, selShip?.price, cfg.freeShipThreshold, cfg.taxRate],
+  );
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -138,16 +161,15 @@ export default function CheckoutPage() {
             <div className="rounded-[16px] p-5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
               <h2 className="mb-3 text-[16px] font-bold">{t.shippingMethod}</h2>
               <div className="flex flex-col gap-2.5">
-                {radio("ship", "standard", ship, setShip, t.standardShip, priceFmt(50000, locale, t.currency))}
-                {radio("ship", "express", ship, setShip, t.expressShip, priceFmt(120000, locale, t.currency))}
+                {shipMethods.length === 0 ? <span className="text-[13px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? "روش ارسالی تنظیم نشده" : "No shipping method"}</span>
+                  : shipMethods.map((m) => radio("ship", m.id, ship, setShip, locale === "fa" ? m.fa : m.en, `${m.price > 0 ? priceFmt(m.price, locale, t.currency) : (locale === "fa" ? "رایگان" : "Free")}${(locale === "fa" ? m.etaFa : m.etaEn) ? " · " + (locale === "fa" ? m.etaFa : m.etaEn) : ""}`))}
               </div>
             </div>
             <div className="rounded-[16px] p-5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
               <h2 className="mb-3 text-[16px] font-bold">{t.paymentMethod}</h2>
               <div className="flex flex-col gap-2.5">
-                {radio("pay", "online", pay, setPay, t.payOnline)}
-                {radio("pay", "wallet", pay, setPay, t.payWallet)}
-                {radio("pay", "cod", pay, setPay, t.payCod)}
+                {payMethods.length === 0 ? <span className="text-[13px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? "روش پرداختی تنظیم نشده" : "No payment method"}</span>
+                  : payMethods.map((m) => radio("pay", m.id, pay, setPay, locale === "fa" ? m.fa : m.en))}
               </div>
             </div>
           </div>
