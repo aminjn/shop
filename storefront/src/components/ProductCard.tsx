@@ -67,6 +67,14 @@ export function ProductCard({
             {num(disc, locale)}٪-
           </span>
         )}
+        {p.featured && (
+          <span
+            className="absolute rounded-full px-2.5 py-1 text-[11px] font-extrabold text-white"
+            style={{ insetInlineStart: 12, top: badge || aiMatch != null ? 44 : 12, background: "linear-gradient(90deg,#f59e0b,#f97316)" }}
+          >
+            ⭐ {locale === "fa" ? "ویژه" : "Featured"}
+          </span>
+        )}
         <button
           onClick={() => toggleWish(p.id)}
           aria-label={t.addToWishlist}

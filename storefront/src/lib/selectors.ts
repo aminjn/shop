@@ -4,8 +4,12 @@ import type { Product } from "./types";
 type List = Product[];
 const seed = () => PRODUCTS;
 
-export const featured = (list: List = seed()): Product[] =>
-  list.filter((p) => p.badge || p.rating >= 4.7).slice(0, 8);
+export const featured = (list: List = seed()): Product[] => {
+  // prefer products explicitly marked featured in admin; fall back to a heuristic
+  const flagged = list.filter((p) => p.featured);
+  if (flagged.length) return flagged.slice(0, 8);
+  return list.filter((p) => p.badge || p.rating >= 4.7).slice(0, 8);
+};
 
 export const newest = (list: List = seed()): Product[] =>
   [...list].reverse().slice(0, 8);

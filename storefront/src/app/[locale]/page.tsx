@@ -258,17 +258,13 @@ export default function HomePage() {
         if (!cards.length) return null;
         const cardCls = "row-hover flex min-w-0 flex-col items-center justify-center gap-2 rounded-[14px] px-2 py-6 no-underline";
         const cardStyle = { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" } as const;
-        const inner = (b: (typeof cards)[number]) => (
-          <>
-            {b.logo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={b.logo} alt={b.label} className="h-12 w-full max-w-[120px] object-contain" />
-            ) : (
-              <span className="text-[18px] font-extrabold truncate max-w-full">{b.label}</span>
-            )}
-            {b.logo && <span className="truncate max-w-full text-[13px] font-bold">{b.label}</span>}
-          </>
-        );
+        const inner = (b: (typeof cards)[number]) =>
+          b.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={b.logo} alt={b.label} title={b.label} className="h-10 w-full max-w-[130px] object-contain" />
+          ) : (
+            <span className="truncate max-w-full text-center text-[17px] font-extrabold">{b.label}</span>
+          );
         return (
           <section className={`${SECTION} py-6`}>
             <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{t.popularBrands}</h2>

@@ -49,6 +49,7 @@ export function ProductModal({
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
   const [video, setVideo] = useState(initial?.video ?? "");
   const [enBusy, setEnBusy] = useState(false);
+  const [featured, setFeatured] = useState(!!initial?.featured);
   const [perCm, setPerCm] = useState(initial?.pricingType === "per_cm");
   const [pricePerCm, setPricePerCm] = useState(String(initial?.pricePerCm ?? ""));
   const [width, setWidth] = useState(String(initial?.width ?? ""));
@@ -106,6 +107,7 @@ export function ProductModal({
       cat,
       sub: sub || undefined,
       brand,
+      featured: featured || undefined,
       price: Number(price) || 0,
       old: Number(old) || undefined,
       rating: initial?.rating ?? 0,
@@ -221,6 +223,13 @@ export function ProductModal({
           <div>
             {lbl(t.thStock)}
             <input className={inputCls} style={inputStyle} inputMode="numeric" value={stock} onChange={(e) => setStock(e.target.value)} />
+          </div>
+          {/* featured / special product */}
+          <div className="sm:col-span-2 rounded-[12px] p-3.5" style={{ background: featured ? "color-mix(in srgb, var(--accent) 12%, var(--surface2))" : "var(--surface2)", border: "1px solid var(--border)" }}>
+            <label className="flex cursor-pointer items-center gap-2 text-[13px] font-extrabold">
+              <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} />
+              ⭐ {locale === "fa" ? "محصول ویژه (در صفحهٔ اصلی و با نشان ویژه نمایش داده می‌شود)" : "Featured product"}
+            </label>
           </div>
           {/* per-cm pricing (rolls/fabric sold by length) */}
           <div className="sm:col-span-2 rounded-[12px] p-3.5" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>

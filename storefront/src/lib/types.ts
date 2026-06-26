@@ -33,6 +33,7 @@ export interface Product {
   cat: string;
   sub?: string; // subcategory slug (the subcategory's English/slug value)
   brand: string;
+  featured?: boolean; // highlighted product (special)
   price: number;
   old?: number;
   rating: number;

@@ -19,6 +19,7 @@ function sanitize(input: Record<string, unknown>, id: number): Product {
     cat: String(input.cat || "tech"),
     sub: input.sub ? String(input.sub) : undefined,
     brand: String(input.brand || ""),
+    featured: input.featured === true || input.featured === "true" ? true : undefined,
     price: n(input.price),
     old: input.old ? n(input.old) : undefined,
     rating: typeof input.rating === "number" ? input.rating : 4.5,
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
         if (!idSet.has(p.id)) continue;
         if (patch.cat) { p.cat = String(patch.cat); if (patch.sub === undefined) p.sub = undefined; }
         if (patch.sub !== undefined) p.sub = String(patch.sub).trim() || undefined;
+        if (patch.featured !== undefined) p.featured = patch.featured === true || patch.featured === "true" ? true : undefined;
         if (patch.brand !== undefined && String(patch.brand).trim()) p.brand = String(patch.brand).trim();
         if (patch.stock !== undefined && String(patch.stock).trim() !== "") { const v = num(patch.stock); if (!Number.isNaN(v)) p.stock = v; }
         if (patch.price !== undefined && String(patch.price).trim() !== "") { const v = num(patch.price); if (!Number.isNaN(v)) p.price = v; }
