@@ -80,5 +80,6 @@ function sanitize(p: Record<string, unknown>) {
     relatedProducts: Array.isArray(p.relatedProducts)
       ? (p.relatedProducts as unknown[]).map((x) => Number(x)).filter((n) => Number.isFinite(n)).slice(0, 12)
       : [],
+    featured: Boolean(p.featured),
   };
 }

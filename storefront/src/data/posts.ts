@@ -15,6 +15,7 @@ export interface Post {
   hue: number;
   cover?: string;
   relatedProducts?: number[];
+  featured?: boolean; // show in the blog hero slider
 }
 
 export const POSTS: Post[] = [

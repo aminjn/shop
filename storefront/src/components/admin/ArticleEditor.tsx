@@ -24,6 +24,7 @@ interface PostRow {
   date: string;
   genError?: string;
   relatedProducts?: number[];
+  featured?: boolean;
 }
 
 const blank = {
@@ -62,6 +63,7 @@ export function ArticleEditor() {
   const [relatedIds, setRelatedIds] = useState<number[]>([]);
   const [prodSearch, setProdSearch] = useState("");
   const [listFilter, setListFilter] = useState<"all" | "published" | "scheduled" | "queued" | "draft">("all");
+  const [featured, setFeatured] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = () =>
@@ -92,12 +94,13 @@ export function ArticleEditor() {
   const set = (k: keyof typeof blank, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const slugify = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}-]/gu, "").slice(0, 80);
 
-  const newPost = () => { setForm({ ...blank }); setEditing(false); setPublishAt(""); setAiTopic(""); setTitleSug([]); setRelatedIds([]); };
+  const newPost = () => { setForm({ ...blank }); setEditing(false); setPublishAt(""); setAiTopic(""); setTitleSug([]); setRelatedIds([]); setFeatured(false); };
   const editPost = (p: PostRow) => {
     setForm({ id: p.id, title: p.fa, slug: p.slug, catFa: p.catFa, tags: (p.tags || []).join("، "), cover: p.cover || "", excerpt: p.excerptFa, body: p.bodyFa, keyword: "", seoTitle: "", metaDesc: "" });
     setEditing(true);
     setPublishAt(p.publishAt || "");
     setRelatedIds(p.relatedProducts || []);
+    setFeatured(Boolean(p.featured));
     setTab("editor");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -236,6 +239,7 @@ export function ArticleEditor() {
         tags: form.tags.split(/[,،]/).map((x) => x.trim()).filter(Boolean),
         cover: form.cover || undefined,
         relatedProducts: relatedIds,
+        featured,
       };
       const body = { action: editing ? "update" : "create", id: form.id, status, publishAt: status === "scheduled" ? new Date(publishAt).toISOString() : undefined, post };
       const r = await fetch("/api/posts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -431,6 +435,13 @@ export function ArticleEditor() {
               </div>
 
               {/* cover */}
+              <div className="p-4" style={card}>
+                <label className="flex cursor-pointer items-center gap-2 text-[13px] font-bold">
+                  <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} />
+                  {fa ? "نمایش در اسلایدر بلاگ (ویژه)" : "Feature in blog slider"}
+                </label>
+              </div>
+
               <div className="p-4" style={card}>
                 <h3 className="mb-2 text-[13.5px] font-extrabold">{fa ? "تصویر شاخص" : "Cover image"}</h3>
                 {form.cover ? (
