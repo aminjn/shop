@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { catById } from "@/data/categories";
@@ -21,6 +21,9 @@ export function ProductDetail({ id }: { id: number }) {
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState<"desc" | "specs" | "reviews">("desc");
   const [showVideo, setShowVideo] = useState(false);
+  // pack/carton products start at one full carton
+  const packInit = p?.packSize && p.packSize > 1 ? p.packSize : 1;
+  useEffect(() => { setQty(packInit); }, [packInit]);
 
   if (!p) {
     return (
@@ -33,6 +36,8 @@ export function ProductDetail({ id }: { id: number }) {
 
   const name = locale === "fa" ? p.fa : p.en;
   const cat = catById(p.cat);
+  const pack = p.packSize && p.packSize > 1 ? p.packSize : 1; // units per carton (1 = normal)
+  const cartons = Math.max(1, Math.round(qty / pack));
   const disc = p.old ? Math.round((1 - p.price / p.old) * 100) : 0;
   const wished = wishlist.includes(p.id);
   const match = 88 + (p.id % 9);
@@ -164,12 +169,20 @@ export function ProductDetail({ id }: { id: number }) {
             </div>
           )}
 
+          {/* pack/carton note */}
+          {pack > 1 && (
+            <div className="mt-5 rounded-[12px] p-3.5 text-[13.5px]" style={{ background: "color-mix(in srgb, var(--accent) 9%, var(--surface))", border: "1px solid var(--border)" }}>
+              📦 <b>{locale === "fa" ? `این محصول کارتنی فروخته می‌شود — هر کارتن ${num(pack, locale)} عدد.` : `Sold by the carton — ${pack} units each.`}</b>
+              <div className="mt-1" style={{ color: "var(--muted)" }}>{locale === "fa" ? `قیمت هر کارتن: ` : `Price per carton: `}<b style={{ color: "var(--accent)" }}>{priceFmt(p.price * pack, locale, t.currency)}</b></div>
+            </div>
+          )}
+
           {/* qty + actions */}
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-3 rounded-[12px] px-2 py-1.5" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-              <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Minus size={16} /></button>
-              <span className="min-w-[24px] text-center text-[15px] font-bold">{num(qty, locale)}</span>
-              <button onClick={() => setQty((q) => q + 1)} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Plus size={16} /></button>
+              <button onClick={() => setQty((q) => Math.max(pack, q - pack))} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Minus size={16} /></button>
+              <span className="min-w-[24px] text-center text-[15px] font-bold">{pack > 1 ? `${num(cartons, locale)} ${locale === "fa" ? "کارتن" : "carton"}` : num(qty, locale)}</span>
+              <button onClick={() => setQty((q) => q + pack)} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Plus size={16} /></button>
             </div>
             <button onClick={() => addToCart(p.id, qty, color, size)} className="flex-1 cursor-pointer rounded-[12px] border-none px-6 py-3.5 text-[15px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.addToCart}</button>
             <button onClick={() => { addToCart(p.id, qty, color, size); router.push(`/${locale}/cart`); }} className="cursor-pointer rounded-[12px] px-6 py-3.5 text-[15px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{t.buyNow}</button>

@@ -120,22 +120,25 @@ export function ProductCard({
             ({num(p.reviews, locale)})
           </span>
         </div>
-        <div className="mb-3 mt-1.5 flex items-center gap-2">
+        <div className="mb-1 mt-1.5 flex items-center gap-2">
           <span className="text-[16px] font-extrabold" style={{ color: "var(--accent)" }}>
-            {priceFmt(p.price, locale, t.currency)}
+            {priceFmt(p.packSize && p.packSize > 1 ? p.price * p.packSize : p.price, locale, t.currency)}
           </span>
-          {p.old && (
+          {p.old && !(p.packSize && p.packSize > 1) && (
             <span className="text-[13px] line-through" style={{ color: "var(--muted)" }}>
               {num(p.old, locale)}
             </span>
           )}
         </div>
+        {p.packSize && p.packSize > 1 ? (
+          <div className="mb-3 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>📦 {locale === "fa" ? `کارتن ${num(p.packSize, locale)} عددی` : `Carton of ${p.packSize}`}</div>
+        ) : <div className="mb-3" />}
         <button
-          onClick={() => addToCart(p.id)}
+          onClick={() => addToCart(p.id, p.packSize && p.packSize > 1 ? p.packSize : 1)}
           className="add-btn mt-auto w-full cursor-pointer rounded-[10px] border p-2.5 text-[13px] font-bold transition"
           style={{ background: "var(--surface2)", color: "var(--text)", borderColor: "var(--border)" }}
         >
-          {t.addToCart}
+          {p.packSize && p.packSize > 1 ? (locale === "fa" ? "افزودن کارتن" : "Add carton") : t.addToCart}
         </button>
       </div>
     </div>

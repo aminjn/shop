@@ -52,6 +52,8 @@ export interface Product {
   variations?: Variation[];
   images?: string[];
   video?: string;
+  // pack/carton sales: sold only in multiples of packSize units (no single unit)
+  packSize?: number;
   // per-centimeter pricing (e.g. rolls/fabric sold by length)
   pricingType?: "unit" | "per_cm";
   pricePerCm?: number; // price for 1 cm of length

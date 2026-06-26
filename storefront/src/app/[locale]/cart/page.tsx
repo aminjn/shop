@@ -67,18 +67,21 @@ export default function CartPage() {
             const p = productById(line.id);
             if (!p) return null;
             const name = locale === "fa" ? p.fa : p.en;
+            const pack = p.packSize && p.packSize > 1 ? p.packSize : 1;
+            const dec = () => { if (line.qty - pack < pack) removeLine(line.key); else changeLine(line.key, -pack); };
             return (
               <div key={line.key} className="flex items-center gap-4 rounded-[16px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                 <LocaleLink href={`/product/${p.id}`} className="flex h-[88px] w-[88px] flex-none items-center justify-center rounded-[12px] text-[30px] font-extrabold no-underline" style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}>{name.charAt(0)}</LocaleLink>
                 <div className="min-w-0 flex-1">
                   <LocaleLink href={`/product/${p.id}`} className="block text-[15px] font-bold no-underline" style={{ color: "var(--text)" }}>{name}</LocaleLink>
                   <div className="mt-0.5 text-[12.5px]" style={{ color: "var(--muted)" }}>{p.brand}</div>
-                  <div className="mt-1 text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(p.price, locale, t.currency)}</div>
+                  <div className="mt-1 text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(p.price, locale, t.currency)}{pack > 1 ? <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}> / {locale === "fa" ? "عدد" : "unit"}</span> : null}</div>
+                  {pack > 1 && <div className="mt-0.5 text-[12px] font-bold" style={{ color: "var(--muted)" }}>📦 {locale === "fa" ? `${num(Math.round(line.qty / pack), locale)} کارتن (${num(line.qty, locale)} عدد)` : `${Math.round(line.qty / pack)} cartons (${line.qty} units)`}</div>}
                 </div>
                 <div className="flex items-center gap-2 rounded-[10px] px-1.5 py-1" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-                  <button onClick={() => changeLine(line.key, -1)} aria-label="-" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Minus size={14} /></button>
-                  <span className="min-w-[22px] text-center text-[14px] font-bold">{num(line.qty, locale)}</span>
-                  <button onClick={() => changeLine(line.key, 1)} aria-label="+" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Plus size={14} /></button>
+                  <button onClick={dec} aria-label="-" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Minus size={14} /></button>
+                  <span className="min-w-[22px] text-center text-[14px] font-bold">{pack > 1 ? `${num(Math.round(line.qty / pack), locale)}×` : num(line.qty, locale)}</span>
+                  <button onClick={() => changeLine(line.key, pack)} aria-label="+" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Plus size={14} /></button>
                 </div>
                 <button onClick={() => removeLine(line.key)} aria-label={t.remove} className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-[10px] border-none" style={{ background: "var(--surface2)", color: "#e11d48" }}><Trash size={16} /></button>
               </div>

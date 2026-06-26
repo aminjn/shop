@@ -50,6 +50,8 @@ export function ProductModal({
   const [video, setVideo] = useState(initial?.video ?? "");
   const [enBusy, setEnBusy] = useState(false);
   const [featured, setFeatured] = useState(!!initial?.featured);
+  const [packMode, setPackMode] = useState(!!(initial?.packSize && initial.packSize > 1));
+  const [packSize, setPackSize] = useState(String(initial?.packSize ?? ""));
   const [perCm, setPerCm] = useState(initial?.pricingType === "per_cm");
   const [pricePerCm, setPricePerCm] = useState(String(initial?.pricePerCm ?? ""));
   const [width, setWidth] = useState(String(initial?.width ?? ""));
@@ -108,6 +110,7 @@ export function ProductModal({
       sub: sub || undefined,
       brand,
       featured: featured || undefined,
+      packSize: packMode && Number(packSize) > 1 ? Number(packSize) : undefined,
       price: Number(price) || 0,
       old: Number(old) || undefined,
       rating: initial?.rating ?? 0,
@@ -230,6 +233,20 @@ export function ProductModal({
               <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} />
               ⭐ {locale === "fa" ? "محصول ویژه (در صفحهٔ اصلی و با نشان ویژه نمایش داده می‌شود)" : "Featured product"}
             </label>
+          </div>
+          {/* pack / carton sales */}
+          <div className="sm:col-span-2 rounded-[12px] p-3.5" style={{ background: packMode ? "color-mix(in srgb, var(--accent) 12%, var(--surface2))" : "var(--surface2)", border: "1px solid var(--border)" }}>
+            <label className="flex cursor-pointer items-center gap-2 text-[13px] font-extrabold">
+              <input type="checkbox" checked={packMode} onChange={(e) => setPackMode(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} />
+              📦 {locale === "fa" ? "فروش کارتنی / بسته‌ای (خرید تکی ممکن نیست)" : "Pack/carton sales (no single unit)"}
+            </label>
+            {packMode && (
+              <div className="mt-3">
+                {lbl(locale === "fa" ? "تعداد در هر کارتن" : "Units per carton")}
+                <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} inputMode="numeric" value={packSize} onChange={(e) => setPackSize(e.target.value)} placeholder={locale === "fa" ? "مثلاً ۱۰" : "e.g. 10"} />
+                <p className="mt-1.5 text-[12px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? `قیمت وارد شده، قیمت «هر عدد» است. هر کارتن = قیمت × تعداد. مشتری فقط مضربی از این تعداد می‌تواند بخرد.` : "Price is per unit; a carton = price × units."}</p>
+              </div>
+            )}
           </div>
           {/* per-cm pricing (rolls/fabric sold by length) */}
           <div className="sm:col-span-2 rounded-[12px] p-3.5" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
