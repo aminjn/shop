@@ -128,7 +128,7 @@ export function ArticleEditor() {
     const d = await r.json().catch(() => ({}));
     if (d.ok) return d;
     const m = `${d.detail || d.error || ""}`;
-    if (/quota|insufficient|balance|credit/i.test(m)) toast(fa ? "اعتبار حساب هوش مصنوعی (گپ‌جی‌پی‌تی) تمام شده — لطفاً حساب را شارژ کن" : "AI account out of credit — top up GapGPT");
+    if (/quota|insufficient|balance|credit/i.test(m)) toast(fa ? "اعتبار حساب سرویس هوش مصنوعی تمام شده — لطفاً حساب را شارژ کن" : "AI account out of credit — please top up");
     else if (d.error === "ai-unavailable") toast(fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید و مدل را ذخیره کن" : "AI not configured — set key in Settings → AI");
     else toast((fa ? "خطای هوش مصنوعی: " : "AI error: ") + m);
     return null;

@@ -1404,7 +1404,7 @@ function CategoriesAdmin() {
   const aiErr = (r: { error?: string; detail?: string }) => {
     const msg = `${r.detail || r.error || ""}`;
     if (/quota|insufficient|balance|credit|اعتبار/i.test(msg))
-      toast(fa ? "اعتبار حساب هوش مصنوعی (گپ‌جی‌پی‌تی) تمام شده — لطفاً حساب را شارژ کن" : "AI account out of credit — top up GapGPT");
+      toast(fa ? "اعتبار حساب سرویس هوش مصنوعی تمام شده — لطفاً حساب را شارژ کن" : "AI account out of credit — please top up");
     else if (r.error === "ai-unavailable")
       toast(fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید و مدل را ذخیره و تست کن" : "AI not configured");
     else toast((fa ? "خطای هوش مصنوعی: " : "AI error: ") + msg);
@@ -1474,7 +1474,7 @@ function CategoriesAdmin() {
             {form.subs.length === 0 && <span className="text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "زیردسته‌ای اضافه نشده" : "none"}</span>}
           </div>
           <div className="flex flex-wrap gap-2">
-            <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} value={subFa} onChange={(e) => setSubFa(e.target.value)} placeholder={fa ? "نام زیردسته (فارسی)" : "Sub (FA)"} onKeyDown={(e) => { if (e.key === "Enter") addSub(); }} />
+            <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} value={subFa} onChange={(e) => setSubFa(e.target.value)} placeholder={fa ? "نام زیردسته (فارسی)" : "Sub (FA)"} onKeyDown={(e) => { if (e.key === "Enter") addSub(); }} onBlur={async () => { if (subFa.trim() && !subEn.trim()) { const v = await translateOne(subFa.trim()); if (v) setSubEn(v); } }} />
             <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} value={subEn} onChange={(e) => setSubEn(e.target.value)} placeholder={fa ? "انگلیسی (اختیاری)" : "Sub (EN)"} dir="ltr" onKeyDown={(e) => { if (e.key === "Enter") addSub(); }} />
             <button onClick={addSub} className="cursor-pointer rounded-[10px] px-4 text-[13px] font-bold" style={inputStyle}>+ {fa ? "افزودن" : "Add"}</button>
           </div>
@@ -2379,7 +2379,7 @@ function Settings() {
         {/* AI settings (GapGPT) */}
         <Card className="p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[15px] font-extrabold">{fa ? "تنظیمات هوش مصنوعی (گپ‌جی‌پی‌تی)" : "AI settings (GapGPT)"}</h2>
+            <h2 className="text-[15px] font-extrabold">{fa ? "تنظیمات هوش مصنوعی" : "AI settings"}</h2>
             <span
               className="rounded-full px-3 py-1 text-[11.5px] font-extrabold"
               style={{
@@ -2393,8 +2393,8 @@ function Settings() {
 
           <p className="mb-4 text-[12.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
             {fa
-              ? "کلید API گپ‌جی‌پی‌تی را وارد کن و مدل را انتخاب کن. این تنظیمات برای جستجوی هوشمند و چت فروشگاه استفاده می‌شود. سازگار با OpenAI."
-              : "Enter your GapGPT API key and pick a model. Used for smart search and the store chat. OpenAI-compatible."}
+              ? "کلید API سرویس هوش مصنوعی خود را وارد کن، آدرس سرویس (Base URL) را بگذار و مدل را انتخاب کن. هر سرویس سازگار با OpenAI پشتیبانی می‌شود (مثل گپ‌جی‌پی‌تی، آوال‌ای‌آی، اوپن‌ای‌آی و …)."
+              : "Enter your AI service API key, Base URL, and pick a model. Any OpenAI-compatible service works."}
           </p>
 
           <div className="flex flex-col gap-3.5">
@@ -2433,7 +2433,7 @@ function Settings() {
               {aiModelsLoading
                 ? (fa ? "در حال دریافت لیست مدل‌ها…" : "Loading models…")
                 : aiModelsLive
-                  ? (fa ? `✓ ${num(aiModels.length, locale)} مدل از حساب گپ‌جی‌پی‌تی شما` : `✓ ${aiModels.length} models from your GapGPT account`)
+                  ? (fa ? `✓ ${num(aiModels.length, locale)} مدل از سرویس شما` : `✓ ${aiModels.length} models from your service`)
                   : (fa ? "لیست پیش‌فرض — برای دریافت لیست واقعی، کلید API را ذخیره کن" : "Default list — save your API key to fetch the live list")}
             </div>
             {/* per-section model selection */}
