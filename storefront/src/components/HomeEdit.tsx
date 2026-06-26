@@ -9,7 +9,7 @@ type BiKey = {
   [K in keyof HomeContent]: HomeContent[K] extends BiText ? K : never;
 }[keyof HomeContent];
 type NumKey = "heroHue" | "bannerHue" | "promoAHue";
-type ListKey = "examples" | "features" | "testimonials" | "faqs";
+type ListKey = "examples" | "features" | "testimonials" | "faqs" | "blocks";
 
 interface EditState {
   canEdit: boolean;

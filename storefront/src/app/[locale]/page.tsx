@@ -19,6 +19,7 @@ import { Countdown } from "@/components/Countdown";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Sparkle } from "@/components/Icons";
 import { HomeEditProvider, useHomeEdit, Ed, HueEdit, ListEdit } from "@/components/HomeEdit";
+import { HomeBlocks } from "@/components/HomeBlocks";
 
 const SECTION = "mx-auto max-w-[1280px] px-[22px]";
 
@@ -284,6 +285,9 @@ function HomeBody() {
           </section>
         );
       })()}
+
+      {/* Custom page-builder blocks (admin-added) */}
+      <HomeBlocks />
 
       {/* Testimonials — only when there are real reviews (or while editing) */}
       {(testimonials.length > 0 || edit?.editMode) && (

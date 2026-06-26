@@ -11,6 +11,22 @@ export interface HomeFeature { icon: string; fa: string; faSub: string; en: stri
 export interface HomeTestimonial { fa: string; faText: string; en: string; enText: string; rating: number }
 export interface HomeFaq { qFa: string; aFa: string; qEn: string; aEn: string }
 
+export type HomeBlockType = "hero" | "richtext" | "image" | "cta" | "products" | "spacer";
+export interface HomeBlock {
+  id: string;
+  type: HomeBlockType;
+  titleFa?: string; titleEn?: string;
+  textFa?: string; textEn?: string;
+  btnFa?: string; btnEn?: string;
+  href?: string;
+  image?: string;
+  hue?: number; // -1 = default surface
+  source?: "featured" | "newest" | "bestsellers" | "onsale";
+  cat?: string;
+  height?: number; // spacer
+  align?: "start" | "center";
+}
+
 export interface HomeContent {
   // dictionary-overridable texts — empty means "use the built-in translation"
   heroBadge: BiText; heroTitle: BiText; heroSub: BiText;
@@ -27,6 +43,8 @@ export interface HomeContent {
   features: HomeFeature[];
   testimonials: HomeTestimonial[];
   faqs: HomeFaq[];
+  // custom drag-free page-builder blocks rendered after the main content
+  blocks: HomeBlock[];
 }
 
 const empty = (): BiText => ({ fa: "", en: "" });
@@ -53,6 +71,7 @@ export const HOME_DEFAULT: HomeContent = {
   ],
   // empty by default — the store owner adds real customer reviews from the editor
   testimonials: [],
+  blocks: [],
   faqs: [
     { qFa: "چطور سفارش ثبت کنم؟", aFa: "محصول را به سبد اضافه کنید و مراحل تسویه را تکمیل کنید؛ پرداخت آنلاین، کیف پول یا پرداخت در محل.", qEn: "How do I place an order?", aEn: "Add to cart and complete checkout — pay online, by wallet or cash on delivery." },
     { qFa: "زمان ارسال چقدر است؟", aFa: "ارسال عادی ۳ تا ۵ روز کاری و ارسال اکسپرس طی ۲۴ ساعت انجام می‌شود.", qEn: "How long is delivery?", aEn: "Standard takes 3–5 business days, express within 24 hours." },
