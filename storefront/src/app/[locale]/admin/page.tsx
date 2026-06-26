@@ -13,7 +13,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 import { UploadButton } from "@/components/UploadButton";
 import { ArticleEditor } from "@/components/admin/ArticleEditor";
 import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
-import { translateOne, translateBatch } from "@/lib/aitranslate";
+import { translateOne, translateWithStatus } from "@/lib/aitranslate";
 import {
   Grid,
   List,
@@ -1401,21 +1401,26 @@ function CategoriesAdmin() {
   };
   const autoEnCat = async () => { if (form.fa.trim() && !form.en.trim()) { const v = await translateOne(form.fa.trim()); if (v) setForm((f) => ({ ...f, en: v })); } };
   const [aiBusy, setAiBusy] = useState(false);
+  const aiErr = (r: { error?: string; detail?: string }) =>
+    toast(r.error === "ai-unavailable"
+      ? (fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید و مدل را ذخیره و تست کن" : "AI not configured")
+      : (fa ? "خطای هوش مصنوعی: " : "AI error: ") + (r.detail || r.error || ""));
   // explicit "complete with AI" — translates the name (overwrites) + any subs missing English
   const fillEnCat = async () => {
     if (!form.fa.trim()) { toast(fa ? "اول نام فارسی را بنویس" : "Enter Persian name"); return; }
     setAiBusy(true);
     try {
-      const v = await translateOne(form.fa.trim());
-      if (v) setForm((f) => ({ ...f, en: v }));
       const need = form.subs.filter(([f1, e1]) => !e1 || e1 === f1);
-      if (need.length) {
-        const res = await translateBatch(need.map(([f1]) => f1));
+      const r = await translateWithStatus([form.fa.trim(), ...need.map(([f1]) => f1)]);
+      if (!r.ok) { aiErr(r); return; }
+      const [nameEn, ...subEn] = r.results;
+      setForm((f) => {
         let i = 0;
-        setForm((f) => ({ ...f, subs: f.subs.map(([f1, e1]) => (!e1 || e1 === f1 ? [f1, res[i++] || e1 || f1] : [f1, e1]) as [string, string]) }));
-      }
-      toast(fa ? "انگلیسی تکمیل شد ✓" : "Completed ✓");
-    } catch { toast(fa ? "خطا" : "Error"); } finally { setAiBusy(false); }
+        const subs = f.subs.map(([f1, e1]) => (!e1 || e1 === f1 ? [f1, subEn[i++] || e1 || f1] : [f1, e1]) as [string, string]);
+        return { ...f, en: nameEn || f.en, subs };
+      });
+      toast(nameEn ? (fa ? "انگلیسی تکمیل شد ✓" : "Completed ✓") : (fa ? "ترجمه‌ای دریافت نشد" : "No result"));
+    } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setAiBusy(false); }
   };
   const rmSub = (i: number) => setForm((f) => ({ ...f, subs: f.subs.filter((_, x) => x !== i) }));
 
@@ -1443,7 +1448,14 @@ function CategoriesAdmin() {
         <div className="grid gap-3 sm:grid-cols-2">
           <div>{lbl(fa ? "نام (فارسی)" : "Name (FA)")}<input className={inputCls} style={inputStyle} value={form.fa} onChange={(e) => setForm((f) => ({ ...f, fa: e.target.value }))} onBlur={autoEnCat} /></div>
           <div>{lbl(fa ? "نام انگلیسی (خودکار)" : "Name (EN)")}<input className={inputCls} style={inputStyle} value={form.en} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" placeholder={fa ? "خودکار از فارسی" : "auto"} /></div>
-          <div>{lbl(fa ? "رنگ (۰ تا ۳۶۰)" : "Hue")}<input className={inputCls} style={inputStyle} type="number" min={0} max={360} value={form.hue} onChange={(e) => setForm((f) => ({ ...f, hue: Number(e.target.value) || 0 }))} dir="ltr" /></div>
+          <div className="sm:col-span-2">
+            {lbl(fa ? "رنگ دسته" : "Color")}
+            <div className="flex items-center gap-3">
+              <span className="h-10 w-10 flex-none rounded-[10px]" style={{ background: `hsl(${form.hue} 70% 55%)`, border: "1px solid var(--border)" }} />
+              <input type="range" min={0} max={360} value={form.hue} onChange={(e) => setForm((f) => ({ ...f, hue: Number(e.target.value) || 0 }))} className="h-2 flex-1 cursor-pointer" style={{ accentColor: `hsl(${form.hue} 70% 55%)` }} />
+              <input type="number" min={0} max={360} value={form.hue} onChange={(e) => setForm((f) => ({ ...f, hue: Math.min(360, Math.max(0, Number(e.target.value) || 0)) }))} className="w-[72px] rounded-[10px] px-2.5 py-2 text-[13px] outline-none" style={inputStyle} dir="ltr" />
+            </div>
+          </div>
         </div>
         {/* subs */}
         <div className="mt-3">
@@ -1579,7 +1591,7 @@ function MenuAdmin() {
         </div>
         <div className="mt-3 flex gap-2">
           <button onClick={saveLink} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره" : "Save") : fa ? "افزودن لینک" : "Add link"}</button>
-          <button onClick={async () => { if (!form.fa.trim()) { toast(fa ? "اول عنوان فارسی" : "Persian first"); return; } const v = await translateOne(form.fa.trim()); if (v) setForm((f) => ({ ...f, en: v })); }} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={{ ...inputStyle, color: "var(--accent)" }}><Sparkle size={15} /> {fa ? "تکمیل انگلیسی" : "AI English"}</button>
+          <button onClick={async () => { if (!form.fa.trim()) { toast(fa ? "اول عنوان فارسی" : "Persian first"); return; } const r = await translateWithStatus([form.fa.trim()]); if (r.ok && r.results[0]) { setForm((f) => ({ ...f, en: r.results[0]! })); toast(fa ? "انگلیسی تکمیل شد ✓" : "Done ✓"); } else toast(r.error === "ai-unavailable" ? (fa ? "هوش مصنوعی تنظیم نشده" : "AI not configured") : (fa ? "خطای هوش مصنوعی: " : "AI error: ") + (r.detail || r.error || "")); }} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={{ ...inputStyle, color: "var(--accent)" }}><Sparkle size={15} /> {fa ? "تکمیل انگلیسی" : "AI English"}</button>
           {editing && <button onClick={startNew} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>}
         </div>
         {items.length > 0 && (

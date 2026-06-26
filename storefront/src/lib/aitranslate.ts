@@ -1,8 +1,9 @@
 "use client";
 
-/** Auto-translate Persian admin inputs to English via the AI endpoint.
- *  Best-effort: returns nulls if AI is unavailable so callers can no-op. */
-export async function translateBatch(texts: string[], slug = false): Promise<(string | null)[]> {
+/** Auto-translate Persian admin inputs to English via the AI endpoint. */
+export interface TranslateResult { ok: boolean; results: (string | null)[]; error?: string; detail?: string }
+
+export async function translateWithStatus(texts: string[], slug = false): Promise<TranslateResult> {
   try {
     const r = await fetch("/api/ai/translate", {
       method: "POST",
@@ -10,9 +11,15 @@ export async function translateBatch(texts: string[], slug = false): Promise<(st
       body: JSON.stringify({ texts, slug }),
     });
     const d = await r.json().catch(() => ({}));
-    if (d.ok && Array.isArray(d.results)) return d.results.map((x: unknown) => (x ? String(x) : null));
-  } catch { /* ignore */ }
-  return texts.map(() => null);
+    if (d.ok && Array.isArray(d.results)) return { ok: true, results: d.results.map((x: unknown) => (x ? String(x) : null)) };
+    return { ok: false, results: texts.map(() => null), error: d.error, detail: d.detail };
+  } catch {
+    return { ok: false, results: texts.map(() => null), error: "network" };
+  }
+}
+
+export async function translateBatch(texts: string[], slug = false): Promise<(string | null)[]> {
+  return (await translateWithStatus(texts, slug)).results;
 }
 
 export async function translateOne(text: string): Promise<string | null> {
