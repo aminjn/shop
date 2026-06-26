@@ -139,7 +139,10 @@ export function ProductModal({
           </div>
           <div>
             {lbl((locale === "fa" ? "نام (انگلیسی)" : "Name (English)") + (enBusy ? (locale === "fa" ? " — در حال ترجمه…" : " — translating…") : ""))}
-            <input className={inputCls} style={inputStyle} value={en} onChange={(e) => setEn(e.target.value)} dir="ltr" placeholder={locale === "fa" ? "خودکار از روی نام فارسی" : "auto from Persian"} />
+            <div className="flex gap-2">
+              <input className={inputCls} style={inputStyle} value={en} onChange={(e) => setEn(e.target.value)} dir="ltr" placeholder={locale === "fa" ? "خودکار از روی نام فارسی" : "auto from Persian"} />
+              <button type="button" onClick={async () => { if (!fa.trim()) return; setEnBusy(true); const v = await translateOne(fa); if (v) setEn(v); setEnBusy(false); }} disabled={enBusy} title={locale === "fa" ? "تکمیل با هوش مصنوعی" : "AI complete"} className="flex-none cursor-pointer rounded-[10px] px-3 text-[13px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--accent)" }}>✨</button>
+            </div>
           </div>
           <div>
             {lbl(t.thCat)}

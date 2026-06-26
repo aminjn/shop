@@ -375,32 +375,43 @@ export function Header() {
               boxShadow: "0 24px 50px rgba(0,0,0,.16)",
             }}
           >
-            <div className="mx-auto grid max-w-[1280px] grid-cols-[1fr_1fr_1fr_1.3fr] gap-[26px] px-[22px] py-6">
-              {mega.subs.map(([fa, en], i) => (
-                <LocaleLink
-                  key={i}
-                  href={`/shop?cat=${mega.id}`}
-                  className="link-accent flex items-center gap-2 py-1.5 text-[14px] no-underline"
-                  style={{ color: "var(--text)", textAlign: "start" }}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--accent)" }} />
-                  {locale === "fa" ? fa : en}
-                </LocaleLink>
-              ))}
-              <div
-                className="flex min-h-[150px] flex-col justify-end rounded-[14px] p-[18px] text-white"
+            <div className="mx-auto flex max-w-[1280px] items-stretch gap-5 px-[22px] py-4">
+              <div className="flex-1">
+                <div className="mb-2 flex items-center gap-2 text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>
+                  <span className="h-2 w-2 rounded-full" style={{ background: `hsl(${mega.hue} 70% 55%)` }} />
+                  {locale === "fa" ? mega.fa : mega.en}
+                  <span style={{ opacity: 0.5 }}>•</span>
+                  {locale === "fa" ? "زیردسته‌ها" : "Subcategories"}
+                </div>
+                {mega.subs.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-1">
+                    {mega.subs.map(([fa, en], i) => (
+                      <LocaleLink
+                        key={i}
+                        href={`/shop?cat=${mega.id}`}
+                        className="row-hover flex items-center gap-2 rounded-[9px] px-3 py-2 text-[13.5px] font-semibold no-underline"
+                        style={{ color: "var(--text)", textAlign: "start" }}
+                      >
+                        <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: "var(--accent)" }} />
+                        <span className="truncate">{locale === "fa" ? fa : en}</span>
+                      </LocaleLink>
+                    ))}
+                  </div>
+                ) : (
+                  <LocaleLink href={`/shop?cat=${mega.id}`} className="text-[13.5px] font-bold no-underline" style={{ color: "var(--accent)" }}>{t.viewAll}</LocaleLink>
+                )}
+              </div>
+              <LocaleLink
+                href={`/shop?cat=${mega.id}`}
+                className="flex w-[230px] flex-none flex-col justify-end rounded-[14px] p-4 text-white no-underline"
                 style={{ background: grad(mega.hue, dark) }}
               >
-                <div className="text-[12px] font-bold opacity-85">{t.megaPromo}</div>
-                <div className="mt-1 text-[20px] font-extrabold">{locale === "fa" ? mega.fa : mega.en}</div>
-                <LocaleLink
-                  href={`/shop?cat=${mega.id}`}
-                  className="mt-3 self-start rounded-[9px] bg-white px-4 py-2 text-[13px] font-bold no-underline"
-                  style={{ color: "#111" }}
-                >
-                  {t.viewAll}
-                </LocaleLink>
-              </div>
+                <div className="text-[11.5px] font-bold opacity-85">{t.megaPromo}</div>
+                <div className="mt-0.5 text-[18px] font-extrabold">{locale === "fa" ? mega.fa : mega.en}</div>
+                <span className="mt-2.5 inline-flex w-fit items-center gap-1 rounded-[9px] bg-white px-3.5 py-1.5 text-[12.5px] font-bold" style={{ color: "#111" }}>
+                  {t.viewAll} <span className="dir-flip"><ChevronDown size={12} style={{ transform: "rotate(-90deg)" }} /></span>
+                </span>
+              </LocaleLink>
             </div>
           </div>
         )}
