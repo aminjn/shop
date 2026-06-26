@@ -1,14 +1,16 @@
 import type { MetadataRoute } from "next";
+import { siteOrigin, getSeo } from "@/lib/seo";
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://example.com";
+export const dynamic = "force-dynamic";
 
 export default function robots(): MetadataRoute.Robots {
+  const BASE = siteOrigin();
+  const seo = getSeo();
   return {
-    rules: {
-      userAgent: "*",
-      allow: "/",
-      disallow: ["/admin"],
-    },
+    rules: seo.noindex
+      ? { userAgent: "*", disallow: "/" }
+      : { userAgent: "*", allow: "/", disallow: ["/fa/admin", "/en/admin", "/api/"] },
     sitemap: `${BASE}/sitemap.xml`,
+    host: BASE,
   };
 }

@@ -6,6 +6,7 @@ import { CATEGORIES } from "@/data/categories";
 import type { Product } from "@/lib/types";
 import type { HomeContent, BiText, HomeFeature, HomeTestimonial, HomeFaq } from "@/lib/home";
 import type { ShipMethod, PayMethod } from "@/lib/settings";
+import type { SeoSettings } from "@/lib/seo";
 import type { Post } from "@/data/posts";
 import type { OrderStatus } from "@/lib/userstore";
 import { grad, priceFmt, num, formatDate } from "@/lib/format";
@@ -40,6 +41,7 @@ type Section =
   | "blog"
   | "reports"
   | "ai"
+  | "seo"
   | "settings";
 
 /* ---------- shared data types (mirror the API responses) ---------- */
@@ -161,6 +163,7 @@ export default function AdminPage() {
     { id: "blog", label: fa ? "مقالات" : "Articles" },
     { id: "reports", label: t.aReports },
     { id: "ai", label: t.aAi },
+    { id: "seo", label: fa ? "سئو" : "SEO" },
     { id: "settings", label: t.aSettings },
   ];
 
@@ -310,6 +313,7 @@ export default function AdminPage() {
           {section === "blog" && <ArticleEditor />}
           {section === "reports" && <Reports />}
           {section === "ai" && <AiStudio />}
+          {section === "seo" && <SeoAdmin />}
           {section === "settings" && <Settings />}
         </section>
       </div>
@@ -1737,6 +1741,130 @@ function ListEditor({ kind, rows, fa, onChange }: { kind: "examples" | "features
       ))}
       <button onClick={add} className="cursor-pointer self-start rounded-[10px] px-4 py-2 text-[13px] font-bold" style={inputStyle}>+ {fa ? "افزودن" : "Add"}</button>
     </div>
+  );
+}
+
+/* ---------- SEO & schema management ---------- */
+
+function SeoAdmin() {
+  const { locale, toast } = useShop();
+  const fa = locale === "fa";
+  const [seo, setSeo] = useState<SeoSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { fetch("/api/seo").then((r) => r.json()).then((d) => d?.seo && setSeo(d.seo)).catch(() => {}); }, []);
+  if (!seo) return <><H1>{fa ? "سئو" : "SEO"}</H1><Empty text={fa ? "در حال بارگذاری…" : "Loading…"} /></>;
+
+  const set = <K extends keyof SeoSettings>(k: K, v: SeoSettings[K]) => setSeo((s) => (s ? { ...s, [k]: v } : s));
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch("/api/seo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seo }) });
+      const d = await r.json();
+      if (d.ok) { setSeo(d.seo); toast(fa ? "سئو ذخیره شد ✓ (برای اعمال کامل، دیپلوی/Purge کن)" : "Saved ✓"); }
+      else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+    } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setSaving(false); }
+  };
+
+  const fld = (k: keyof SeoSettings, label: string, ph = "", area = false, ltr = true) => (
+    <div>
+      {lbl(label)}
+      {area
+        ? <textarea className={inputCls} style={{ ...inputStyle, minHeight: 70 }} dir={ltr ? "ltr" : "rtl"} value={String(seo[k] ?? "")} placeholder={ph} onChange={(e) => set(k, e.target.value as SeoSettings[typeof k])} />
+        : <input className={inputCls} style={inputStyle} dir={ltr ? "ltr" : "rtl"} value={String(seo[k] ?? "")} placeholder={ph} onChange={(e) => set(k, e.target.value as SeoSettings[typeof k])} />}
+    </div>
+  );
+
+  const check = (ok: boolean, label: string) => (
+    <div className="flex items-center gap-2 text-[12.5px]"><span style={{ color: ok ? "#1f8a5b" : "#d97706" }}>{ok ? "✓" : "•"}</span><span style={{ color: ok ? "var(--text)" : "var(--muted)" }}>{label}</span></div>
+  );
+
+  return (
+    <>
+      <H1>{fa ? "سئو و داده‌های ساختاریافته" : "SEO & structured data"}</H1>
+      <p className="mb-4 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "مدیریت کامل سئوی سایت: عنوان و توضیحات، اتصال به گوگل، اسکیما/Schema، آنالیتیکس، نقشهٔ سایت و robots." : "Full SEO control: titles, Google integration, schema, analytics, sitemap & robots."}</p>
+
+      {/* status */}
+      <Card className="mb-5 p-5">
+        <h2 className="mb-3 text-[14px] font-extrabold">{fa ? "وضعیت سئو" : "SEO status"}</h2>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {check(!!seo.siteUrl, fa ? "آدرس سایت (برای canonical و نقشهٔ سایت)" : "Site URL set")}
+          {check(!!seo.defaultDescription, fa ? "توضیحات متا تنظیم شده" : "Meta description set")}
+          {check(!!seo.ogImage, fa ? "تصویر اشتراک‌گذاری (OG) تنظیم شده" : "OG image set")}
+          {check(!!seo.googleVerification, fa ? "تأیید گوگل سرچ‌کنسول" : "Google verification")}
+          {check(!!(seo.gaId || seo.gtmId), fa ? "آنالیتیکس (GA4/GTM) متصل" : "Analytics connected")}
+          {check(!!seo.orgName, fa ? "اسکیمای سازمان (Organization)" : "Organization schema")}
+          {check(!seo.noindex, fa ? "ایندکس شدن سایت فعال است" : "Indexing enabled")}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href="/sitemap.xml" target="_blank" rel="noreferrer" className="rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold no-underline" style={{ ...inputStyle, color: "var(--accent)" }}>sitemap.xml ↗</a>
+          <a href="/robots.txt" target="_blank" rel="noreferrer" className="rounded-[9px] px-3 py-1.5 text-[12.5px] font-bold no-underline" style={{ ...inputStyle, color: "var(--accent)" }}>robots.txt ↗</a>
+        </div>
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-3 text-[14px] font-extrabold">{fa ? "عمومی" : "General"}</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fld("siteUrl", fa ? "آدرس سایت" : "Site URL", "https://tebtamin.ir")}
+          {fld("titleTemplate", fa ? "الگوی عنوان (%s = عنوان صفحه)" : "Title template", "%s | تامین طب")}
+          <div className="sm:col-span-2">{fld("defaultTitle", fa ? "عنوان پیش‌فرض / صفحهٔ اصلی" : "Default title", "", false, false)}</div>
+          <div className="sm:col-span-2">{fld("defaultDescription", fa ? "توضیحات متا (حداکثر ۱۶۰ کاراکتر)" : "Meta description", "", true, false)}</div>
+          <div className="sm:col-span-2">{fld("keywords", fa ? "کلمات کلیدی (با ویرگول)" : "Keywords", "", false, false)}</div>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            {lbl(fa ? "تصویر اشتراک‌گذاری (OG/Twitter)" : "Social share image")}
+            <div className="flex items-center gap-3">
+              {seo.ogImage && /* eslint-disable-next-line @next/next/no-img-element */ <img src={seo.ogImage} alt="og" className="h-12 w-20 rounded-[8px] object-cover" style={{ border: "1px solid var(--border)" }} />}
+              <UploadButton accept="image/*" label={fa ? "آپلود تصویر" : "Upload"} onUploaded={(url) => set("ogImage", url)} />
+              {seo.ogImage && <button onClick={() => set("ogImage", "")} className="cursor-pointer border-none bg-transparent text-[12px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>}
+            </div>
+          </div>
+          {fld("twitterHandle", fa ? "آیدی توییتر/X" : "Twitter handle", "@tebtamin")}
+        </div>
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-3 text-[14px] font-extrabold">{fa ? "اتصال به گوگل و موتورهای جستجو" : "Google & search engines"}</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fld("googleVerification", fa ? "کد تأیید گوگل سرچ‌کنسول" : "Google Search Console verification", "google-site-verification token")}
+          {fld("bingVerification", fa ? "کد تأیید بینگ" : "Bing verification", "msvalidate.01 token")}
+          {fld("gaId", fa ? "شناسهٔ Google Analytics (GA4)" : "GA4 Measurement ID", "G-XXXXXXXXXX")}
+          {fld("gtmId", fa ? "شناسهٔ Google Tag Manager" : "GTM ID", "GTM-XXXXXXX")}
+        </div>
+        <p className="mt-2 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "فقط کد/توکن را وارد کن (نه تگ کامل). بعد از ذخیره، تگ تأیید گوگل در همهٔ صفحات قرار می‌گیرد." : "Enter only the token/ID, not the full tag."}</p>
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-3 text-[14px] font-extrabold">{fa ? "اسکیمای سازمان (Schema.org)" : "Organization schema"}</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fld("orgName", fa ? "نام سازمان/برند" : "Organization name", "", false, false)}
+          <div>
+            {lbl(fa ? "لوگو (برای اسکیما)" : "Logo")}
+            <div className="flex items-center gap-3">
+              {seo.orgLogo && /* eslint-disable-next-line @next/next/no-img-element */ <img src={seo.orgLogo} alt="logo" className="h-10 w-10 rounded-[8px] object-contain" style={{ border: "1px solid var(--border)" }} />}
+              <UploadButton accept="image/*" label={fa ? "آپلود" : "Upload"} onUploaded={(url) => set("orgLogo", url)} />
+            </div>
+          </div>
+          {fld("phone", fa ? "تلفن" : "Phone", "+98...")}
+          {fld("email", fa ? "ایمیل" : "Email", "info@...")}
+          <div className="sm:col-span-2">{fld("address", fa ? "آدرس" : "Address", "", false, false)}</div>
+          <div className="sm:col-span-2">{fld("sameAs", fa ? "شبکه‌های اجتماعی (هر کدام در یک خط)" : "Social profiles (one per line)", "https://instagram.com/...", true)}</div>
+        </div>
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-3 text-[14px] font-extrabold">{fa ? "ایندکس و robots" : "Indexing & robots"}</h2>
+        <label className="flex cursor-pointer items-center gap-2 text-[13.5px] font-bold">
+          <input type="checkbox" checked={seo.noindex} onChange={(e) => set("noindex", e.target.checked)} style={{ accentColor: "var(--accent)" }} />
+          {fa ? "جلوگیری از ایندکس کل سایت (noindex)" : "Block indexing (noindex)"}
+        </label>
+        <p className="mt-1 mb-3 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "اگر روشن باشد، گوگل سایت را ایندکس نمی‌کند (برای زمان توسعه)." : "When on, search engines won't index the site."}</p>
+        {fld("robotsExtra", fa ? "خطوط اضافهٔ robots.txt (اختیاری)" : "Extra robots.txt lines", "Disallow: /private", true)}
+      </Card>
+
+      <button onClick={save} disabled={saving} className="cursor-pointer rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>{saving ? (fa ? "در حال ذخیره…" : "Saving…") : fa ? "ذخیره تنظیمات سئو" : "Save SEO settings"}</button>
+    </>
   );
 }
 
