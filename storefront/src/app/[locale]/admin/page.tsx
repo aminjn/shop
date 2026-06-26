@@ -1401,10 +1401,14 @@ function CategoriesAdmin() {
   };
   const autoEnCat = async () => { if (form.fa.trim() && !form.en.trim()) { const v = await translateOne(form.fa.trim()); if (v) setForm((f) => ({ ...f, en: v })); } };
   const [aiBusy, setAiBusy] = useState(false);
-  const aiErr = (r: { error?: string; detail?: string }) =>
-    toast(r.error === "ai-unavailable"
-      ? (fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید و مدل را ذخیره و تست کن" : "AI not configured")
-      : (fa ? "خطای هوش مصنوعی: " : "AI error: ") + (r.detail || r.error || ""));
+  const aiErr = (r: { error?: string; detail?: string }) => {
+    const msg = `${r.detail || r.error || ""}`;
+    if (/quota|insufficient|balance|credit|اعتبار/i.test(msg))
+      toast(fa ? "اعتبار حساب هوش مصنوعی (گپ‌جی‌پی‌تی) تمام شده — لطفاً حساب را شارژ کن" : "AI account out of credit — top up GapGPT");
+    else if (r.error === "ai-unavailable")
+      toast(fa ? "هوش مصنوعی تنظیم نشده — در «تنظیمات ← هوش مصنوعی» کلید و مدل را ذخیره و تست کن" : "AI not configured");
+    else toast((fa ? "خطای هوش مصنوعی: " : "AI error: ") + msg);
+  };
   // explicit "complete with AI" — translates the name (overwrites) + any subs missing English
   const fillEnCat = async () => {
     if (!form.fa.trim()) { toast(fa ? "اول نام فارسی را بنویس" : "Enter Persian name"); return; }
