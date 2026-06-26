@@ -578,7 +578,10 @@ export function ArticleEditor() {
           <div className="flex flex-col gap-2">
             {shown.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-[10px] px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold" title={p.genError ? (fa ? "علت خطا: " : "Error: ") + p.genError : undefined}>{p.fa}</span>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-[13.5px] font-bold" title={p.genError ? (fa ? "علت خطا: " : "Error: ") + p.genError : undefined}>{p.fa}</span>
+                  {p.genError && <span className="block truncate text-[11.5px] font-bold" style={{ color: "#e11d48" }} title={p.genError}>⚠ {p.genError}</span>}
+                </div>
                 {statusBadge(p.status, p.genError)}
                 <span className="text-[12px]" style={{ color: "var(--muted)" }}>{(p.status === "scheduled" || p.status === "queued") && p.publishAt ? formatDate(p.publishAt, locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : formatDate(p.date, locale, { month: "short", day: "numeric" })}</span>
                 {p.genError && <button onClick={() => retryGen(p.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>↻ {fa ? "تلاش مجدد" : "Retry"}</button>}

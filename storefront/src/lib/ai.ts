@@ -85,14 +85,18 @@ export async function callAIDetailed(
   // model rejects it (token/length/context error) we step down automatically.
   const want = Math.max(256, maxTokens);
   const caps = [Math.min(16000, want), Math.min(8192, want), Math.min(4096, want), 2048];
+  // Try the requested model first, then fall back to the global default model
+  // (a per-section model saved for an old provider may not exist on the new one).
+  const modelQueue = [...new Set([model || c.model, c.model].filter(Boolean))];
+  let mi = 0;
   let lastErr = "";
   let tokenParam: "max_tokens" | "max_completion_tokens" = "max_tokens";
 
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const cap = caps[Math.min(attempt, caps.length - 1)];
     try {
       const body: Record<string, unknown> = {
-        model: model || c.model,
+        model: modelQueue[mi] || c.model,
         messages: [{ role: "system", content: system }, ...messages],
       };
       body[tokenParam] = cap;
@@ -119,6 +123,11 @@ export async function callAIDetailed(
         if (tokenParam === "max_tokens" && /max_completion_tokens|unsupported.*max_tokens|'max_tokens'/i.test(msg)) {
           tokenParam = "max_completion_tokens";
           continue; // retry immediately with the other param name
+        }
+        // a bad/unknown model → try the next model in the queue (e.g. default)
+        if (/model|does not exist|no such model|not found|invalid.*model|unsupported model/i.test(msg) && mi < modelQueue.length - 1) {
+          mi++;
+          continue;
         }
         // other 4xx (bad model/auth) won't fix themselves — stop, unless token-size
         if (res.status >= 400 && res.status < 500 && res.status !== 429) {
