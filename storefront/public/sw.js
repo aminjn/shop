@@ -1,7 +1,7 @@
 /* Simple PWA service worker: precache the app shell, network-first for
    navigations (so updates show), cache-first for static assets, never
    touch API/admin requests. */
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC_CACHE = "static-" + VERSION;
 const PAGE_CACHE = "pages-" + VERSION;
 const OFFLINE_URL = "/fa";
