@@ -189,11 +189,12 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
         </div>
       ))}
       {editing && (
-        <div className="my-4 rounded-[14px] p-4" style={{ background: "color-mix(in srgb, var(--accent) 6%, var(--surface))", border: "1.5px dashed rgba(99,102,241,.6)" }}>
-          <div className="mb-2 text-[12.5px] font-extrabold" style={{ color: "var(--accent)" }}>+ {fa ? "افزودن بلوک جدید" : "Add a block"}</div>
+        <div className="my-4 rounded-[16px] p-5" style={{ background: "color-mix(in srgb, var(--accent) 9%, var(--surface))", border: "2px dashed rgba(99,102,241,.7)" }}>
+          <div className="mb-1 text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>🧱 {fa ? "بلوک‌ساز — افزودن بخش جدید به این صفحه" : "Block builder — add a section"}</div>
+          <div className="mb-3 text-[12.5px]" style={{ color: "var(--muted)" }}>{fa ? "یک نوع بلوک را انتخاب کن تا به صفحه اضافه شود؛ بعد با ⚙ آن را تنظیم کن." : "Pick a block type to add it, then tune it with ⚙."}</div>
           <div className="flex flex-wrap gap-2">
             {ADD.map((a) => (
-              <button key={a.type} onClick={() => add(a.type)} className="cursor-pointer rounded-[10px] px-3.5 py-2 text-[13px] font-bold" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>{a.label}</button>
+              <button key={a.type} onClick={() => add(a.type)} className="cursor-pointer rounded-[10px] px-4 py-2.5 text-[13.5px] font-bold" style={{ background: "var(--accent)", border: "none", color: "#fff" }}>+ {a.label}</button>
             ))}
           </div>
         </div>

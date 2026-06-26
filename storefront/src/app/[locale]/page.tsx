@@ -18,7 +18,7 @@ import { AiSearchBox } from "@/components/AiSearchBox";
 import { Countdown } from "@/components/Countdown";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Sparkle } from "@/components/Icons";
-import { HomeEditProvider, useHomeEdit, Ed, HueEdit, ListEdit } from "@/components/HomeEdit";
+import { HomeEditProvider, useHomeEdit, Ed, HueEdit, LinkEdit, ListEdit } from "@/components/HomeEdit";
 import { HomeBlocks } from "@/components/HomeBlocks";
 
 const SECTION = "mx-auto max-w-[1280px] px-[22px]";
@@ -125,6 +125,7 @@ function HomeBody() {
         <div className="grid gap-[18px] md:grid-cols-[2fr_1fr]">
           <div className="relative flex min-h-[380px] items-center overflow-hidden rounded-[22px]" style={{ background: grad(hue(home?.bannerHue, 255), dark) }}>
             <HueEdit k="bannerHue" />
+            <LinkEdit k="bannerCtaHref" />
             <div className="relative z-[2] max-w-[540px] p-12 text-white">
               <Ed k="bannerBadge" fallback={t.heroBadge} className="inline-block rounded-[30px] px-3.5 py-[7px] text-[12.5px] font-bold" style={{ background: "rgba(255,255,255,.2)", backdropFilter: "blur(6px)" }} />
               <Ed as="h2" k="bannerTitle" fallback={t.heroTitle} className="mt-4 block text-[46px] font-black leading-[1.12] tracking-tight" />
@@ -142,11 +143,13 @@ function HomeBody() {
           <div className="flex flex-col gap-[18px]">
             <LocaleLink href={home?.promoAHref || "/shop"} className="relative flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] text-white no-underline" style={{ background: grad(hue(home?.promoAHue, 28), dark) }}>
               <HueEdit k="promoAHue" />
+              <LinkEdit k="promoAHref" />
               <Ed k="promoATag" fallback={t.promoCardTagA} className="block text-[12.5px] font-bold opacity-85" />
               <Ed as="div" k="promoATitle" fallback={t.promoCardA} className="mt-1.5 block text-[24px] font-extrabold leading-tight" />
               <span className="mt-3 text-[13px] font-bold underline">{t.shopNow}</span>
             </LocaleLink>
-            <LocaleLink href={home?.promoBHref || "/shop"} className="flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <LocaleLink href={home?.promoBHref || "/shop"} className="relative flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <LinkEdit k="promoBHref" />
               <Ed k="promoBTag" fallback={t.promoCardTagB} className="block text-[12.5px] font-bold" style={{ color: "var(--accent)" }} />
               <Ed as="div" k="promoBTitle" fallback={t.promoCardB} className="mt-1.5 block text-[24px] font-extrabold leading-tight" style={{ color: "var(--text)" }} />
               <span className="mt-3 text-[13px] font-bold underline" style={{ color: "var(--accent)" }}>{t.shopNow}</span>

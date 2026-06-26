@@ -23,8 +23,11 @@ interface EditState {
   locale: "fa" | "en";
   setField: (k: BiKey, val: string) => void;
   setNum: (k: NumKey, val: number) => void;
+  setStr: (k: StrKey, val: string) => void;
   updateList: (k: ListKey, list: unknown[]) => void;
 }
+
+type StrKey = "bannerCtaHref" | "promoAHref" | "promoBHref";
 
 const Ctx = createContext<EditState | null>(null);
 export const useHomeEdit = () => useContext(Ctx);
@@ -72,12 +75,13 @@ export function HomeEditProvider({ children }: { children: React.ReactNode }) {
     setDraft((d) => (d ? { ...d, [k]: { ...(d[k] as BiText), [locale]: val } } : d));
   }, [locale]);
   const setNum = useCallback((k: NumKey, val: number) => { setDirty(true); setDraft((d) => (d ? { ...d, [k]: val } : d)); }, []);
+  const setStr = useCallback((k: StrKey, val: string) => { setDirty(true); setDraft((d) => (d ? { ...d, [k]: val } : d)); }, []);
   const updateList = useCallback((k: ListKey, list: unknown[]) => { setDirty(true); setDraft((d) => (d ? { ...d, [k]: list } : d)); }, []);
 
   const value: EditState = {
     canEdit, editMode, enter, cancel, save, saving, dirty,
     content: editMode ? draft : (local || storeHome),
-    locale, setField, setNum, updateList,
+    locale, setField, setNum, setStr, updateList,
   };
   return <Ctx.Provider value={value}>{children}{canEdit && <Toolbar />}</Ctx.Provider>;
 }
@@ -130,6 +134,29 @@ export function HueEdit({ k }: { k: NumKey }) {
               <input type="range" min={0} max={360} value={val} onChange={(e) => ctx.setNum(k, Number(e.target.value))} className="h-2 flex-1 cursor-pointer" style={{ accentColor: `hsl(${val} 70% 55%)` }} />
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- inline link editor (banner CTA / promo cards) ---- */
+export function LinkEdit({ k, top = 10 }: { k: StrKey; top?: number }) {
+  const ctx = useHomeEdit();
+  const [open, setOpen] = useState(false);
+  if (!ctx?.editMode) return null;
+  const fa = ctx.locale === "fa";
+  const val = (ctx.content?.[k] as string) || "";
+  return (
+    <div className="absolute z-[20]" style={{ insetInlineEnd: 70, top }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+      <button onClick={() => setOpen((o) => !o)} className="flex h-8 cursor-pointer items-center gap-1.5 rounded-[8px] border-none px-2.5 text-[12px] font-bold text-white" style={{ background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)" }}>🔗 {fa ? "لینک" : "Link"}</button>
+      {open && (
+        <div className="mt-1.5 rounded-[10px] p-3 shadow-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", width: 250 }}>
+          <div className="mb-1 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "این بلوک کجا باز شود؟" : "Where does this open?"}</div>
+          <input autoFocus dir="ltr" value={val} onChange={(e) => ctx.setStr(k, e.target.value)} placeholder="/shop?cat=tech  •  https://…" className="w-full rounded-[8px] px-2.5 py-1.5 text-[12.5px] outline-none" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }} />
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {["/shop", "/blog"].map((s) => <button key={s} onClick={() => ctx.setStr(k, s)} className="cursor-pointer rounded-[6px] px-2 py-1 text-[11px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--accent)" }}>{s}</button>)}
+          </div>
         </div>
       )}
     </div>
