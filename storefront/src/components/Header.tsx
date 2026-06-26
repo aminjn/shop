@@ -16,6 +16,7 @@ import {
   Sun,
   Moon,
 } from "./Icons";
+import { MobileMenu } from "./Mobile";
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
@@ -111,7 +112,8 @@ export function Header() {
       </div>
 
       {/* main row */}
-      <div className="mx-auto flex max-w-[1280px] items-center gap-[22px] px-[22px] py-3.5">
+      <div className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 py-3.5 md:gap-[22px] md:px-[22px]">
+        <MobileMenu />
         <LocaleLink href="/" className="flex items-center gap-[11px] no-underline" style={{ color: "var(--text)" }}>
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -252,23 +254,23 @@ export function Header() {
           <button
             onClick={switchLang}
             title="language"
-            className="h-[42px] cursor-pointer rounded-[10px] px-3 text-[13px] font-bold"
+            className="hidden h-[42px] cursor-pointer rounded-[10px] px-3 text-[13px] font-bold md:block"
             style={{ border: "1px solid var(--border)", background: "none", color: "var(--text)" }}
           >
             {locale === "fa" ? "EN" : "فا"}
           </button>
-          <button onClick={toggleDark} title="theme" className={iconBtn} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
+          <button onClick={toggleDark} title="theme" className={`${iconBtn} hidden md:flex`} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
             {dark ? <Sun size={19} /> : <Moon size={19} />}
           </button>
-          <LocaleLink href="/compare" title={t.compare} className={iconBtn} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
+          <LocaleLink href="/compare" title={t.compare} className={`${iconBtn} hidden md:flex`} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
             <Compare size={19} />
             {compare.length > 0 && <Badge>{num(compare.length, locale)}</Badge>}
           </LocaleLink>
-          <LocaleLink href="/wishlist" title={t.wishlist} className={iconBtn} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
+          <LocaleLink href="/wishlist" title={t.wishlist} className={`${iconBtn} hidden md:flex`} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
             <Heart size={19} />
             {wishlist.length > 0 && <Badge>{num(wishlist.length, locale)}</Badge>}
           </LocaleLink>
-          <LocaleLink href={role ? "/account" : "/login"} title={t.account} className={iconBtn} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
+          <LocaleLink href={role ? "/account" : "/login"} title={t.account} className={`${iconBtn} hidden md:flex`} style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
             <User size={19} />
           </LocaleLink>
           <LocaleLink
@@ -290,8 +292,8 @@ export function Header() {
         </nav>
       </div>
 
-      {/* nav row */}
-      <div style={{ borderTop: "1px solid var(--border)" }} onMouseLeave={() => setMegaCat(null)}>
+      {/* nav row (desktop only) */}
+      <div className="hidden md:block" style={{ borderTop: "1px solid var(--border)" }} onMouseLeave={() => setMegaCat(null)}>
         <div className="mx-auto flex h-12 max-w-[1280px] items-center gap-1 px-[22px]">
           <LocaleLink href="/" className="flex h-full items-center px-3.5 text-[14px] font-semibold no-underline" style={{ color: "var(--text)" }}>
             {t.navHome}

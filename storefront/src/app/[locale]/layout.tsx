@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "../globals.css";
 import { notFound } from "next/navigation";
@@ -12,6 +12,14 @@ import { Footer } from "@/components/Footer";
 import { FloatingChat } from "@/components/FloatingChat";
 import { Toast } from "@/components/Toast";
 import { Onboarding } from "@/components/Onboarding";
+import { MobileNav, PwaInstall } from "@/components/Mobile";
+
+export const viewport: Viewport = {
+  themeColor: "#4f46e5",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 const vazir = localFont({
   src: "../fonts/Vazirmatn.woff2",
@@ -48,7 +56,11 @@ export async function generateMetadata({
       ...(store.ogImage ? { images: [store.ogImage] } : {}),
     },
     alternates: { languages: { fa: "/fa", en: "/en" } },
-    ...(store.faviconUrl ? { icons: { icon: store.faviconUrl } } : {}),
+    icons: {
+      icon: store.faviconUrl || "/icons/icon-192.png",
+      apple: "/icons/apple-touch-icon.png",
+    },
+    appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: name },
   };
 }
 
@@ -64,7 +76,7 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} dir={dir(locale)} className={vazir.variable} suppressHydrationWarning>
-      <body className="scrollthin">
+      <body className="scrollthin pb-[calc(60px+env(safe-area-inset-bottom))] md:pb-0">
         <ShopProvider locale={locale}>
           <Header />
           <main style={{ minHeight: "60vh" }}>{children}</main>
@@ -72,6 +84,8 @@ export default async function LocaleLayout({
           <FloatingChat />
           <Toast />
           <Onboarding />
+          <MobileNav />
+          <PwaInstall />
         </ShopProvider>
       </body>
     </html>

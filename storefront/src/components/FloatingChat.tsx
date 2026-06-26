@@ -59,7 +59,7 @@ export function FloatingChat() {
       <button
         onClick={() => setChatOpen(!chatOpen)}
         aria-label={t.chatTitle}
-        className="fixed bottom-6 z-[80] flex h-[60px] w-[60px] items-center justify-center rounded-full border-none text-white"
+        className="fixed bottom-[76px] z-[80] flex h-[56px] w-[56px] items-center justify-center rounded-full border-none text-white md:bottom-6 md:h-[60px] md:w-[60px]"
         style={{ insetInlineEnd: 24, background: "var(--accent)", boxShadow: "0 12px 30px rgba(0,0,0,.28)", cursor: "pointer" }}
       >
         {chatOpen ? <Close size={24} /> : <Chat size={26} />}
@@ -67,7 +67,7 @@ export function FloatingChat() {
 
       {chatOpen && (
         <div
-          className="anim-pop fixed bottom-[96px] z-[81] flex h-[540px] w-[380px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[18px]"
+          className="anim-pop fixed bottom-[144px] z-[81] flex h-[540px] w-[380px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[18px] md:bottom-[96px]"
           style={{
             insetInlineEnd: 24,
             maxHeight: "calc(100vh - 130px)",
