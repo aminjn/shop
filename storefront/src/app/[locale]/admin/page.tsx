@@ -1518,14 +1518,14 @@ function CategoriesAdmin() {
 
 /* ---------- brands management ---------- */
 
-type BrandRow = { id: string; name: string; en?: string; logo?: string; featured?: boolean };
+type BrandRow = { id: string; name: string; en?: string; logo?: string; url?: string; featured?: boolean };
 
 function BrandsAdmin() {
   const { locale, toast } = useShop();
   const fa = locale === "fa";
   const [brands, setBrands] = useState<BrandRow[]>([]);
   const [editing, setEditing] = useState<BrandRow | null>(null);
-  const blank: BrandRow = { id: "", name: "", en: "", logo: "", featured: true };
+  const blank: BrandRow = { id: "", name: "", en: "", logo: "", url: "", featured: true };
   const [form, setForm] = useState<BrandRow>(blank);
   const [enBusy, setEnBusy] = useState(false);
 
@@ -1554,7 +1554,7 @@ function BrandsAdmin() {
 
   const save = async () => {
     if (!form.name.trim()) { toast(fa ? "نام برند الزامی است" : "Name required"); return; }
-    const d = await post({ action: editing ? "update" : "add", id: form.id, name: form.name.trim(), en: (form.en || "").trim(), logo: (form.logo || "").trim(), featured: form.featured !== false });
+    const d = await post({ action: editing ? "update" : "add", id: form.id, name: form.name.trim(), en: (form.en || "").trim(), logo: (form.logo || "").trim(), url: (form.url || "").trim(), featured: form.featured !== false });
     if (d.ok) { startNew(); toast(fa ? "ذخیره شد ✓ (برای دیدن در سایت صفحه را تازه کن)" : "Saved ✓"); }
     else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
   };
@@ -1590,6 +1590,11 @@ function BrandsAdmin() {
             {form.logo && <button type="button" onClick={() => setForm((f) => ({ ...f, logo: "" }))} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف لوگو" : "Remove"}</button>}
           </div>
         </div>
+        <div className="mt-3">
+          {lbl(fa ? "آدرس سایت برند (اختیاری)" : "Brand website (optional)")}
+          <input className={inputCls} style={inputStyle} value={form.url || ""} onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))} dir="ltr" placeholder="https://example.com" />
+          <p className="mt-1 text-[11.5px]" style={{ color: "var(--muted)" }}>{fa ? "اگر پر شود، در صفحهٔ اصلی کارت این برند به سایت خودش لینک می‌شود (در تب جدید)." : "If set, the homepage brand card links to this site (new tab)."}</p>
+        </div>
         <label className="mt-3 flex cursor-pointer items-center gap-2 text-[13.5px] font-bold">
           <input type="checkbox" checked={form.featured !== false} onChange={(e) => setForm((f) => ({ ...f, featured: e.target.checked }))} style={{ accentColor: "var(--accent)" }} />
           {fa ? "نمایش در صفحهٔ اصلی" : "Show on homepage"}
@@ -1612,7 +1617,7 @@ function BrandsAdmin() {
               )}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14px] font-bold">{b.name}</div>
-                <div className="truncate text-[12px]" style={{ color: "var(--muted)" }}>{b.en || "—"}{b.featured === false ? (fa ? " · مخفی از صفحهٔ اصلی" : " · hidden") : ""}</div>
+                <div className="truncate text-[12px]" style={{ color: "var(--muted)" }}>{b.en || "—"}{b.url ? " · 🔗 " + b.url.replace(/^https?:\/\//, "").replace(/\/$/, "") : ""}{b.featured === false ? (fa ? " · مخفی" : " · hidden") : ""}</div>
               </div>
               <button onClick={() => startEdit(b)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
               <button onClick={() => del(b.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>

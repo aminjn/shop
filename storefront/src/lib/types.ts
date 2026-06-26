@@ -14,6 +14,7 @@ export interface Brand {
   name: string; // canonical brand value stored on products (e.g. "TechPro")
   en?: string; // latin/slug for links & SEO
   logo?: string; // logo image url
+  url?: string; // the brand's own website (homepage links here when set)
   featured?: boolean; // show on homepage
 }
 

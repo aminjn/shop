@@ -253,24 +253,37 @@ export default function HomePage() {
       {(() => {
         const managed = brands.filter((b) => b.featured !== false);
         const cards = managed.length
-          ? managed.map((b) => ({ key: b.id, label: b.name, href: b.name, logo: b.logo }))
-          : topBrands(products).map((b) => ({ key: b, label: b, href: b, logo: undefined as string | undefined }));
+          ? managed.map((b) => ({ key: b.id, label: b.name, brand: b.name, logo: b.logo, url: b.url }))
+          : topBrands(products).map((b) => ({ key: b, label: b, brand: b, logo: undefined as string | undefined, url: undefined as string | undefined }));
         if (!cards.length) return null;
+        const cardCls = "row-hover flex min-w-0 flex-col items-center justify-center gap-2 rounded-[14px] px-2 py-6 no-underline";
+        const cardStyle = { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" } as const;
+        const inner = (b: (typeof cards)[number]) => (
+          <>
+            {b.logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={b.logo} alt={b.label} className="h-12 w-full max-w-[120px] object-contain" />
+            ) : (
+              <span className="text-[18px] font-extrabold truncate max-w-full">{b.label}</span>
+            )}
+            {b.logo && <span className="truncate max-w-full text-[13px] font-bold">{b.label}</span>}
+          </>
+        );
         return (
           <section className={`${SECTION} py-6`}>
             <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{t.popularBrands}</h2>
             <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-5">
-              {cards.map((b) => (
-                <LocaleLink key={b.key} href={`/shop?brand=${encodeURIComponent(b.href)}`} className="row-hover flex min-w-0 flex-col items-center justify-center gap-2 rounded-[14px] px-2 py-6 no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
-                  {b.logo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={b.logo} alt={b.label} className="h-12 w-full max-w-[120px] object-contain" />
-                  ) : (
-                    <span className="text-[18px] font-extrabold truncate max-w-full">{b.label}</span>
-                  )}
-                  {b.logo && <span className="truncate max-w-full text-[13px] font-bold">{b.label}</span>}
-                </LocaleLink>
-              ))}
+              {cards.map((b) =>
+                b.url ? (
+                  <a key={b.key} href={b.url} target="_blank" rel="noopener noreferrer nofollow" className={cardCls} style={cardStyle}>
+                    {inner(b)}
+                  </a>
+                ) : (
+                  <LocaleLink key={b.key} href={`/shop?brand=${encodeURIComponent(b.brand)}`} className={cardCls} style={cardStyle}>
+                    {inner(b)}
+                  </LocaleLink>
+                ),
+              )}
             </div>
           </section>
         );
