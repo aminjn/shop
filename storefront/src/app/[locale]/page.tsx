@@ -18,20 +18,26 @@ import { AiSearchBox } from "@/components/AiSearchBox";
 import { Countdown } from "@/components/Countdown";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Sparkle } from "@/components/Icons";
+import { HomeEditProvider, useHomeEdit, Ed, HueEdit, ListEdit } from "@/components/HomeEdit";
 
 const SECTION = "mx-auto max-w-[1280px] px-[22px]";
 
 export default function HomePage() {
-  const { locale, t, dark, addToCart, setChatOpen, products, brands, home, categories: liveCats } = useShop();
+  return (
+    <HomeEditProvider>
+      <HomeBody />
+    </HomeEditProvider>
+  );
+}
+
+function HomeBody() {
+  const { locale, t, dark, addToCart, setChatOpen, products, brands, categories: liveCats } = useShop();
+  const edit = useHomeEdit();
+  const home = edit?.content ?? null;
   const [tab, setTab] = useState<"featured" | "new" | "best" | "deal">("featured");
   const L = locale === "fa";
   // real, admin-managed categories (not the seed)
   const CATS = liveCats.length ? liveCats : CATEGORIES;
-  // pick admin-edited bilingual text, falling back to the built-in translation
-  const tx = (b: { fa: string; en: string } | undefined, fallback: string) => {
-    const v = b ? (L ? b.fa : b.en) : "";
-    return v && v.trim() ? v : fallback;
-  };
   const hue = (h: number | undefined, def: number) => (typeof h === "number" && h >= 0 ? h : def);
 
   const deal = dealOfDay(products);
@@ -80,16 +86,18 @@ export default function HomePage() {
         : [["Sara M.", "Amazing purchase, fast shipping and great packaging.", 5], ["Ali R.", "Product quality is truly high and prices are fair.", 5], ["Maryam K.", "Support replied quickly and solved my issue fast.", 4]];
 
   return (
-    <>
+    <div onClickCapture={(e) => { if (edit?.editMode) { const a = (e.target as HTMLElement).closest("a"); if (a) e.preventDefault(); } }}>
       {/* AI Landing hero */}
       <section className={`${SECTION} pt-6`}>
         <div className="relative overflow-hidden rounded-[22px] px-10 py-[38px] text-white" style={{ background: grad(hue(home?.heroHue, 255), dark) }}>
+          <HueEdit k="heroHue" />
           <div className="relative z-[2] max-w-[760px]">
             <span className="inline-flex items-center gap-2 rounded-[30px] px-[15px] py-[7px] text-[13px] font-extrabold" style={{ background: "rgba(255,255,255,.2)", backdropFilter: "blur(6px)" }}>
-              🤖 {tx(home?.heroBadge, t.aiSystemBadge)}
+              🤖 <Ed k="heroBadge" fallback={t.aiSystemBadge} />
             </span>
-            <h1 className="mt-4 text-[38px] font-black leading-tight tracking-tight">{tx(home?.heroTitle, t.aiHeroTitle)}</h1>
-            <p className="mb-5 mt-3 text-[16px] leading-relaxed opacity-90">{tx(home?.heroSub, t.aiHeroSub)}</p>
+            <Ed as="h1" k="heroTitle" fallback={t.aiHeroTitle} className="mt-4 block text-[38px] font-black leading-tight tracking-tight" />
+            <Ed as="p" k="heroSub" fallback={t.aiHeroSub} multiline className="mb-5 mt-3 block text-[16px] leading-relaxed opacity-90" />
+            <ListEdit kind="examples" />
             <AiSearchBox examples={examples} />
           </div>
           <div className="absolute h-[300px] w-[300px] rounded-full" style={{ insetInlineEnd: -50, bottom: -70, background: "rgba(255,255,255,.1)" }} />
@@ -103,7 +111,7 @@ export default function HomePage() {
             <Sparkle size={18} />
           </span>
           <div>
-            <h2 className="text-[22px] font-extrabold tracking-tight">{tx(home?.titleSmartPicks, t.smartPicksTitle)}</h2>
+            <Ed as="h2" k="titleSmartPicks" fallback={t.smartPicksTitle} className="block text-[22px] font-extrabold tracking-tight" />
             <div className="mt-0.5 text-[13px]" style={{ color: "var(--muted)" }}>{t.smartPicksSub}</div>
           </div>
         </div>
@@ -118,29 +126,31 @@ export default function HomePage() {
       <section className={`${SECTION} py-6`}>
         <div className="grid gap-[18px] md:grid-cols-[2fr_1fr]">
           <div className="relative flex min-h-[380px] items-center overflow-hidden rounded-[22px]" style={{ background: grad(hue(home?.bannerHue, 255), dark) }}>
+            <HueEdit k="bannerHue" />
             <div className="relative z-[2] max-w-[540px] p-12 text-white">
-              <span className="inline-block rounded-[30px] px-3.5 py-[7px] text-[12.5px] font-bold" style={{ background: "rgba(255,255,255,.2)", backdropFilter: "blur(6px)" }}>{tx(home?.bannerBadge, t.heroBadge)}</span>
-              <h2 className="mt-4 text-[46px] font-black leading-[1.12] tracking-tight">{tx(home?.bannerTitle, t.heroTitle)}</h2>
-              <p className="mt-4 max-w-[420px] text-[16.5px] leading-relaxed opacity-90">{tx(home?.bannerSub, t.heroSub)}</p>
+              <Ed k="bannerBadge" fallback={t.heroBadge} className="inline-block rounded-[30px] px-3.5 py-[7px] text-[12.5px] font-bold" style={{ background: "rgba(255,255,255,.2)", backdropFilter: "blur(6px)" }} />
+              <Ed as="h2" k="bannerTitle" fallback={t.heroTitle} className="mt-4 block text-[46px] font-black leading-[1.12] tracking-tight" />
+              <Ed as="p" k="bannerSub" fallback={t.heroSub} multiline className="mt-4 block max-w-[420px] text-[16.5px] leading-relaxed opacity-90" />
               <div className="mt-6 flex gap-3">
-                <LocaleLink href="/shop" className="rounded-[12px] bg-white px-[26px] py-3.5 text-[15px] font-extrabold no-underline" style={{ color: "#111" }}>{tx(home?.bannerCta, t.heroCta)}</LocaleLink>
-                <button onClick={() => setChatOpen(true)} className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] px-[22px] py-3.5 text-[15px] font-bold text-white" style={{ background: "rgba(255,255,255,.16)", border: "1.5px solid rgba(255,255,255,.4)" }}>
+                <LocaleLink href="/shop" className="rounded-[12px] bg-white px-[26px] py-3.5 text-[15px] font-extrabold no-underline" style={{ color: "#111" }}><Ed k="bannerCta" fallback={t.heroCta} /></LocaleLink>
+                <button onClick={() => !edit?.editMode && setChatOpen(true)} className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] px-[22px] py-3.5 text-[15px] font-bold text-white" style={{ background: "rgba(255,255,255,.16)", border: "1.5px solid rgba(255,255,255,.4)" }}>
                   <Sparkle size={17} />
-                  {tx(home?.bannerCta2, t.heroCta2)}
+                  <Ed k="bannerCta2" fallback={t.heroCta2} />
                 </button>
               </div>
             </div>
             <div className="absolute h-[340px] w-[340px] rounded-full" style={{ insetInlineEnd: -60, bottom: -60, background: "rgba(255,255,255,.12)" }} />
           </div>
           <div className="flex flex-col gap-[18px]">
-            <LocaleLink href="/shop" className="flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] text-white no-underline" style={{ background: grad(hue(home?.promoAHue, 28), dark) }}>
-              <div className="text-[12.5px] font-bold opacity-85">{tx(home?.promoATag, t.promoCardTagA)}</div>
-              <div className="mt-1.5 text-[24px] font-extrabold leading-tight">{tx(home?.promoATitle, t.promoCardA)}</div>
+            <LocaleLink href="/shop" className="relative flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] text-white no-underline" style={{ background: grad(hue(home?.promoAHue, 28), dark) }}>
+              <HueEdit k="promoAHue" />
+              <Ed k="promoATag" fallback={t.promoCardTagA} className="block text-[12.5px] font-bold opacity-85" />
+              <Ed as="div" k="promoATitle" fallback={t.promoCardA} className="mt-1.5 block text-[24px] font-extrabold leading-tight" />
               <span className="mt-3 text-[13px] font-bold underline">{t.shopNow}</span>
             </LocaleLink>
             <LocaleLink href="/shop" className="flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-              <div className="text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{tx(home?.promoBTag, t.promoCardTagB)}</div>
-              <div className="mt-1.5 text-[24px] font-extrabold leading-tight" style={{ color: "var(--text)" }}>{tx(home?.promoBTitle, t.promoCardB)}</div>
+              <Ed k="promoBTag" fallback={t.promoCardTagB} className="block text-[12.5px] font-bold" style={{ color: "var(--accent)" }} />
+              <Ed as="div" k="promoBTitle" fallback={t.promoCardB} className="mt-1.5 block text-[24px] font-extrabold leading-tight" style={{ color: "var(--text)" }} />
               <span className="mt-3 text-[13px] font-bold underline" style={{ color: "var(--accent)" }}>{t.shopNow}</span>
             </LocaleLink>
           </div>
@@ -160,12 +170,13 @@ export default function HomePage() {
             </div>
           ))}
         </div>
+        <ListEdit kind="features" />
       </section>
 
       {/* Categories */}
       <section className={`${SECTION} py-6`}>
         <div className="mb-[18px] flex items-baseline justify-between">
-          <h2 className="text-[24px] font-extrabold tracking-tight">{tx(home?.titleShopByCat, t.shopByCat)}</h2>
+          <Ed as="h2" k="titleShopByCat" fallback={t.shopByCat} className="block text-[24px] font-extrabold tracking-tight" />
           <LocaleLink href="/shop" className="text-[14px] font-bold no-underline" style={{ color: "var(--accent)" }}>{t.viewAll}</LocaleLink>
         </div>
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-5">
@@ -259,7 +270,7 @@ export default function HomePage() {
           );
         return (
           <section className={`${SECTION} py-6`}>
-            <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{tx(home?.titleBrands, t.popularBrands)}</h2>
+            <Ed as="h2" k="titleBrands" fallback={t.popularBrands} className="mb-[18px] block text-[24px] font-extrabold tracking-tight" />
             <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-5">
               {cards.map((b) =>
                 b.url ? (
@@ -279,7 +290,8 @@ export default function HomePage() {
 
       {/* Testimonials */}
       <section className={`${SECTION} py-6`}>
-        <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{tx(home?.titleTestimonials, t.testimonials)}</h2>
+        <Ed as="h2" k="titleTestimonials" fallback={t.testimonials} className="mb-[18px] block text-[24px] font-extrabold tracking-tight" />
+        <ListEdit kind="testimonials" />
         <div className="grid gap-[18px] md:grid-cols-3">
           {testimonials.map(([name, text, rate]) => (
             <div key={name as string} className="rounded-[16px] p-6" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -296,7 +308,8 @@ export default function HomePage() {
 
       {/* FAQ */}
       <section className={`${SECTION} pb-10 pt-3`}>
-        <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{tx(home?.titleFaq, t.faqTitle)}</h2>
+        <Ed as="h2" k="titleFaq" fallback={t.faqTitle} className="mb-[18px] block text-[24px] font-extrabold tracking-tight" />
+        <ListEdit kind="faqs" />
         <div className="flex flex-col gap-2.5">
           {faqs.map(([q, a], i) => (
             <div key={q} className="overflow-hidden rounded-[14px]" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -309,6 +322,6 @@ export default function HomePage() {
           ))}
         </div>
       </section>
-    </>
+    </div>
   );
 }
