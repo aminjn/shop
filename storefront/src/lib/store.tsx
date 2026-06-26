@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import type { Brand, CartLine, Category, Coupon, Locale, Product } from "./types";
+import type { HomeContent } from "./home";
 import { getDict, type Dict } from "@/i18n/dictionaries";
 import { ROUNDNESS } from "./format";
 import { PRODUCTS as SEED_PRODUCTS } from "@/data/products";
@@ -58,6 +59,7 @@ interface ShopState {
   categories: Category[];
   menu: MenuLink[];
   brands: Brand[];
+  home: HomeContent | null;
   // store branding
   logoUrl: string;
 }
@@ -116,6 +118,7 @@ export function ShopProvider({
   const [categories, setCategories] = useState<Category[]>(SEED_CATEGORIES);
   const [menu, setMenu] = useState<MenuLink[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [home, setHome] = useState<HomeContent | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // hydrate from localStorage on mount
@@ -145,6 +148,10 @@ export function ShopProvider({
       fetch("/api/brands")
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
+        .catch(() => {});
+      fetch("/api/home")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (d?.home) setHome(d.home); })
         .catch(() => {});
     };
     refreshData();
@@ -333,6 +340,7 @@ export function ShopProvider({
     categories,
     menu,
     brands,
+    home,
     logoUrl,
   };
 

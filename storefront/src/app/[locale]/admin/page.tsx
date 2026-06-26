@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useShop } from "@/lib/store";
 import { CATEGORIES } from "@/data/categories";
 import type { Product } from "@/lib/types";
+import type { HomeContent, BiText, HomeFeature, HomeTestimonial, HomeFaq } from "@/lib/home";
 import type { Post } from "@/data/posts";
 import type { OrderStatus } from "@/lib/userstore";
 import { grad, priceFmt, num, formatDate } from "@/lib/format";
@@ -25,6 +26,7 @@ import {
 
 type Section =
   | "dashboard"
+  | "home"
   | "products"
   | "categories"
   | "menu"
@@ -142,6 +144,7 @@ export default function AdminPage() {
 
   const NAV: { id: Section; label: string }[] = [
     { id: "dashboard", label: t.aDashboard },
+    { id: "home", label: fa ? "صفحهٔ اصلی" : "Homepage" },
     { id: "products", label: t.aProducts },
     { id: "categories", label: fa ? "دسته‌بندی‌ها" : "Categories" },
     { id: "menu", label: fa ? "منوها" : "Menus" },
@@ -280,6 +283,7 @@ export default function AdminPage() {
         {/* content */}
         <section className="min-w-0">
           {section === "dashboard" && <Dashboard products={products} />}
+          {section === "home" && <HomeAdmin />}
           {section === "products" && (
             <Products
               products={products}
@@ -1513,6 +1517,210 @@ function CategoriesAdmin() {
         </div>
       )}
     </>
+  );
+}
+
+/* ---------- homepage block editor (live preview) ---------- */
+
+function HomeAdmin() {
+  const { locale, toast } = useShop();
+  const fa = locale === "fa";
+  const [c, setC] = useState<HomeContent | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [aiKey, setAiKey] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState(0);
+
+  useEffect(() => { fetch("/api/home").then((r) => r.json()).then((d) => d?.home && setC(d.home)).catch(() => {}); }, []);
+
+  if (!c) return <><H1>{fa ? "صفحهٔ اصلی" : "Homepage"}</H1><Empty text={fa ? "در حال بارگذاری…" : "Loading…"} /></>;
+
+  const setBi = (k: keyof HomeContent, lang: "fa" | "en", val: string) =>
+    setC((p) => (p ? { ...p, [k]: { ...(p[k] as BiText), [lang]: val } } : p));
+  const setNum = (k: keyof HomeContent, val: number) => setC((p) => (p ? { ...p, [k]: val } : p));
+
+  // translate one block's fa → en
+  const aiBi = async (k: keyof HomeContent) => {
+    const cur = c[k] as BiText;
+    if (!cur?.fa?.trim()) { toast(fa ? "اول متن فارسی را بنویس" : "Enter Persian first"); return; }
+    setAiKey(String(k));
+    try { const v = await translateOne(cur.fa.trim()); if (v) setBi(k, "en", v); else toast(fa ? "ترجمه‌ای دریافت نشد" : "No result"); }
+    catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setAiKey(null); }
+  };
+
+  // a bilingual field row (returned as JSX, NOT a component, to keep focus)
+  const biField = (label: string, k: keyof HomeContent, opts?: { area?: boolean }) => {
+    const v = c[k] as BiText;
+    const Tag = opts?.area ? "textarea" : "input";
+    return (
+      <div className="mb-3">
+        <div className="mb-1 flex items-center justify-between">
+          {lbl(label)}
+          <button type="button" onClick={() => aiBi(k)} disabled={aiKey === String(k)} className="mb-1 inline-flex cursor-pointer items-center gap-1 rounded-[8px] px-2 py-1 text-[11.5px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--accent)" }}>✨ {aiKey === String(k) ? "…" : fa ? "ترجمه" : "Translate"}</button>
+        </div>
+        <Tag className={inputCls} style={inputStyle} value={v.fa} placeholder={fa ? "فارسی" : "Persian"} onChange={(e) => setBi(k, "fa", (e.target as HTMLInputElement).value)} />
+        <Tag className={`${inputCls} mt-1.5`} style={inputStyle} dir="ltr" value={v.en} placeholder="English" onChange={(e) => setBi(k, "en", (e.target as HTMLInputElement).value)} />
+      </div>
+    );
+  };
+
+  const hueRow = (label: string, k: keyof HomeContent) => {
+    const val = c[k] as number;
+    const on = typeof val === "number" && val >= 0;
+    return (
+      <div className="mb-3">
+        {lbl(label)}
+        <div className="flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-1.5 text-[12.5px] font-bold">
+            <input type="checkbox" checked={on} onChange={(e) => setNum(k, e.target.checked ? 255 : -1)} style={{ accentColor: "var(--accent)" }} />
+            {fa ? "رنگ سفارشی" : "Custom"}
+          </label>
+          {on && <>
+            <span className="h-8 w-8 flex-none rounded-[8px]" style={{ background: `hsl(${val} 70% 55%)`, border: "1px solid var(--border)" }} />
+            <input type="range" min={0} max={360} value={val} onChange={(e) => setNum(k, Number(e.target.value))} className="h-2 flex-1 cursor-pointer" style={{ accentColor: `hsl(${val} 70% 55%)` }} />
+            <input type="number" min={0} max={360} value={val} onChange={(e) => setNum(k, Math.min(360, Math.max(0, Number(e.target.value) || 0)))} className="w-[64px] rounded-[8px] px-2 py-1.5 text-[12.5px]" style={inputStyle} dir="ltr" />
+          </>}
+        </div>
+      </div>
+    );
+  };
+
+  const save = async (reset = false) => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/home", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(reset ? { action: "reset" } : { home: c }) });
+      const d = await r.json();
+      if (d.ok) { setC(d.home); setPreviewKey((p) => p + 1); toast(fa ? "ذخیره شد ✓ پیش‌نمایش به‌روز شد" : "Saved ✓"); }
+      else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+    } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setBusy(false); }
+  };
+
+  // ---- list editors ----
+  const updateList = <T,>(k: "examples" | "features" | "testimonials" | "faqs", list: T[]) => setC((p) => (p ? { ...p, [k]: list } : p));
+
+  const sec = (title: string, body: React.ReactNode) => (
+    <Card className="mb-4 p-5"><h3 className="mb-3 text-[14px] font-extrabold">{title}</h3>{body}</Card>
+  );
+
+  return (
+    <>
+      <H1>{fa ? "ویرایش صفحهٔ اصلی" : "Homepage editor"}</H1>
+      <p className="mb-4 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "متن و رنگ همهٔ بخش‌های صفحهٔ اصلی را اینجا ویرایش کن. هر فیلد را خالی بگذاری، مقدار پیش‌فرض نمایش داده می‌شود. بعد از «ذخیره» پیش‌نمایش سمت کنار به‌روز می‌شود." : "Edit every homepage block here; empty fields fall back to defaults."}</p>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button onClick={() => save(false)} disabled={busy} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>{busy ? (fa ? "در حال ذخیره…" : "…") : fa ? "ذخیره و به‌روزرسانی پیش‌نمایش" : "Save"}</button>
+        <button onClick={() => setPreviewKey((p) => p + 1)} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={inputStyle}>{fa ? "بازخوانی پیش‌نمایش" : "Reload preview"}</button>
+        <a href={`/${locale}`} target="_blank" rel="noreferrer" className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold no-underline" style={{ ...inputStyle, color: "var(--accent)" }}>{fa ? "باز کردن در تب جدید ↗" : "Open ↗"}</a>
+        <button onClick={() => { if (confirm(fa ? "همه‌چیز به حالت پیش‌فرض برگردد؟" : "Reset all to defaults?")) save(true); }} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={{ ...inputStyle, color: "#e11d48" }}>{fa ? "بازنشانی به پیش‌فرض" : "Reset"}</button>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_460px]">
+        <div className="min-w-0">
+          {sec(fa ? "بنر هوش مصنوعی (بالای صفحه)" : "AI hero", <>
+            {biField(fa ? "نشان (بَج)" : "Badge", "heroBadge")}
+            {biField(fa ? "عنوان" : "Title", "heroTitle")}
+            {biField(fa ? "زیرعنوان" : "Subtitle", "heroSub", { area: true })}
+            {hueRow(fa ? "رنگ بنر" : "Color", "heroHue")}
+            <ListEditor kind="examples" rows={c.examples} fa={fa} onChange={(l) => updateList("examples", l as BiText[])} />
+          </>)}
+
+          {sec(fa ? "بنر بزرگ + کارت‌های تبلیغ" : "Banner & promo cards", <>
+            {biField(fa ? "نشان بنر" : "Banner badge", "bannerBadge")}
+            {biField(fa ? "عنوان بنر" : "Banner title", "bannerTitle")}
+            {biField(fa ? "زیرعنوان بنر" : "Banner subtitle", "bannerSub", { area: true })}
+            {biField(fa ? "دکمهٔ اول" : "CTA 1", "bannerCta")}
+            {biField(fa ? "دکمهٔ دوم" : "CTA 2", "bannerCta2")}
+            {hueRow(fa ? "رنگ بنر" : "Banner color", "bannerHue")}
+            <div className="my-3 h-px" style={{ background: "var(--border)" }} />
+            {biField(fa ? "کارت ۱ — برچسب" : "Promo A tag", "promoATag")}
+            {biField(fa ? "کارت ۱ — عنوان" : "Promo A title", "promoATitle")}
+            {hueRow(fa ? "رنگ کارت ۱" : "Promo A color", "promoAHue")}
+            {biField(fa ? "کارت ۲ — برچسب" : "Promo B tag", "promoBTag")}
+            {biField(fa ? "کارت ۲ — عنوان" : "Promo B title", "promoBTitle")}
+          </>)}
+
+          {sec(fa ? "نوار ویژگی‌ها" : "Feature strip", <ListEditor kind="features" rows={c.features} fa={fa} onChange={(l) => updateList("features", l as HomeFeature[])} />)}
+
+          {sec(fa ? "عنوان بخش‌ها" : "Section titles", <>
+            {biField(fa ? "پیشنهادهای هوشمند" : "Smart picks", "titleSmartPicks")}
+            {biField(fa ? "خرید بر اساس دسته" : "Shop by category", "titleShopByCat")}
+            {biField(fa ? "برندها" : "Brands", "titleBrands")}
+            {biField(fa ? "نظرات مشتریان" : "Testimonials", "titleTestimonials")}
+            {biField(fa ? "سوالات پرتکرار" : "FAQ", "titleFaq")}
+          </>)}
+
+          {sec(fa ? "نظرات مشتریان" : "Testimonials", <ListEditor kind="testimonials" rows={c.testimonials} fa={fa} onChange={(l) => updateList("testimonials", l as HomeTestimonial[])} />)}
+
+          {sec(fa ? "سوالات پرتکرار" : "FAQ", <ListEditor kind="faqs" rows={c.faqs} fa={fa} onChange={(l) => updateList("faqs", l as HomeFaq[])} />)}
+        </div>
+
+        <div className="min-w-0">
+          <div className="xl:sticky xl:top-4">
+            <div className="mb-2 text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "پیش‌نمایش زنده (بعد از ذخیره به‌روز می‌شود)" : "Live preview (updates on save)"}</div>
+            <div className="overflow-hidden rounded-[14px]" style={{ border: "1px solid var(--border)", height: "70vh" }}>
+              <iframe key={previewKey} src={`/${locale}?preview=${previewKey}`} title="preview" style={{ width: "100%", height: "100%", border: "none" }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// generic list editor for the homepage blocks
+function ListEditor({ kind, rows, fa, onChange }: { kind: "examples" | "features" | "testimonials" | "faqs"; rows: unknown[]; fa: boolean; onChange: (l: unknown[]) => void }) {
+  const upd = (i: number, patch: Record<string, unknown>) => onChange(rows.map((r, x) => (x === i ? { ...(r as object), ...patch } : r)));
+  const rm = (i: number) => onChange(rows.filter((_, x) => x !== i));
+  const add = () => {
+    const blank =
+      kind === "examples" ? { fa: "", en: "" }
+      : kind === "features" ? { icon: "⭐", fa: "", faSub: "", en: "", enSub: "" }
+      : kind === "testimonials" ? { fa: "", faText: "", en: "", enText: "", rating: 5 }
+      : { qFa: "", aFa: "", qEn: "", aEn: "" };
+    onChange([...rows, blank]);
+  };
+  const ai = async (i: number, srcKey: string, dstKey: string) => {
+    const val = String((rows[i] as Record<string, unknown>)[srcKey] || "").trim();
+    if (!val) return;
+    const v = await translateOne(val);
+    if (v) upd(i, { [dstKey]: v });
+  };
+  const fld = (i: number, key: string, ph: string, area = false) => {
+    const Tag = area ? "textarea" : "input";
+    return <Tag className={inputCls} style={inputStyle} value={String((rows[i] as Record<string, unknown>)[key] ?? "")} placeholder={ph} dir={/en|En/.test(key) ? "ltr" : undefined} onChange={(e) => upd(i, { [key]: (e.target as HTMLInputElement).value })} />;
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {rows.map((_, i) => (
+        <div key={i} className="rounded-[12px] p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[12px] font-bold" style={{ color: "var(--muted)" }}>#{i + 1}</span>
+            <button onClick={() => rm(i)} className="cursor-pointer border-none bg-transparent text-[12px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>
+          </div>
+          {kind === "examples" && <div className="grid gap-1.5 sm:grid-cols-2">{fld(i, "fa", fa ? "نمونه (فارسی)" : "Example (FA)")}{fld(i, "en", "Example (EN)")}</div>}
+          {kind === "features" && <div className="grid gap-1.5 sm:grid-cols-2">
+            <input className={inputCls} style={inputStyle} value={String((rows[i] as Record<string, unknown>).icon ?? "")} placeholder={fa ? "آیکن (ایموجی)" : "Icon"} onChange={(e) => upd(i, { icon: e.target.value })} />
+            <span />
+            {fld(i, "fa", fa ? "عنوان فارسی" : "Title FA")}{fld(i, "faSub", fa ? "زیرنویس فارسی" : "Sub FA")}
+            {fld(i, "en", "Title EN")}{fld(i, "enSub", "Sub EN")}
+          </div>}
+          {kind === "testimonials" && <div className="grid gap-1.5 sm:grid-cols-2">
+            {fld(i, "fa", fa ? "نام (فارسی)" : "Name FA")}{fld(i, "en", "Name EN")}
+            {fld(i, "faText", fa ? "متن فارسی" : "Text FA", true)}{fld(i, "enText", "Text EN", true)}
+            <label className="flex items-center gap-2 text-[12.5px] font-bold">{fa ? "امتیاز" : "Rating"}
+              <input type="number" min={1} max={5} className="w-[64px] rounded-[8px] px-2 py-1.5 text-[12.5px]" style={inputStyle} value={Number((rows[i] as Record<string, unknown>).rating ?? 5)} onChange={(e) => upd(i, { rating: Math.min(5, Math.max(1, Number(e.target.value) || 5)) })} dir="ltr" />
+            </label>
+            <button onClick={() => { ai(i, "fa", "en"); ai(i, "faText", "enText"); }} className="cursor-pointer rounded-[8px] px-2 py-1.5 text-[12px] font-bold" style={{ ...inputStyle, color: "var(--accent)" }}>✨ {fa ? "ترجمه به انگلیسی" : "Translate"}</button>
+          </div>}
+          {kind === "faqs" && <div className="grid gap-1.5">
+            {fld(i, "qFa", fa ? "سوال (فارسی)" : "Q FA")}{fld(i, "aFa", fa ? "پاسخ (فارسی)" : "A FA", true)}
+            {fld(i, "qEn", "Q EN")}{fld(i, "aEn", "A EN", true)}
+            <button onClick={() => { ai(i, "qFa", "qEn"); ai(i, "aFa", "aEn"); }} className="cursor-pointer self-start rounded-[8px] px-2 py-1.5 text-[12px] font-bold" style={{ ...inputStyle, color: "var(--accent)" }}>✨ {fa ? "ترجمه به انگلیسی" : "Translate"}</button>
+          </div>}
+        </div>
+      ))}
+      <button onClick={add} className="cursor-pointer self-start rounded-[10px] px-4 py-2 text-[13px] font-bold" style={inputStyle}>+ {fa ? "افزودن" : "Add"}</button>
+    </div>
   );
 }
 
