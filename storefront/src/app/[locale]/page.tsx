@@ -78,12 +78,9 @@ function HomeBody() {
         : [["How do I place an order?", "Add to cart and complete checkout — pay online, by wallet or cash on delivery."], ["How long is delivery?", "Standard takes 3–5 business days, express within 24 hours."], ["Can I return items?", "Yes, you can return within 7 days of delivery."], ["What about warranty?", "All products come with authenticity and valid manufacturer warranty."]];
   const [openFaq, setOpenFaq] = useState(0);
 
+  // real customer reviews only — no fake samples. Empty hides the section.
   const testimonials: [string, string, number][] =
-    home?.testimonials?.length
-      ? home.testimonials.map((tm) => [L ? tm.fa : tm.en, L ? tm.faText : tm.enText, tm.rating] as [string, string, number])
-      : L
-        ? [["سارا محمدی", "خرید فوق‌العاده‌ای بود، ارسال سریع و بسته‌بندی عالی.", 5], ["علی رضایی", "کیفیت محصولات واقعاً بالاست و قیمت‌ها منصفانه است.", 5], ["مریم کریمی", "پشتیبانی خیلی خوب جواب داد و مشکلم سریع حل شد.", 4]]
-        : [["Sara M.", "Amazing purchase, fast shipping and great packaging.", 5], ["Ali R.", "Product quality is truly high and prices are fair.", 5], ["Maryam K.", "Support replied quickly and solved my issue fast.", 4]];
+    (home?.testimonials || []).map((tm) => [L ? tm.fa : tm.en, L ? tm.faText : tm.enText, tm.rating] as [string, string, number]);
 
   return (
     <div onClickCapture={(e) => { if (edit?.editMode) { const a = (e.target as HTMLElement).closest("a"); if (a) e.preventDefault(); } }}>
@@ -132,7 +129,7 @@ function HomeBody() {
               <Ed as="h2" k="bannerTitle" fallback={t.heroTitle} className="mt-4 block text-[46px] font-black leading-[1.12] tracking-tight" />
               <Ed as="p" k="bannerSub" fallback={t.heroSub} multiline className="mt-4 block max-w-[420px] text-[16.5px] leading-relaxed opacity-90" />
               <div className="mt-6 flex gap-3">
-                <LocaleLink href="/shop" className="rounded-[12px] bg-white px-[26px] py-3.5 text-[15px] font-extrabold no-underline" style={{ color: "#111" }}><Ed k="bannerCta" fallback={t.heroCta} /></LocaleLink>
+                <LocaleLink href={home?.bannerCtaHref || "/shop"} className="rounded-[12px] bg-white px-[26px] py-3.5 text-[15px] font-extrabold no-underline" style={{ color: "#111" }}><Ed k="bannerCta" fallback={t.heroCta} /></LocaleLink>
                 <button onClick={() => !edit?.editMode && setChatOpen(true)} className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] px-[22px] py-3.5 text-[15px] font-bold text-white" style={{ background: "rgba(255,255,255,.16)", border: "1.5px solid rgba(255,255,255,.4)" }}>
                   <Sparkle size={17} />
                   <Ed k="bannerCta2" fallback={t.heroCta2} />
@@ -142,13 +139,13 @@ function HomeBody() {
             <div className="absolute h-[340px] w-[340px] rounded-full" style={{ insetInlineEnd: -60, bottom: -60, background: "rgba(255,255,255,.12)" }} />
           </div>
           <div className="flex flex-col gap-[18px]">
-            <LocaleLink href="/shop" className="relative flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] text-white no-underline" style={{ background: grad(hue(home?.promoAHue, 28), dark) }}>
+            <LocaleLink href={home?.promoAHref || "/shop"} className="relative flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] text-white no-underline" style={{ background: grad(hue(home?.promoAHue, 28), dark) }}>
               <HueEdit k="promoAHue" />
               <Ed k="promoATag" fallback={t.promoCardTagA} className="block text-[12.5px] font-bold opacity-85" />
               <Ed as="div" k="promoATitle" fallback={t.promoCardA} className="mt-1.5 block text-[24px] font-extrabold leading-tight" />
               <span className="mt-3 text-[13px] font-bold underline">{t.shopNow}</span>
             </LocaleLink>
-            <LocaleLink href="/shop" className="flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <LocaleLink href={home?.promoBHref || "/shop"} className="flex flex-1 cursor-pointer flex-col justify-center rounded-[18px] p-[26px] no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
               <Ed k="promoBTag" fallback={t.promoCardTagB} className="block text-[12.5px] font-bold" style={{ color: "var(--accent)" }} />
               <Ed as="div" k="promoBTitle" fallback={t.promoCardB} className="mt-1.5 block text-[24px] font-extrabold leading-tight" style={{ color: "var(--text)" }} />
               <span className="mt-3 text-[13px] font-bold underline" style={{ color: "var(--accent)" }}>{t.shopNow}</span>
@@ -288,7 +285,8 @@ function HomeBody() {
         );
       })()}
 
-      {/* Testimonials */}
+      {/* Testimonials — only when there are real reviews (or while editing) */}
+      {(testimonials.length > 0 || edit?.editMode) && (
       <section className={`${SECTION} py-6`}>
         <Ed as="h2" k="titleTestimonials" fallback={t.testimonials} className="mb-[18px] block text-[24px] font-extrabold tracking-tight" />
         <ListEdit kind="testimonials" />
@@ -305,6 +303,7 @@ function HomeBody() {
           ))}
         </div>
       </section>
+      )}
 
       {/* FAQ */}
       <section className={`${SECTION} pb-10 pt-3`}>

@@ -31,6 +31,7 @@ type Section =
   | "categories"
   | "menu"
   | "brands"
+  | "pages"
   | "orders"
   | "customers"
   | "discounts"
@@ -149,6 +150,7 @@ export default function AdminPage() {
     { id: "categories", label: fa ? "دسته‌بندی‌ها" : "Categories" },
     { id: "menu", label: fa ? "منوها" : "Menus" },
     { id: "brands", label: fa ? "برندها" : "Brands" },
+    { id: "pages", label: fa ? "صفحات" : "Pages" },
     { id: "orders", label: t.aOrders },
     { id: "customers", label: t.aCustomers },
     { id: "discounts", label: t.aDiscounts },
@@ -297,6 +299,7 @@ export default function AdminPage() {
           {section === "categories" && <CategoriesAdmin />}
           {section === "menu" && <MenuAdmin />}
           {section === "brands" && <BrandsAdmin />}
+          {section === "pages" && <PagesAdmin />}
           {section === "orders" && <Orders />}
           {section === "customers" && <Customers />}
           {section === "discounts" && <Discounts />}
@@ -1563,6 +1566,13 @@ function HomeAdmin() {
     );
   };
 
+  const hrefField = (label: string, k: "bannerCtaHref" | "promoAHref" | "promoBHref") => (
+    <div className="mb-3">
+      {lbl(label)}
+      <input className={inputCls} style={inputStyle} dir="ltr" value={(c[k] as string) || ""} placeholder="/shop  •  /shop?cat=…  •  https://…" onChange={(e) => setC((p) => (p ? { ...p, [k]: e.target.value } : p))} />
+    </div>
+  );
+
   const hueRow = (label: string, k: keyof HomeContent) => {
     const val = c[k] as number;
     const on = typeof val === "number" && val >= 0;
@@ -1629,13 +1639,16 @@ function HomeAdmin() {
             {biField(fa ? "زیرعنوان بنر" : "Banner subtitle", "bannerSub", { area: true })}
             {biField(fa ? "دکمهٔ اول" : "CTA 1", "bannerCta")}
             {biField(fa ? "دکمهٔ دوم" : "CTA 2", "bannerCta2")}
+            {hrefField(fa ? "لینک دکمهٔ اول" : "CTA 1 link", "bannerCtaHref")}
             {hueRow(fa ? "رنگ بنر" : "Banner color", "bannerHue")}
             <div className="my-3 h-px" style={{ background: "var(--border)" }} />
             {biField(fa ? "کارت ۱ — برچسب" : "Promo A tag", "promoATag")}
             {biField(fa ? "کارت ۱ — عنوان" : "Promo A title", "promoATitle")}
+            {hrefField(fa ? "کارت ۱ — لینک" : "Promo A link", "promoAHref")}
             {hueRow(fa ? "رنگ کارت ۱" : "Promo A color", "promoAHue")}
             {biField(fa ? "کارت ۲ — برچسب" : "Promo B tag", "promoBTag")}
             {biField(fa ? "کارت ۲ — عنوان" : "Promo B title", "promoBTitle")}
+            {hrefField(fa ? "کارت ۲ — لینک" : "Promo B link", "promoBHref")}
           </>)}
 
           {sec(fa ? "نوار ویژگی‌ها" : "Feature strip", <ListEditor kind="features" rows={c.features} fa={fa} onChange={(l) => updateList("features", l as HomeFeature[])} />)}
@@ -1721,6 +1734,101 @@ function ListEditor({ kind, rows, fa, onChange }: { kind: "examples" | "features
       ))}
       <button onClick={add} className="cursor-pointer self-start rounded-[10px] px-4 py-2 text-[13px] font-bold" style={inputStyle}>+ {fa ? "افزودن" : "Add"}</button>
     </div>
+  );
+}
+
+/* ---------- public pages (CMS) ---------- */
+
+type PageRow = { slug: string; titleFa: string; titleEn: string; bodyFa: string; bodyEn: string; published: boolean; footerCol?: "support" | "company" | "" };
+
+function PagesAdmin() {
+  const { locale, toast } = useShop();
+  const fa = locale === "fa";
+  const [pages, setPages] = useState<PageRow[]>([]);
+  const [editing, setEditing] = useState<PageRow | null>(null);
+  const blank: PageRow = { slug: "", titleFa: "", titleEn: "", bodyFa: "", bodyEn: "", published: true, footerCol: "" };
+  const [form, setForm] = useState<PageRow>(blank);
+  const [busy, setBusy] = useState(false);
+
+  const load = () => fetch("/api/pages").then((r) => r.json()).then((d) => Array.isArray(d?.pages) && setPages(d.pages)).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const startNew = () => { setEditing(null); setForm(blank); };
+  const startEdit = (p: PageRow) => { setEditing(p); setForm({ ...p }); window.scrollTo({ top: 0, behavior: "smooth" }); };
+
+  const aiTranslate = async () => {
+    if (!form.titleFa.trim() && !form.bodyFa.trim()) { toast(fa ? "اول محتوای فارسی را بنویس" : "Write Persian first"); return; }
+    setBusy(true);
+    try {
+      const r = await translateWithStatus([form.titleFa, form.bodyFa]);
+      if (!r.ok) { toast(fa ? "ترجمه ناموفق — اعتبار سرویس را بررسی کن" : "Translate failed"); return; }
+      setForm((f) => ({ ...f, titleEn: r.results[0] || f.titleEn, bodyEn: r.results[1] || f.bodyEn }));
+      toast(fa ? "ترجمه شد ✓" : "Translated ✓");
+    } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setBusy(false); }
+  };
+
+  const post = async (body: Record<string, unknown>) => {
+    const r = await fetch("/api/pages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok && Array.isArray(d.pages)) setPages(d.pages);
+    return d;
+  };
+  const save = async () => {
+    if (!form.titleFa.trim()) { toast(fa ? "عنوان فارسی الزامی است" : "Title required"); return; }
+    const d = await post({ action: editing ? "update" : "add", originalSlug: editing?.slug, slug: form.slug, titleFa: form.titleFa.trim(), titleEn: form.titleEn.trim(), bodyFa: form.bodyFa, bodyEn: form.bodyEn, published: form.published, footerCol: form.footerCol });
+    if (d.ok) { startNew(); toast(fa ? "ذخیره شد ✓" : "Saved ✓"); }
+    else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+  };
+  const del = async (slug: string) => { if (!confirm(fa ? "حذف این صفحه؟" : "Delete page?")) return; const d = await post({ action: "delete", slug }); if (d.ok) toast(fa ? "حذف شد" : "Deleted"); };
+
+  return (
+    <>
+      <H1>{fa ? "صفحات سایت" : "Site pages"}</H1>
+      <p className="mb-5 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "صفحات عمومی مثل «درباره ما»، «تماس با ما»، «قوانین» و… را اینجا بساز و ویرایش کن. متن با Markdown است. لینک هر صفحه: /p/اسلاگ — و در فوتر هم نمایش داده می‌شود." : "Create and edit public pages (Markdown). Each page is at /p/slug."}</p>
+
+      <Card className="mb-6 p-5">
+        <h2 className="mb-3 text-[15px] font-extrabold">{editing ? (fa ? "ویرایش صفحه" : "Edit page") : fa ? "صفحهٔ جدید" : "New page"}</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>{lbl(fa ? "عنوان (فارسی)" : "Title (FA)")}<input className={inputCls} style={inputStyle} value={form.titleFa} onChange={(e) => setForm((f) => ({ ...f, titleFa: e.target.value }))} /></div>
+          <div>{lbl(fa ? "عنوان (انگلیسی)" : "Title (EN)")}<input className={inputCls} style={inputStyle} dir="ltr" value={form.titleEn} onChange={(e) => setForm((f) => ({ ...f, titleEn: e.target.value }))} /></div>
+          <div>{lbl(fa ? "اسلاگ (آدرس)" : "Slug")}<input className={inputCls} style={inputStyle} dir="ltr" value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} placeholder={fa ? "خودکار از عنوان انگلیسی" : "auto"} /></div>
+          <div>{lbl(fa ? "ستون فوتر" : "Footer column")}
+            <select className={inputCls} style={inputStyle} value={form.footerCol || ""} onChange={(e) => setForm((f) => ({ ...f, footerCol: e.target.value as PageRow["footerCol"] }))}>
+              <option value="">{fa ? "نمایش نده در فوتر" : "Not in footer"}</option>
+              <option value="support">{fa ? "ستون پشتیبانی" : "Support"}</option>
+              <option value="company">{fa ? "ستون شرکت" : "Company"}</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-3">{lbl(fa ? "متن صفحه (فارسی) — Markdown" : "Body (FA)")}<textarea className={inputCls} style={{ ...inputStyle, minHeight: 160 }} value={form.bodyFa} onChange={(e) => setForm((f) => ({ ...f, bodyFa: e.target.value }))} /></div>
+        <div className="mt-3">{lbl(fa ? "متن صفحه (انگلیسی)" : "Body (EN)")}<textarea className={inputCls} style={{ ...inputStyle, minHeight: 120 }} dir="ltr" value={form.bodyEn} onChange={(e) => setForm((f) => ({ ...f, bodyEn: e.target.value }))} /></div>
+        <label className="mt-3 flex cursor-pointer items-center gap-2 text-[13.5px] font-bold">
+          <input type="checkbox" checked={form.published} onChange={(e) => setForm((f) => ({ ...f, published: e.target.checked }))} style={{ accentColor: "var(--accent)" }} />
+          {fa ? "منتشر شده (در سایت دیده شود)" : "Published"}
+        </label>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button onClick={save} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره تغییرات" : "Save") : fa ? "ایجاد صفحه" : "Create"}</button>
+          <button onClick={aiTranslate} disabled={busy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold disabled:opacity-60" style={{ ...inputStyle, color: "var(--accent)" }}><Sparkle size={15} /> {busy ? (fa ? "در حال ترجمه…" : "…") : fa ? "ترجمه به انگلیسی با AI" : "AI translate"}</button>
+          {editing && <a href={`/${locale}/p/${editing.slug}`} target="_blank" rel="noreferrer" className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold no-underline" style={{ ...inputStyle, color: "var(--accent)" }}>{fa ? "مشاهده ↗" : "View ↗"}</a>}
+          {editing && <button onClick={startNew} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>}
+        </div>
+      </Card>
+
+      {pages.length === 0 ? <Empty text={fa ? "صفحه‌ای نیست." : "No pages."} /> : (
+        <div className="flex flex-col gap-2">
+          {pages.map((p) => (
+            <div key={p.slug} className="flex flex-wrap items-center gap-3 rounded-[12px] p-3" style={{ ...cardStyle }}>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-bold">{fa ? p.titleFa : p.titleEn} {!p.published && <span className="text-[11px]" style={{ color: "#e11d48" }}>({fa ? "پیش‌نویس" : "draft"})</span>}</div>
+                <div className="truncate text-[12px]" style={{ color: "var(--muted)" }}>/p/{p.slug}{p.footerCol ? ` · ${fa ? "فوتر" : "footer"}: ${p.footerCol}` : ""}</div>
+              </div>
+              <button onClick={() => startEdit(p)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
+              <button onClick={() => del(p.slug)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 

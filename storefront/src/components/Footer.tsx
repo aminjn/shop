@@ -1,36 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useShop } from "@/lib/store";
 import { CATEGORIES } from "@/data/categories";
 import { jalaliYearNow } from "@/lib/jalali";
 import { LocaleLink } from "./LocaleLink";
 
+type FootPage = { slug: string; titleFa: string; titleEn: string; published: boolean; footerCol?: string };
+
 export function Footer() {
-  const { t, locale, toast } = useShop();
+  const { t, locale, toast, categories: liveCats } = useShop();
   const [email, setEmail] = useState("");
+  const [pages, setPages] = useState<FootPage[]>([]);
+  useEffect(() => { fetch("/api/pages").then((r) => r.json()).then((d) => Array.isArray(d?.pages) && setPages(d.pages)).catch(() => {}); }, []);
+  const cats = (liveCats.length ? liveCats : CATEGORIES).filter((c) => !c.hidden);
   const year =
     locale === "fa"
       ? jalaliYearNow().toLocaleString("fa-IR", { useGrouping: false })
       : String(new Date().getFullYear());
 
-  const col = (title: string, links: string[]) => (
+  // a column of links (href is required so links are real, not all "/shop")
+  const col = (title: string, links: { label: string; href: string }[]) => (
     <div>
       <div className="mb-3 text-[14px] font-bold">{title}</div>
       <div className="flex flex-col gap-2.5">
         {links.map((l) => (
           <LocaleLink
-            key={l}
-            href="/shop"
+            key={l.href + l.label}
+            href={l.href}
             className="link-accent text-[13px] no-underline"
             style={{ color: "var(--muted)" }}
           >
-            {l}
+            {l.label}
           </LocaleLink>
         ))}
       </div>
     </div>
   );
+
+  const pageLinks = (group: "support" | "company") =>
+    pages.filter((p) => p.published && p.footerCol === group).map((p) => ({ label: locale === "fa" ? p.titleFa : p.titleEn, href: `/p/${p.slug}` }));
 
   return (
     <footer style={{ background: "var(--surface)", borderTop: "1px solid var(--border)" }}>
@@ -81,9 +90,9 @@ export function Footer() {
             {t.footerAbout}
           </p>
         </div>
-        {col(t.footerShop, CATEGORIES.map((c) => (locale === "fa" ? c.fa : c.en)))}
-        {col(t.footerSupport, [t.fContactUs, t.fFaq, t.fReturns, t.fShipping])}
-        {col(t.footerCompany, [t.fAbout, t.fCareers, t.fTerms, t.fPrivacy])}
+        {col(t.footerShop, cats.map((c) => ({ label: locale === "fa" ? c.fa : c.en, href: `/shop?cat=${c.id}` })))}
+        {col(t.footerSupport, pageLinks("support"))}
+        {col(t.footerCompany, pageLinks("company"))}
       </div>
 
       <div

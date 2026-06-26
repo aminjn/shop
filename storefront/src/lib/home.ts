@@ -18,6 +18,8 @@ export interface HomeContent {
   promoATag: BiText; promoATitle: BiText;
   promoBTag: BiText; promoBTitle: BiText;
   titleSmartPicks: BiText; titleShopByCat: BiText; titleBrands: BiText; titleTestimonials: BiText; titleFaq: BiText;
+  // link targets for the banner CTA and promo cards
+  bannerCtaHref: string; promoAHref: string; promoBHref: string;
   // colors (HSL hue 0–360; <0 means "use default")
   heroHue: number; bannerHue: number; promoAHue: number;
   // blocks with real defaults (currently hardcoded on the page)
@@ -35,6 +37,7 @@ export const HOME_DEFAULT: HomeContent = {
   promoATag: empty(), promoATitle: empty(),
   promoBTag: empty(), promoBTitle: empty(),
   titleSmartPicks: empty(), titleShopByCat: empty(), titleBrands: empty(), titleTestimonials: empty(), titleFaq: empty(),
+  bannerCtaHref: "/shop", promoAHref: "/shop", promoBHref: "/shop",
   heroHue: -1, bannerHue: -1, promoAHue: -1,
   examples: [
     { fa: "یک گوشی تا ۲۰ میلیون", en: "A phone under 20M" },
@@ -48,11 +51,8 @@ export const HOME_DEFAULT: HomeContent = {
     { icon: "↩️", fa: "بازگشت آسان", faSub: "۷ روز مهلت", en: "Easy returns", enSub: "7-day window" },
     { icon: "💬", fa: "پشتیبانی ۲۴/۷", faSub: "همیشه در دسترس", en: "24/7 support", enSub: "Always available" },
   ],
-  testimonials: [
-    { fa: "سارا محمدی", faText: "خرید فوق‌العاده‌ای بود، ارسال سریع و بسته‌بندی عالی.", en: "Sara M.", enText: "Amazing purchase, fast shipping and great packaging.", rating: 5 },
-    { fa: "علی رضایی", faText: "کیفیت محصولات واقعاً بالاست و قیمت‌ها منصفانه است.", en: "Ali R.", enText: "Product quality is truly high and prices are fair.", rating: 5 },
-    { fa: "مریم کریمی", faText: "پشتیبانی خیلی خوب جواب داد و مشکلم سریع حل شد.", en: "Maryam K.", enText: "Support replied quickly and solved my issue fast.", rating: 4 },
-  ],
+  // empty by default — the store owner adds real customer reviews from the editor
+  testimonials: [],
   faqs: [
     { qFa: "چطور سفارش ثبت کنم؟", aFa: "محصول را به سبد اضافه کنید و مراحل تسویه را تکمیل کنید؛ پرداخت آنلاین، کیف پول یا پرداخت در محل.", qEn: "How do I place an order?", aEn: "Add to cart and complete checkout — pay online, by wallet or cash on delivery." },
     { qFa: "زمان ارسال چقدر است؟", aFa: "ارسال عادی ۳ تا ۵ روز کاری و ارسال اکسپرس طی ۲۴ ساعت انجام می‌شود.", qEn: "How long is delivery?", aEn: "Standard takes 3–5 business days, express within 24 hours." },
