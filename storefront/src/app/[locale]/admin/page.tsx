@@ -1386,19 +1386,23 @@ function CategoriesAdmin() {
   const [form, setForm] = useState<CatRow>(blank);
   const [subFa, setSubFa] = useState("");
   const [subEn, setSubEn] = useState("");
+  const [subEdit, setSubEdit] = useState<number | null>(null);
 
   const load = () => fetch("/api/categories").then((r) => r.json()).then((d) => Array.isArray(d?.categories) && setCats(d.categories)).catch(() => {});
   useEffect(() => { load(); }, []);
 
-  const startNew = () => { setEditing(null); setForm(blank); };
-  const startEdit = (c: CatRow) => { setEditing(c); setForm({ ...c, subs: [...c.subs] }); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const startNew = () => { setEditing(null); setForm(blank); cancelSubEdit(); };
+  const startEdit = (c: CatRow) => { setEditing(c); setForm({ ...c, subs: [...c.subs] }); cancelSubEdit(); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const addSub = async () => {
     if (!subFa.trim()) return;
     let en = subEn.trim();
     if (!en) en = (await translateOne(subFa.trim())) || subFa.trim();
-    setForm((f) => ({ ...f, subs: [...f.subs, [subFa.trim(), en]] }));
-    setSubFa(""); setSubEn("");
+    const pair: [string, string] = [subFa.trim(), en];
+    setForm((f) => ({ ...f, subs: subEdit === null ? [...f.subs, pair] : f.subs.map((s, x) => (x === subEdit ? pair : s)) }));
+    setSubFa(""); setSubEn(""); setSubEdit(null);
   };
+  const editSub = (i: number) => { const [f1, e1] = form.subs[i]; setSubFa(f1); setSubEn(e1); setSubEdit(i); };
+  const cancelSubEdit = () => { setSubFa(""); setSubEn(""); setSubEdit(null); };
   const autoEnCat = async () => { if (form.fa.trim() && !form.en.trim()) { const v = await translateOne(form.fa.trim()); if (v) setForm((f) => ({ ...f, en: v })); } };
   const [aiBusy, setAiBusy] = useState(false);
   const aiErr = (r: { error?: string; detail?: string }) => {
@@ -1426,7 +1430,7 @@ function CategoriesAdmin() {
       toast(nameEn ? (fa ? "انگلیسی تکمیل شد ✓" : "Completed ✓") : (fa ? "ترجمه‌ای دریافت نشد" : "No result"));
     } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setAiBusy(false); }
   };
-  const rmSub = (i: number) => setForm((f) => ({ ...f, subs: f.subs.filter((_, x) => x !== i) }));
+  const rmSub = (i: number) => { setForm((f) => ({ ...f, subs: f.subs.filter((_, x) => x !== i) })); if (subEdit === i) cancelSubEdit(); };
 
   const save = async () => {
     if (!form.fa.trim()) { toast(fa ? "نام دسته الزامی است" : "Name required"); return; }
@@ -1466,9 +1470,9 @@ function CategoriesAdmin() {
           {lbl(fa ? "زیردسته‌ها" : "Subcategories")}
           <div className="mb-2 flex flex-wrap gap-1.5">
             {form.subs.map(([f1, e1], i) => (
-              <span key={i} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-                {fa ? f1 : e1}
-                <button onClick={() => rmSub(i)} className="cursor-pointer border-none bg-transparent text-[12px]" style={{ color: "#e11d48" }}>×</button>
+              <span key={i} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: subEdit === i ? "var(--accent)" : "var(--surface2)", color: subEdit === i ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}>
+                <button onClick={() => editSub(i)} title={fa ? "ویرایش زیردسته" : "Edit subcategory"} className="cursor-pointer border-none bg-transparent p-0 text-[12px] font-bold" style={{ color: "inherit" }}>{fa ? f1 : e1}</button>
+                <button onClick={() => rmSub(i)} title={fa ? "حذف" : "Remove"} className="cursor-pointer border-none bg-transparent text-[12px]" style={{ color: subEdit === i ? "#fff" : "#e11d48" }}>×</button>
               </span>
             ))}
             {form.subs.length === 0 && <span className="text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "زیردسته‌ای اضافه نشده" : "none"}</span>}
@@ -1476,8 +1480,10 @@ function CategoriesAdmin() {
           <div className="flex flex-wrap gap-2">
             <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} value={subFa} onChange={(e) => setSubFa(e.target.value)} placeholder={fa ? "نام زیردسته (فارسی)" : "Sub (FA)"} onKeyDown={(e) => { if (e.key === "Enter") addSub(); }} onBlur={async () => { if (subFa.trim() && !subEn.trim()) { const v = await translateOne(subFa.trim()); if (v) setSubEn(v); } }} />
             <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} value={subEn} onChange={(e) => setSubEn(e.target.value)} placeholder={fa ? "انگلیسی (اختیاری)" : "Sub (EN)"} dir="ltr" onKeyDown={(e) => { if (e.key === "Enter") addSub(); }} />
-            <button onClick={addSub} className="cursor-pointer rounded-[10px] px-4 text-[13px] font-bold" style={inputStyle}>+ {fa ? "افزودن" : "Add"}</button>
+            <button onClick={addSub} className="cursor-pointer rounded-[10px] px-4 text-[13px] font-bold" style={inputStyle}>{subEdit === null ? `+ ${fa ? "افزودن" : "Add"}` : (fa ? "ذخیره زیردسته" : "Update")}</button>
+            {subEdit !== null && <button onClick={cancelSubEdit} className="cursor-pointer rounded-[10px] px-4 text-[13px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>}
           </div>
+          {subEdit !== null && <div className="mt-1.5 text-[11.5px]" style={{ color: "var(--accent)" }}>{fa ? "در حال ویرایش زیردسته — تغییر بده و «ذخیره زیردسته» را بزن" : "Editing subcategory"}</div>}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button onClick={save} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره تغییرات" : "Save") : fa ? "افزودن دسته" : "Add"}</button>

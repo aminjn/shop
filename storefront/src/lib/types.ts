@@ -22,6 +22,7 @@ export interface Product {
   fa: string;
   en: string;
   cat: string;
+  sub?: string; // subcategory slug (the subcategory's English/slug value)
   brand: string;
   price: number;
   old?: number;

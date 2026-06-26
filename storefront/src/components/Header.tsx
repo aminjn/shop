@@ -388,7 +388,7 @@ export function Header() {
                     {mega.subs.map(([fa, en], i) => (
                       <LocaleLink
                         key={i}
-                        href={`/shop?cat=${mega.id}`}
+                        href={`/shop?cat=${mega.id}&sub=${encodeURIComponent(en)}`}
                         className="row-hover flex items-center gap-2 rounded-[9px] px-3 py-2 text-[13.5px] font-semibold no-underline"
                         style={{ color: "var(--text)", textAlign: "start" }}
                       >

@@ -17,6 +17,7 @@ function sanitize(input: Record<string, unknown>, id: number): Product {
     fa: String(input.fa || "").slice(0, 120),
     en: String(input.en || input.fa || "").slice(0, 120),
     cat: String(input.cat || "tech"),
+    sub: input.sub ? String(input.sub) : undefined,
     brand: String(input.brand || ""),
     price: n(input.price),
     old: input.old ? n(input.old) : undefined,
@@ -59,7 +60,8 @@ export async function POST(req: Request) {
       const patch = (b.patch || {}) as Record<string, unknown>;
       for (const p of list) {
         if (!idSet.has(p.id)) continue;
-        if (patch.cat) p.cat = String(patch.cat);
+        if (patch.cat) { p.cat = String(patch.cat); if (patch.sub === undefined) p.sub = undefined; }
+        if (patch.sub !== undefined) p.sub = String(patch.sub).trim() || undefined;
         if (patch.brand !== undefined && String(patch.brand).trim()) p.brand = String(patch.brand).trim();
         if (patch.stock !== undefined && String(patch.stock).trim() !== "") { const v = num(patch.stock); if (!Number.isNaN(v)) p.stock = v; }
         if (patch.price !== undefined && String(patch.price).trim() !== "") { const v = num(patch.price); if (!Number.isNaN(v)) p.price = v; }

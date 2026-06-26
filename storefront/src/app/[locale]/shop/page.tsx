@@ -30,13 +30,16 @@ export default function ShopPage() {
 
 function ShopContent() {
   const sp = useSearchParams();
-  const { locale, t, products } = useShop();
+  const { locale, t, products, categories: liveCats } = useShop();
+  const CATS = liveCats.length ? liveCats : CATEGORIES;
 
   const qParam = sp.get("q") || "";
   const catParam = sp.get("cat") || "all";
+  const subParam = sp.get("sub") || "";
   const brandParam = sp.get("brand") || "";
 
   const [activeCat, setActiveCat] = useState(catParam);
+  const [activeSub, setActiveSub] = useState(subParam);
   const [priceMax, setPriceMax] = useState(MAX_PRICE);
   const [brandFilter, setBrandFilter] = useState<string[]>(brandParam ? [brandParam] : []);
   const [ratingMin, setRatingMin] = useState(0);
@@ -53,6 +56,9 @@ function ShopContent() {
   useEffect(() => {
     setActiveCat(catParam);
   }, [catParam]);
+  useEffect(() => {
+    setActiveSub(subParam);
+  }, [subParam]);
   useEffect(() => {
     setBrandFilter(brandParam ? [brandParam] : []);
   }, [brandParam]);
@@ -94,6 +100,7 @@ function ShopContent() {
     }
     let out = products.filter((p) => {
       if (activeCat !== "all" && p.cat !== activeCat) return false;
+      if (activeSub && p.sub !== activeSub) return false;
       if (p.price > priceMax) return false;
       if (brandFilter.length && !brandFilter.includes(p.brand)) return false;
       if (ratingMin && p.rating < ratingMin) return false;
@@ -119,10 +126,11 @@ function ShopContent() {
       default: out.sort((a, b) => b.rating - a.rating);
     }
     return out;
-  }, [products, aiIds, activeCat, priceMax, brandFilter, ratingMin, inStockOnly, colorFilter, sizeFilter, sort]);
+  }, [products, aiIds, activeCat, activeSub, priceMax, brandFilter, ratingMin, inStockOnly, colorFilter, sizeFilter, sort]);
 
   const reset = () => {
     setActiveCat("all");
+    setActiveSub("");
     setPriceMax(MAX_PRICE);
     setBrandFilter([]);
     setRatingMin(0);
@@ -149,12 +157,29 @@ function ShopContent() {
         <div className={fieldBox} style={fieldStyle}>
           <div className="mb-2.5 text-[13.5px] font-bold">{t.fCategory}</div>
           <div className="flex flex-col gap-1.5">
-            {[["all", t.allCats] as const, ...CATEGORIES.map((c) => [c.id, locale === "fa" ? c.fa : c.en] as const)].map(([id, label]) => (
-              <button key={id} onClick={() => setActiveCat(id)} className="cursor-pointer border-none bg-transparent py-1 text-[13.5px]" style={{ color: activeCat === id ? "var(--accent)" : "var(--text)", fontWeight: activeCat === id ? 700 : 400, textAlign: "start" }}>
+            {[["all", t.allCats] as const, ...CATS.map((c) => [c.id, locale === "fa" ? c.fa : c.en] as const)].map(([id, label]) => (
+              <button key={id} onClick={() => { setActiveCat(id); setActiveSub(""); }} className="cursor-pointer border-none bg-transparent py-1 text-[13.5px]" style={{ color: activeCat === id ? "var(--accent)" : "var(--text)", fontWeight: activeCat === id ? 700 : 400, textAlign: "start" }}>
                 {label}
               </button>
             ))}
           </div>
+          {/* subcategories of the active category */}
+          {activeCat !== "all" && (() => {
+            const subs = CATS.find((c) => c.id === activeCat)?.subs ?? [];
+            if (!subs.length) return null;
+            return (
+              <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+                <div className="mb-2 text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{locale === "fa" ? "زیردسته‌ها" : "Subcategories"}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {subs.map(([sf, se]) => (
+                    <button key={se} onClick={() => setActiveSub(activeSub === se ? "" : se)} className="cursor-pointer rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ background: activeSub === se ? "var(--accent)" : "var(--surface2)", color: activeSub === se ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}>
+                      {locale === "fa" ? sf : se}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         <div className={fieldBox} style={fieldStyle}>

@@ -30,6 +30,9 @@ export function ProductModal({
   const [fa, setFa] = useState(initial?.fa ?? "");
   const [en, setEn] = useState(initial?.en ?? "");
   const [cat, setCat] = useState(initial?.cat ?? CATEGORIES[0].id);
+  const [sub, setSub] = useState(initial?.sub ?? "");
+  const curCat = CATEGORIES.find((c) => c.id === cat);
+  const subOptions = curCat?.subs ?? [];
   const [brand, setBrand] = useState(initial?.brand ?? BRANDS[0]);
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [price, setPrice] = useState(String(initial?.price ?? ""));
@@ -75,6 +78,7 @@ export function ProductModal({
       fa: fa.trim(),
       en: en.trim() || fa.trim(),
       cat,
+      sub: sub || undefined,
       brand,
       price: Number(price) || 0,
       old: Number(old) || undefined,
@@ -146,10 +150,21 @@ export function ProductModal({
           </div>
           <div>
             {lbl(t.thCat)}
-            <select className={inputCls} style={inputStyle} value={cat} onChange={(e) => setCat(e.target.value)}>
+            <select className={inputCls} style={inputStyle} value={cat} onChange={(e) => { setCat(e.target.value); setSub(""); }}>
               {CATEGORIES.map((c) => (
                 <option key={c.id} value={c.id}>
                   {locale === "fa" ? c.fa : c.en}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            {lbl(locale === "fa" ? "زیردسته" : "Subcategory")}
+            <select className={inputCls} style={inputStyle} value={sub} onChange={(e) => setSub(e.target.value)} disabled={!subOptions.length}>
+              <option value="">{locale === "fa" ? (subOptions.length ? "بدون زیردسته" : "زیردسته‌ای ندارد") : "None"}</option>
+              {subOptions.map(([sf, se]) => (
+                <option key={se} value={se}>
+                  {locale === "fa" ? sf : se}
                 </option>
               ))}
             </select>
