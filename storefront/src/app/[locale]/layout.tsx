@@ -6,7 +6,7 @@ import { isLocale, locales, dir } from "@/i18n/config";
 import { getDict } from "@/i18n/dictionaries";
 import { readStore } from "@/lib/settings";
 import { getSeo, siteOrigin } from "@/lib/seo";
-import Script from "next/script";
+import { SeoClient } from "@/components/SeoClient";
 import type { Locale } from "@/lib/types";
 import { ShopProvider } from "@/lib/store";
 import { Header } from "@/components/Header";
@@ -33,10 +33,6 @@ const vazir = localFont({
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
-
-// Render at request time so admin-managed SEO (verification, schema, analytics,
-// titles) from the runtime data volume is reflected — the build can't see it.
-export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -99,52 +95,10 @@ export default async function LocaleLayout({
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
-  const store = readStore();
-  const seo = getSeo();
-  const origin = siteOrigin();
-  const orgName = seo.orgName || store.storeName || getDict(locale as Locale).storeName;
-  const sameAs = (seo.sameAs || "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        name: orgName,
-        url: origin,
-        ...(seo.orgLogo || store.logoUrl ? { logo: seo.orgLogo || store.logoUrl } : {}),
-        ...(seo.phone ? { telephone: seo.phone } : {}),
-        ...(seo.email ? { email: seo.email } : {}),
-        ...(seo.address ? { address: seo.address } : {}),
-        ...(sameAs.length ? { sameAs } : {}),
-      },
-      {
-        "@type": "WebSite",
-        name: orgName,
-        url: origin,
-        potentialAction: {
-          "@type": "SearchAction",
-          target: `${origin}/${locale}/shop?q={search_term_string}`,
-          "query-input": "required name=search_term_string",
-        },
-      },
-    ],
-  };
-
   return (
     <html lang={locale} dir={dir(locale)} className={vazir.variable} suppressHydrationWarning>
       <body className="scrollthin pb-[calc(60px+env(safe-area-inset-bottom))] md:pb-0">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-        {seo.gtmId && (
-          <Script id="gtm" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html:
-            `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${seo.gtmId}');` }} />
-        )}
-        {seo.gaId && (
-          <>
-            <Script src={`https://www.googletagmanager.com/gtag/js?id=${seo.gaId}`} strategy="afterInteractive" />
-            <Script id="ga4" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html:
-              `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${seo.gaId}');` }} />
-          </>
-        )}
+        <SeoClient origin={siteOrigin()} />
         <ShopProvider locale={locale}>
           <Header />
           <main style={{ minHeight: "60vh" }}>{children}</main>

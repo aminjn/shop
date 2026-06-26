@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
 import { BlogArticle } from "@/components/BlogArticle";
-import { postBySlug, POSTS } from "@/data/posts";
+import { postBySlugStore } from "@/lib/posts";
 import { getDict } from "@/i18n/dictionaries";
 import { isLocale } from "@/i18n/config";
 import type { Locale } from "@/lib/types";
 
-export function generateStaticParams() {
-  return POSTS.flatMap((p) =>
-    (["fa", "en"] as const).map((locale) => ({ locale, slug: p.slug })),
-  );
-}
+// articles are admin/AI-generated at runtime → read live, render on demand
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -19,7 +16,7 @@ export async function generateMetadata({
   const { locale, slug } = await params;
   const loc = (isLocale(locale) ? locale : "fa") as Locale;
   const t = getDict(loc);
-  const p = postBySlug(slug);
+  const p = postBySlugStore(slug);
   if (!p) return { title: t.blogTitle };
   const title = loc === "fa" ? p.fa : p.en;
   const desc = loc === "fa" ? p.excerptFa : p.excerptEn;
@@ -37,7 +34,7 @@ export default async function BlogPostPage({
 }) {
   const { locale, slug } = await params;
   const loc = (isLocale(locale) ? locale : "fa") as Locale;
-  const p = postBySlug(slug);
+  const p = postBySlugStore(slug);
 
   const jsonLd = p
     ? {

@@ -133,7 +133,17 @@ export function readArray<T>(file: string, fallback: T[]): T[] {
 }
 export function writeArray<T>(file: string, arr: T[]): T[] {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(arr, null, 2), "utf8");
+  // atomic write: a background worker and admin requests can write the same
+  // file concurrently — write to a temp file then rename so a reader never
+  // sees a half-written (empty/corrupt) file.
+  const full = path.join(DATA_DIR, file);
+  const tmp = `${full}.${process.pid}.${Math.floor(process.hrtime()[1])}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(arr, null, 2), "utf8");
+    fs.renameSync(tmp, full);
+  } catch {
+    try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+  }
   return arr;
 }
 
