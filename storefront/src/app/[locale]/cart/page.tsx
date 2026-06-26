@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useShop } from "@/lib/store";
+import { useShop, usePageTitle } from "@/lib/store";
 import { computeTotals } from "@/lib/cart";
 import { grad, priceFmt, num } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
@@ -9,6 +9,7 @@ import { Plus, Minus, Trash, Cart as CartIcon, ArrowBack } from "@/components/Ic
 
 export default function CartPage() {
   const { locale, t, dark, cart, changeLine, removeLine, coupon, setCoupon, products, productById } = useShop();
+  usePageTitle(t.cartTitle);
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState("");
   const [cfg, setCfg] = useState<{ shipFee: number; freeShipThreshold: number; taxRate: number } | undefined>();

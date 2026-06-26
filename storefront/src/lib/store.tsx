@@ -352,3 +352,17 @@ export function useShop() {
   if (!ctx) throw new Error("useShop must be used within ShopProvider");
   return ctx;
 }
+
+/** Set the document title to "<page> | <store>" using the LIVE store name.
+ *  Re-applies after navigation so the prerendered/default title can't stick. */
+export function usePageTitle(title?: string) {
+  const { t } = useShop();
+  const store = t.storeName;
+  useEffect(() => {
+    const desired = title && title.trim() ? `${title} | ${store}` : store;
+    document.title = desired;
+    // guard against Next applying the prerendered metadata title a tick later
+    const id = setTimeout(() => { if (document.title !== desired) document.title = desired; }, 50);
+    return () => clearTimeout(id);
+  }, [title, store]);
+}

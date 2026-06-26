@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useShop } from "@/lib/store";
+import { useShop, usePageTitle } from "@/lib/store";
 import { CATEGORIES } from "@/data/categories";
 import { num } from "@/lib/format";
 import { ProductCard } from "@/components/ProductCard";
@@ -26,6 +26,7 @@ export default function ShopPage() {
 function ShopContent() {
   const sp = useSearchParams();
   const { locale, t, products, categories: liveCats } = useShop();
+  usePageTitle(locale === "fa" ? "فروشگاه" : "Shop");
   const CATS = liveCats.length ? liveCats : CATEGORIES;
 
   const qParam = sp.get("q") || "";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useShop } from "@/lib/store";
+import { useShop, usePageTitle } from "@/lib/store";
 import { CATEGORIES } from "@/data/categories";
 import {
   featured,
@@ -33,6 +33,7 @@ export default function HomePage() {
 
 function HomeBody() {
   const { locale, t, dark, addToCart, setChatOpen, products, brands, categories: liveCats } = useShop();
+  usePageTitle();
   const edit = useHomeEdit();
   const home = edit?.content ?? null;
   const [tab, setTab] = useState<"featured" | "new" | "best" | "deal">("featured");

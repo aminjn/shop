@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useShop } from "@/lib/store";
+import { useShop, usePageTitle } from "@/lib/store";
 import { computeTotals } from "@/lib/cart";
 import type { ShipMethod, PayMethod } from "@/lib/settings";
 import { grad, priceFmt, num } from "@/lib/format";
@@ -13,6 +13,7 @@ const field =
 
 export default function CheckoutPage() {
   const { locale, t, dark, cart, clearCart, coupon, toast, productById, products } = useShop();
+  usePageTitle(t.checkoutTitle);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "", phone: "", email: "", province: "", city: "", postal: "", address: "", notes: "",
@@ -37,6 +38,12 @@ export default function CheckoutPage() {
       setPay((p) => p || pm[0]?.id || "online");
     }).catch(() => {});
   }, []);
+
+  // real upsell suggestion: cheapest in-stock product not already in the cart
+  const suggestion = useMemo(() => {
+    const inCart = new Set(cart.map((l) => l.id));
+    return products.filter((p) => !inCart.has(p.id) && p.stock > 0).sort((a, b) => a.price - b.price)[0];
+  }, [products, cart]);
 
   const selShip = shipMethods.find((m) => m.id === ship);
   const totals = useMemo(
@@ -123,17 +130,19 @@ export default function CheckoutPage() {
     <div className="mx-auto max-w-[1280px] px-[22px] py-7">
       <h1 className="mb-5 text-[24px] font-extrabold tracking-tight">{t.checkoutTitle}</h1>
 
-      {/* smart checkout assistant */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] p-4" style={{ background: "var(--surface2)", border: "1px dashed var(--accent)" }}>
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg text-white" style={{ background: "var(--accent)" }}><Sparkle size={16} /></span>
-          <div>
-            <div className="text-[13.5px] font-extrabold">{t.checkoutAiTitle}</div>
-            <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>{t.checkoutAiText}</div>
+      {/* real upsell — suggests an actual in-stock product not already in the cart */}
+      {suggestion && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[14px] p-4" style={{ background: "var(--surface2)", border: "1px dashed var(--accent)" }}>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg text-white" style={{ background: "var(--accent)" }}><Sparkle size={16} /></span>
+            <div>
+              <div className="text-[13.5px] font-extrabold">{locale === "fa" ? "تکمیل خرید" : "Complete your order"}</div>
+              <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? `شاید به «${suggestion.fa}» هم نیاز داشته باشی — ${priceFmt(suggestion.price, locale, t.currency)}` : `You may also need “${suggestion.en}” — ${priceFmt(suggestion.price, locale, t.currency)}`}</div>
+            </div>
           </div>
+          <LocaleLink href={`/product/${suggestion.id}`} className="rounded-[9px] px-4 py-2 text-[12.5px] font-bold text-white no-underline" style={{ background: "var(--accent)" }}>{locale === "fa" ? "مشاهده محصول" : "View product"}</LocaleLink>
         </div>
-        <LocaleLink href="/product/14" className="rounded-[9px] px-4 py-2 text-[12.5px] font-bold text-white no-underline" style={{ background: "var(--accent)" }}>{t.checkoutAiAdd}</LocaleLink>
-      </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-[1fr_360px]">
         <div className="flex flex-col gap-5">
