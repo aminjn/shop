@@ -127,24 +127,30 @@ export function ShopProvider({
     setWishlist(load("wishlist", []));
     setCompare(load("compare", []));
     setMounted(true);
-    // refresh catalog with any admin edits (falls back to seed on failure)
-    fetch("/api/products")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
-      .catch(() => {});
-    // live categories & custom menu (admin-editable)
-    fetch("/api/categories")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) setCategories(d.categories); })
-      .catch(() => {});
-    fetch("/api/menu")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
-      .catch(() => {});
-    fetch("/api/brands")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
-      .catch(() => {});
+    // live data (admin-editable). Refetched on tab focus so edits made in the
+    // admin panel show up on the site without a hard refresh.
+    const refreshData = () => {
+      fetch("/api/products")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
+        .catch(() => {});
+      fetch("/api/categories")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) setCategories(d.categories); })
+        .catch(() => {});
+      fetch("/api/menu")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
+        .catch(() => {});
+      fetch("/api/brands")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
+        .catch(() => {});
+    };
+    refreshData();
+    const onVisible = () => { if (document.visibilityState === "visible") refreshData(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refreshData);
     // apply store branding (name / currency / logo) saved in admin
     fetch("/api/settings/store")
       .then((r) => (r.ok ? r.json() : null))
@@ -156,6 +162,10 @@ export function ShopProvider({
         faviconUrl: d.settings.faviconUrl,
       }))
       .catch(() => {});
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refreshData);
+    };
   }, [accentColor, defaultRoundness]);
 
   // reflect theme on <html> for SSR-safe theming via CSS vars

@@ -43,6 +43,8 @@ export function ProductModal({
   const [warranty, setWarranty] = useState(initial?.warranty ?? "");
   const [shortFa, setShortFa] = useState(initial?.shortFa ?? "");
   const [shortEn, setShortEn] = useState(initial?.shortEn ?? "");
+  const [specs, setSpecs] = useState<[string, string][]>(initial?.specs ?? []);
+  const [aiBusy, setAiBusy] = useState(false);
   const [vars, setVars] = useState<Variation[]>(initial?.variations ?? []);
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
   const [video, setVideo] = useState(initial?.video ?? "");
@@ -69,6 +71,29 @@ export function ProductModal({
       ),
     );
 
+  // specs editor
+  const addSpec = () => setSpecs((s) => [...s, ["", ""]]);
+  const setSpec = (i: number, idx: 0 | 1, val: string) =>
+    setSpecs((s) => s.map((row, x) => (x === i ? (idx === 0 ? [val, row[1]] : [row[0], val]) : row)));
+  const rmSpec = (i: number) => setSpecs((s) => s.filter((_, x) => x !== i));
+
+  // one-click AI: write the description + technical specs from the product name
+  const aiFill = async () => {
+    if (!fa.trim()) { toast(locale === "fa" ? "اول نام محصول را بنویس" : "Enter product name"); return; }
+    setAiBusy(true);
+    try {
+      const r = await fetch("/api/ai/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: fa.trim(), category: cat }) });
+      const d = await r.json().catch(() => ({}));
+      if (!d.ok || !d.result) { toast(locale === "fa" ? "هوش مصنوعی پاسخی نداد — اعتبار سرویس را بررسی کن" : "AI unavailable — check account credit"); return; }
+      const res = d.result as { shortDesc?: string; longDesc?: string; specs?: { k: string; v: string }[] };
+      const desc = (res.longDesc || res.shortDesc || "").trim();
+      if (desc) { setShortFa(desc); const en = await translateOne(desc); if (en) setShortEn(en); }
+      if (Array.isArray(res.specs) && res.specs.length)
+        setSpecs(res.specs.filter((s) => s && s.k && s.v).map((s) => [String(s.k), String(s.v)] as [string, string]));
+      toast(locale === "fa" ? "توضیحات و مشخصات با هوش مصنوعی پر شد ✓" : "Filled with AI ✓");
+    } catch { toast(locale === "fa" ? "خطای شبکه" : "Error"); } finally { setAiBusy(false); }
+  };
+
   const save = () => {
     if (!fa.trim()) {
       toast(locale === "fa" ? "نام محصول الزامی است" : "Product name is required");
@@ -91,6 +116,7 @@ export function ProductModal({
       stock: Number(stock) || 0,
       shortFa: shortFa.trim() || undefined,
       shortEn: shortEn.trim() || undefined,
+      specs: specs.filter(([k, v]) => k.trim() && v.trim()).length ? specs.filter(([k, v]) => k.trim() && v.trim()) : undefined,
       sku: sku.trim() || undefined,
       variations: vars.length ? vars : undefined,
       images: images.length ? images : undefined,
@@ -227,12 +253,37 @@ export function ProductModal({
             <input className={inputCls} style={inputStyle} value={warranty} onChange={(e) => setWarranty(e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            {lbl(locale === "fa" ? "توضیح کوتاه (فارسی)" : "Short description (Persian)")}
-            <input className={inputCls} style={inputStyle} value={shortFa} onChange={(e) => setShortFa(e.target.value)} />
+            <div className="mb-1 flex items-center justify-between gap-2">
+              {lbl(locale === "fa" ? "توضیحات" : "Description")}
+              <button type="button" onClick={aiFill} disabled={aiBusy} className="mb-1 inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[12.5px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--accent)" }}>
+                ✨ {aiBusy ? (locale === "fa" ? "در حال تولید…" : "…") : locale === "fa" ? "تولید توضیحات و مشخصات با هوش مصنوعی" : "Generate with AI"}
+              </button>
+            </div>
+            <textarea className={inputCls} style={{ ...inputStyle, minHeight: 72 }} rows={3} value={shortFa} onChange={(e) => setShortFa(e.target.value)} placeholder={locale === "fa" ? "توضیح فارسی محصول (یا با دکمهٔ ✨ بالا تولید کن)" : "Persian description"} />
           </div>
           <div className="sm:col-span-2">
-            {lbl(locale === "fa" ? "توضیح کوتاه (انگلیسی)" : "Short description (English)")}
-            <input className={inputCls} style={inputStyle} value={shortEn} onChange={(e) => setShortEn(e.target.value)} />
+            {lbl(locale === "fa" ? "توضیح (انگلیسی)" : "Description (English)")}
+            <textarea className={inputCls} style={{ ...inputStyle, minHeight: 56 }} rows={2} dir="ltr" value={shortEn} onChange={(e) => setShortEn(e.target.value)} placeholder={locale === "fa" ? "خودکار از فارسی با ✨" : "English description"} />
+          </div>
+          {/* technical specs */}
+          <div className="sm:col-span-2">
+            <div className="mb-1.5 flex items-center justify-between">
+              {lbl(locale === "fa" ? "مشخصات فنی" : "Technical specs")}
+              <button type="button" onClick={addSpec} className="mb-1 cursor-pointer rounded-[10px] px-3 py-1.5 text-[12.5px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>+ {locale === "fa" ? "افزودن مشخصه" : "Add spec"}</button>
+            </div>
+            {specs.length === 0 ? (
+              <p className="text-[12px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? "مشخصه‌ای اضافه نشده — دستی اضافه کن یا با دکمهٔ ✨ بساز." : "No specs yet."}</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {specs.map(([k, v], i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input className={inputCls} style={{ ...inputStyle, maxWidth: 200 }} value={k} onChange={(e) => setSpec(i, 0, e.target.value)} placeholder={locale === "fa" ? "عنوان (مثلاً جنس)" : "Label"} />
+                    <input className={inputCls} style={inputStyle} value={v} onChange={(e) => setSpec(i, 1, e.target.value)} placeholder={locale === "fa" ? "مقدار" : "Value"} />
+                    <button type="button" onClick={() => rmSpec(i)} aria-label={t.remove} className="flex-none cursor-pointer rounded-[10px] px-2.5 py-2 text-[13px] font-bold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "#e11d48" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

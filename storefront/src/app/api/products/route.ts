@@ -29,6 +29,12 @@ function sanitize(input: Record<string, unknown>, id: number): Product {
     stock: n(input.stock),
     sku: input.sku ? String(input.sku) : undefined,
     shortFa: input.shortFa ? String(input.shortFa) : undefined,
+    shortEn: input.shortEn ? String(input.shortEn) : undefined,
+    specs: Array.isArray(input.specs)
+      ? (input.specs as unknown[])
+          .map((x) => (Array.isArray(x) ? [String(x[0] ?? ""), String(x[1] ?? "")] as [string, string] : null))
+          .filter((x): x is [string, string] => !!x && !!x[0] && !!x[1])
+      : undefined,
     colors: Array.isArray(input.colors) ? (input.colors as [string, string][]) : undefined,
     sizes: Array.isArray(input.sizes) ? (input.sizes as string[]) : undefined,
     badge: Array.isArray(input.badge) ? (input.badge as [string, string]) : undefined,

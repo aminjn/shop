@@ -46,6 +46,7 @@ export interface Product {
   stock: number;
   shortFa?: string;
   shortEn?: string;
+  specs?: [string, string][]; // custom technical specs [label, value]
   sku?: string;
   variations?: Variation[];
   images?: string[];

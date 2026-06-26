@@ -37,22 +37,26 @@ export function ProductDetail({ id }: { id: number }) {
   const wished = wishlist.includes(p.id);
   const match = 88 + (p.id % 9);
 
-  const specs =
+  const hasWarranty = !!p.warranty && p.warranty.trim() !== "" && p.warranty.trim() !== "-";
+  const base: ([string, string] | null)[] =
     locale === "fa"
       ? [
           ["برند", p.brand],
-          ["کشور سازنده", p.country],
-          ["گارانتی", p.warranty],
+          p.country ? ["کشور سازنده", p.country] : null,
+          hasWarranty ? ["گارانتی", p.warranty] : null,
           ["کد کالا", p.sku || `SKU-${1000 + p.id}`],
           ["وضعیت", p.stock > 0 ? "موجود" : "ناموجود"],
         ]
       : [
           ["Brand", p.brand],
-          ["Origin", p.country],
-          ["Warranty", p.warranty],
+          p.country ? ["Origin", p.country] : null,
+          hasWarranty ? ["Warranty", p.warranty] : null,
           ["SKU", p.sku || `SKU-${1000 + p.id}`],
           ["Status", p.stock > 0 ? "In stock" : "Out of stock"],
         ];
+  // custom technical specs entered in admin come first
+  const custom: [string, string][] = (p.specs || []).filter((s) => s && s[0] && s[1]);
+  const specs: [string, string][] = [...custom, ...base.filter((x): x is [string, string] => !!x)];
 
   return (
     <div className="mx-auto max-w-[1280px] px-[22px] py-7">
@@ -190,10 +194,20 @@ export function ProductDetail({ id }: { id: number }) {
         </div>
         <div className="py-5">
           {tab === "desc" && (
-            <p className="max-w-[760px] text-[14.5px] leading-loose" style={{ color: "var(--muted)" }}>
-              {locale === "fa"
-                ? `${name} یکی از محصولات محبوب برند ${p.brand} است که با کیفیت ساخت بالا و طراحی مدرن عرضه می‌شود. این محصول ساخت کشور ${p.country} بوده و دارای ${p.warranty} گارانتی معتبر است. مناسب برای استفاده‌ی روزمره با دوام و عملکرد عالی.`
-                : `${name} is one of ${p.brand}'s popular products, featuring premium build quality and a modern design. Made in ${p.country} with a valid ${p.warranty} warranty. Ideal for everyday use with great durability and performance.`}
+            <p className="max-w-[760px] whitespace-pre-line text-[14.5px] leading-loose" style={{ color: "var(--muted)" }}>
+              {(() => {
+                const custom = locale === "fa" ? p.shortFa : p.shortEn;
+                if (custom && custom.trim()) return custom;
+                const origin = locale === "fa"
+                  ? (p.country ? ` این محصول ساخت کشور ${p.country} است.` : "")
+                  : (p.country ? ` Made in ${p.country}.` : "");
+                const warr = locale === "fa"
+                  ? (hasWarranty ? ` دارای ${p.warranty} گارانتی معتبر است.` : "")
+                  : (hasWarranty ? ` Comes with a valid ${p.warranty} warranty.` : "");
+                return locale === "fa"
+                  ? `${name} یکی از محصولات محبوب برند ${p.brand} است که با کیفیت ساخت بالا و طراحی مدرن عرضه می‌شود.${origin}${warr} مناسب برای استفاده‌ی روزمره با دوام و عملکرد عالی.`
+                  : `${name} is one of ${p.brand}'s popular products, featuring premium build quality and a modern design.${origin}${warr} Ideal for everyday use with great durability and performance.`;
+              })()}
             </p>
           )}
           {tab === "specs" && (
