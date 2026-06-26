@@ -9,15 +9,6 @@ import { ProductCard } from "@/components/ProductCard";
 import { Grid, List, Sparkle, Close } from "@/components/Icons";
 import type { Product } from "@/lib/types";
 
-const ALL_COLORS = [
-  ["مشکی", "Black", "#1a1a1a"],
-  ["سفید", "White", "#f1f3f6"],
-  ["آبی", "Blue", "#2a6fdb"],
-  ["قرمز", "Red", "#e11d48"],
-  ["سبز", "Green", "#1f8a5b"],
-  ["طلایی", "Gold", "#d4af37"],
-];
-const ALL_SIZES = ["۴۰", "۴۱", "۴۲", "۴۳", "۴۴"];
 const MAX_PRICE = 15_000_000;
 
 export default function ShopPage() {
@@ -90,7 +81,29 @@ function ShopContent() {
     };
   }, [qParam, locale]);
 
-  const brands = useMemo(() => [...new Set(products.map((p) => p.brand))], [products]);
+  // facets are derived from the products of the OPEN list (current category + subcategory,
+  // or AI results) so filters only show options that actually exist for this group.
+  const scope = useMemo(() => {
+    if (aiIds) return aiIds.map((id) => products.find((p) => p.id === id)).filter((p): p is Product => Boolean(p));
+    return products.filter((p) => (activeCat === "all" || p.cat === activeCat) && (!activeSub || p.sub === activeSub));
+  }, [products, aiIds, activeCat, activeSub]);
+
+  const facetBrands = useMemo(() => [...new Set(scope.map((p) => p.brand).filter(Boolean))], [scope]);
+  const facetColors = useMemo(() => {
+    const m = new Map<string, string>();
+    scope.forEach((p) => (p.colors || []).forEach(([name, hex]) => { if (name && !m.has(name)) m.set(name, hex); }));
+    return [...m.entries()] as [string, string][];
+  }, [scope]);
+  const facetSizes = useMemo(() => [...new Set(scope.flatMap((p) => p.sizes || []))], [scope]);
+  const priceCap = useMemo(() => Math.max(0, ...scope.map((p) => p.price)) || MAX_PRICE, [scope]);
+  const ratingsVary = useMemo(() => new Set(scope.map((p) => Math.floor(p.rating))).size > 1, [scope]);
+
+  // drop any selected filter values that no longer exist in the current scope
+  useEffect(() => {
+    setBrandFilter((prev) => prev.filter((b) => facetBrands.includes(b)));
+    setColorFilter((prev) => prev.filter((c) => facetColors.some(([n]) => n === c)));
+    setSizeFilter((prev) => prev.filter((s) => facetSizes.includes(s)));
+  }, [facetBrands, facetColors, facetSizes]);
 
   const list: Product[] = useMemo(() => {
     if (aiIds) {
@@ -184,57 +197,64 @@ function ShopContent() {
 
         <div className={fieldBox} style={fieldStyle}>
           <div className="mb-2.5 text-[13.5px] font-bold">{t.fPrice}</div>
-          <input type="range" min={0} max={MAX_PRICE} step={100000} value={priceMax} onChange={(e) => setPriceMax(Number(e.target.value))} className="w-full" style={{ accentColor: "var(--accent)" }} />
-          <div className="mt-1 text-[12.5px]" style={{ color: "var(--muted)" }}>{t.upTo} {num(priceMax, locale)} {t.currency}</div>
+          <input type="range" min={0} max={priceCap} step={Math.max(10000, Math.round(priceCap / 100))} value={Math.min(priceMax, priceCap)} onChange={(e) => setPriceMax(Number(e.target.value))} className="w-full" style={{ accentColor: "var(--accent)" }} />
+          <div className="mt-1 text-[12.5px]" style={{ color: "var(--muted)" }}>{t.upTo} {num(Math.min(priceMax, priceCap), locale)} {t.currency}</div>
         </div>
 
-        <div className={fieldBox} style={fieldStyle}>
-          <div className="mb-2.5 text-[13.5px] font-bold">{t.fBrand}</div>
-          <div className="flex flex-col gap-1.5">
-            {brands.map((b) => (
-              <label key={b} className="flex cursor-pointer items-center gap-2 text-[13.5px]">
-                <input type="checkbox" checked={brandFilter.includes(b)} onChange={() => toggle(brandFilter, b, setBrandFilter)} style={{ accentColor: "var(--accent)" }} />
-                {b}
-              </label>
-            ))}
+        {facetBrands.length > 0 && (
+          <div className={fieldBox} style={fieldStyle}>
+            <div className="mb-2.5 text-[13.5px] font-bold">{t.fBrand}</div>
+            <div className="flex flex-col gap-1.5">
+              {facetBrands.map((b) => (
+                <label key={b} className="flex cursor-pointer items-center gap-2 text-[13.5px]">
+                  <input type="checkbox" checked={brandFilter.includes(b)} onChange={() => toggle(brandFilter, b, setBrandFilter)} style={{ accentColor: "var(--accent)" }} />
+                  {b}
+                </label>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className={fieldBox} style={fieldStyle}>
-          <div className="mb-2.5 text-[13.5px] font-bold">{t.fRating}</div>
-          <div className="flex flex-col gap-1.5">
-            {[4, 3, 0].map((r) => (
-              <button key={r} onClick={() => setRatingMin(r)} className="cursor-pointer border-none bg-transparent py-1 text-[13.5px]" style={{ color: ratingMin === r ? "var(--accent)" : "var(--text)", fontWeight: ratingMin === r ? 700 : 400, textAlign: "start" }}>
-                {r === 0 ? (locale === "fa" ? "همه" : "All") : `${"★".repeat(r)}+ `}
-              </button>
-            ))}
+        {ratingsVary && (
+          <div className={fieldBox} style={fieldStyle}>
+            <div className="mb-2.5 text-[13.5px] font-bold">{t.fRating}</div>
+            <div className="flex flex-col gap-1.5">
+              {[4, 3, 0].map((r) => (
+                <button key={r} onClick={() => setRatingMin(r)} className="cursor-pointer border-none bg-transparent py-1 text-[13.5px]" style={{ color: ratingMin === r ? "var(--accent)" : "var(--text)", fontWeight: ratingMin === r ? 700 : 400, textAlign: "start" }}>
+                  {r === 0 ? (locale === "fa" ? "همه" : "All") : `${"★".repeat(r)}+ `}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className={fieldBox} style={fieldStyle}>
-          <div className="mb-2.5 text-[13.5px] font-bold">{t.fColor}</div>
-          <div className="flex flex-wrap gap-2">
-            {ALL_COLORS.map(([fa, en, hex]) => {
-              const name = locale === "fa" ? fa : en;
-              const on = colorFilter.includes(fa);
-              return (
-                <button key={fa} onClick={() => toggle(colorFilter, fa, setColorFilter)} title={name} className="h-7 w-7 cursor-pointer rounded-full" style={{ background: hex, border: on ? "2px solid var(--accent)" : "2px solid var(--border)", outline: on ? "2px solid var(--accent)" : "none", outlineOffset: 1 }} />
-              );
-            })}
+        {facetColors.length > 0 && (
+          <div className={fieldBox} style={fieldStyle}>
+            <div className="mb-2.5 text-[13.5px] font-bold">{t.fColor}</div>
+            <div className="flex flex-wrap gap-2">
+              {facetColors.map(([name, hex]) => {
+                const on = colorFilter.includes(name);
+                return (
+                  <button key={name} onClick={() => toggle(colorFilter, name, setColorFilter)} title={name} className="h-7 w-7 cursor-pointer rounded-full" style={{ background: hex, border: on ? "2px solid var(--accent)" : "2px solid var(--border)", outline: on ? "2px solid var(--accent)" : "none", outlineOffset: 1 }} />
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className={fieldBox} style={fieldStyle}>
-          <div className="mb-2.5 text-[13.5px] font-bold">{t.fSize}</div>
-          <div className="flex flex-wrap gap-2">
-            {ALL_SIZES.map((sz) => {
-              const on = sizeFilter.includes(sz);
-              return (
-                <button key={sz} onClick={() => toggle(sizeFilter, sz, setSizeFilter)} className="min-w-[40px] cursor-pointer rounded-[8px] px-2.5 py-1.5 text-[13px] font-bold" style={{ background: on ? "var(--accent)" : "var(--surface2)", color: on ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}>{sz}</button>
-              );
-            })}
+        {facetSizes.length > 0 && (
+          <div className={fieldBox} style={fieldStyle}>
+            <div className="mb-2.5 text-[13.5px] font-bold">{t.fSize}</div>
+            <div className="flex flex-wrap gap-2">
+              {facetSizes.map((sz) => {
+                const on = sizeFilter.includes(sz);
+                return (
+                  <button key={sz} onClick={() => toggle(sizeFilter, sz, setSizeFilter)} className="min-w-[40px] cursor-pointer rounded-[8px] px-2.5 py-1.5 text-[13px] font-bold" style={{ background: on ? "var(--accent)" : "var(--surface2)", color: on ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}>{sz}</button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         <label className={`${fieldBox} flex cursor-pointer items-center justify-between text-[13.5px] font-bold`} style={fieldStyle}>
           {t.fInStock}
