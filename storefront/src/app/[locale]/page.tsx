@@ -22,9 +22,11 @@ import { Sparkle } from "@/components/Icons";
 const SECTION = "mx-auto max-w-[1280px] px-[22px]";
 
 export default function HomePage() {
-  const { locale, t, dark, addToCart, setChatOpen, products, brands, home } = useShop();
+  const { locale, t, dark, addToCart, setChatOpen, products, brands, home, categories: liveCats } = useShop();
   const [tab, setTab] = useState<"featured" | "new" | "best" | "deal">("featured");
   const L = locale === "fa";
+  // real, admin-managed categories (not the seed)
+  const CATS = liveCats.length ? liveCats : CATEGORIES;
   // pick admin-edited bilingual text, falling back to the built-in translation
   const tx = (b: { fa: string; en: string } | undefined, fallback: string) => {
     const v = b ? (L ? b.fa : b.en) : "";
@@ -34,14 +36,10 @@ export default function HomePage() {
 
   const deal = dealOfDay(products);
   const dealName = deal ? (locale === "fa" ? deal.fa : deal.en) : "";
-  const dealCat = deal ? CATEGORIES.find((c) => c.id === deal.cat) : undefined;
+  const dealCat = deal ? CATS.find((c) => c.id === deal.cat) : undefined;
+  const dealImg = deal?.images?.[0];
 
   const picks = smartPicks(products);
-  const reasons =
-    locale === "fa"
-      ? ["چون قبلاً محصول مشابه دیدی", "چون کاربران مشابه انتخاب کرده‌اند", "پرتکرار در سبد خریدها", "متناسب با سلیقه‌ی تو"]
-      : ["Because you viewed similar items", "Chosen by shoppers like you", "Frequently bought together", "Matches your taste"];
-  const matches = [96, 93, 91, 89];
 
   const tabs = [
     { id: "featured" as const, label: t.tabFeatured, items: featured(products) },
@@ -110,8 +108,8 @@ export default function HomePage() {
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-[18px] md:grid-cols-4">
-          {picks.map((p, i) => (
-            <ProductCard key={p.id} p={p} aiMatch={matches[i]} reason={reasons[i]} />
+          {picks.map((p) => (
+            <ProductCard key={p.id} p={p} />
           ))}
         </div>
       </section>
@@ -171,7 +169,7 @@ export default function HomePage() {
           <LocaleLink href="/shop" className="text-[14px] font-bold no-underline" style={{ color: "var(--accent)" }}>{t.viewAll}</LocaleLink>
         </div>
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-5">
-          {CATEGORIES.map((c) => {
+          {CATS.filter((c) => !c.hidden).map((c) => {
             const count = products.filter((p) => p.cat === c.id).length;
             return (
               <LocaleLink key={c.id} href={`/shop?cat=${c.id}`} className="lift flex flex-col items-center gap-2.5 rounded-[16px] px-4 py-6 text-center text-white no-underline transition" style={{ background: grad(c.hue, dark) }}>
@@ -196,7 +194,14 @@ export default function HomePage() {
             <LocaleLink href={`/product/${deal.id}`} className="mt-5 self-start rounded-[11px] bg-white px-[22px] py-3 text-[14px] font-extrabold no-underline" style={{ color: "#111" }}>{t.grabDeal}</LocaleLink>
           </div>
           <div className="flex flex-col items-stretch gap-4 p-5 sm:flex-row sm:items-center sm:gap-7 sm:p-7">
-            <LocaleLink href={`/product/${deal.id}`} className="flex h-[170px] w-full flex-none items-center justify-center rounded-[18px] text-[64px] font-extrabold no-underline sm:h-[230px] sm:w-[230px]" style={{ background: grad(deal.hue, dark), color: "rgba(255,255,255,.55)" }}>{dealName.charAt(0)}</LocaleLink>
+            <LocaleLink href={`/product/${deal.id}`} className="flex h-[170px] w-full flex-none items-center justify-center overflow-hidden rounded-[18px] text-[64px] font-extrabold no-underline sm:h-[230px] sm:w-[230px]" style={{ background: grad(deal.hue, dark), color: "rgba(255,255,255,.55)" }}>
+              {dealImg ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={dealImg} alt={dealName} className="h-full w-full object-cover" />
+              ) : (
+                dealName.charAt(0)
+              )}
+            </LocaleLink>
             <div>
               <div className="text-[13px] font-bold" style={{ color: "var(--accent)" }}>{dealCat ? (locale === "fa" ? dealCat.fa : dealCat.en) : ""}</div>
               <div className="my-1.5 text-[22px] font-extrabold tracking-tight">{dealName}</div>

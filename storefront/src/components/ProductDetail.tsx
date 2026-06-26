@@ -54,9 +54,12 @@ export function ProductDetail({ id }: { id: number }) {
           ["SKU", p.sku || `SKU-${1000 + p.id}`],
           ["Status", p.stock > 0 ? "In stock" : "Out of stock"],
         ];
-  // custom technical specs entered in admin come first
+  // custom technical specs entered in admin come first; base specs are only
+  // appended when their label isn't already covered by a custom spec (no dupes)
   const custom: [string, string][] = (p.specs || []).filter((s) => s && s[0] && s[1]);
-  const specs: [string, string][] = [...custom, ...base.filter((x): x is [string, string] => !!x)];
+  const seenLabels = new Set(custom.map(([k]) => k.trim().toLowerCase()));
+  const baseList = base.filter((x): x is [string, string] => !!x).filter(([k]) => !seenLabels.has(k.trim().toLowerCase()));
+  const specs: [string, string][] = [...custom, ...baseList];
 
   return (
     <div className="mx-auto max-w-[1280px] px-[22px] py-7">
