@@ -6,6 +6,7 @@ import { CATEGORIES as SEED_CATS, BRANDS } from "@/data/categories";
 import type { Product, Variation } from "@/lib/types";
 import { Plus, Trash, Close, Play } from "@/components/Icons";
 import { UploadButton } from "@/components/UploadButton";
+import { translateOne } from "@/lib/aitranslate";
 
 const inputCls = "w-full rounded-[10px] px-3 py-2.5 text-[13.5px] outline-none";
 const inputStyle = {
@@ -41,6 +42,7 @@ export function ProductModal({
   const [vars, setVars] = useState<Variation[]>(initial?.variations ?? []);
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
   const [video, setVideo] = useState(initial?.video ?? "");
+  const [enBusy, setEnBusy] = useState(false);
   const [perCm, setPerCm] = useState(initial?.pricingType === "per_cm");
   const [pricePerCm, setPricePerCm] = useState(String(initial?.pricePerCm ?? ""));
   const [width, setWidth] = useState(String(initial?.width ?? ""));
@@ -132,11 +134,12 @@ export function ProductModal({
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             {lbl(locale === "fa" ? "نام (فارسی)" : "Name (Persian)")}
-            <input className={inputCls} style={inputStyle} value={fa} onChange={(e) => setFa(e.target.value)} />
+            <input className={inputCls} style={inputStyle} value={fa} onChange={(e) => setFa(e.target.value)}
+              onBlur={async () => { if (fa.trim() && !en.trim()) { setEnBusy(true); const v = await translateOne(fa); if (v) setEn(v); setEnBusy(false); } }} />
           </div>
           <div>
-            {lbl(locale === "fa" ? "نام (انگلیسی)" : "Name (English)")}
-            <input className={inputCls} style={inputStyle} value={en} onChange={(e) => setEn(e.target.value)} />
+            {lbl((locale === "fa" ? "نام (انگلیسی)" : "Name (English)") + (enBusy ? (locale === "fa" ? " — در حال ترجمه…" : " — translating…") : ""))}
+            <input className={inputCls} style={inputStyle} value={en} onChange={(e) => setEn(e.target.value)} dir="ltr" placeholder={locale === "fa" ? "خودکار از روی نام فارسی" : "auto from Persian"} />
           </div>
           <div>
             {lbl(t.thCat)}

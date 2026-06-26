@@ -129,8 +129,8 @@ export function Header() {
           <span className="text-[21px] font-extrabold tracking-tight">{storeName}</span>
         </LocaleLink>
 
-        {/* search */}
-        <div className="relative max-w-[560px] flex-1">
+        {/* search (desktop) */}
+        <div className="relative hidden max-w-[560px] flex-1 md:block">
           <div
             className="flex h-[46px] items-center gap-2 rounded-[13px] px-3"
             style={{ background: "var(--surface2)", border: "1.5px solid var(--border)" }}
@@ -249,6 +249,13 @@ export function Header() {
           )}
         </div>
 
+        <span className="flex-1 md:hidden" />
+
+        {/* mobile search toggle */}
+        <button onClick={() => setShowSearch((v) => !v)} aria-label="search" className="flex h-[42px] w-[42px] items-center justify-center rounded-[10px] md:hidden" style={{ border: "1px solid var(--border)", color: "var(--text)" }}>
+          <Search size={20} />
+        </button>
+
         {/* controls */}
         <nav className="flex items-center gap-1">
           <button
@@ -279,7 +286,7 @@ export function Header() {
             style={{ background: "var(--accent)" }}
           >
             <Cart size={19} />
-            <span>{t.cart}</span>
+            <span className="hidden md:inline">{t.cart}</span>
             {cartCount > 0 && (
               <span
                 className="absolute flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10.5px] font-extrabold"
@@ -291,6 +298,27 @@ export function Header() {
           </LocaleLink>
         </nav>
       </div>
+
+      {/* mobile search row */}
+      {showSearch && (
+        <div className="border-t px-4 py-2.5 md:hidden" style={{ borderColor: "var(--border)" }}>
+          <div className="flex h-[44px] items-center gap-2 rounded-[12px] px-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+            <Search size={18} style={{ color: "var(--muted)" }} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { runSearch(); setShowSearch(false); } }}
+              autoFocus
+              placeholder={t.searchPh}
+              className="h-full flex-1 border-none bg-transparent text-[14px] outline-none"
+              style={{ color: "var(--text)" }}
+            />
+            <button onClick={() => { runSearch(); setShowSearch(false); }} className="inline-flex items-center gap-1 rounded-[9px] border-none px-3 py-1.5 text-[12px] font-bold text-white" style={{ background: "var(--accent)" }}>
+              <Sparkle size={14} /> {t.aiSearch}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* nav row (desktop only) */}
       <div className="hidden md:block" style={{ borderTop: "1px solid var(--border)" }} onMouseLeave={() => setMegaCat(null)}>

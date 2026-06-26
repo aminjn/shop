@@ -13,6 +13,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 import { UploadButton } from "@/components/UploadButton";
 import { ArticleEditor } from "@/components/admin/ArticleEditor";
 import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
+import { translateOne } from "@/lib/aitranslate";
 import {
   Grid,
   List,
@@ -1391,7 +1392,14 @@ function CategoriesAdmin() {
 
   const startNew = () => { setEditing(null); setForm(blank); };
   const startEdit = (c: CatRow) => { setEditing(c); setForm({ ...c, subs: [...c.subs] }); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const addSub = () => { if (!subFa.trim()) return; setForm((f) => ({ ...f, subs: [...f.subs, [subFa.trim(), subEn.trim() || subFa.trim()]] })); setSubFa(""); setSubEn(""); };
+  const addSub = async () => {
+    if (!subFa.trim()) return;
+    let en = subEn.trim();
+    if (!en) en = (await translateOne(subFa.trim())) || subFa.trim();
+    setForm((f) => ({ ...f, subs: [...f.subs, [subFa.trim(), en]] }));
+    setSubFa(""); setSubEn("");
+  };
+  const autoEnCat = async () => { if (form.fa.trim() && !form.en.trim()) { const v = await translateOne(form.fa.trim()); if (v) setForm((f) => ({ ...f, en: v })); } };
   const rmSub = (i: number) => setForm((f) => ({ ...f, subs: f.subs.filter((_, x) => x !== i) }));
 
   const save = async () => {
@@ -1416,8 +1424,8 @@ function CategoriesAdmin() {
       <Card className="mb-6 p-5">
         <h2 className="mb-3 text-[15px] font-extrabold">{editing ? (fa ? "ویرایش دسته" : "Edit category") : fa ? "افزودن دستهٔ جدید" : "Add category"}</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div>{lbl(fa ? "نام (فارسی)" : "Name (FA)")}<input className={inputCls} style={inputStyle} value={form.fa} onChange={(e) => setForm((f) => ({ ...f, fa: e.target.value }))} /></div>
-          <div>{lbl(fa ? "نام (انگلیسی)" : "Name (EN)")}<input className={inputCls} style={inputStyle} value={form.en} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" /></div>
+          <div>{lbl(fa ? "نام (فارسی)" : "Name (FA)")}<input className={inputCls} style={inputStyle} value={form.fa} onChange={(e) => setForm((f) => ({ ...f, fa: e.target.value }))} onBlur={autoEnCat} /></div>
+          <div>{lbl(fa ? "نام انگلیسی (خودکار)" : "Name (EN)")}<input className={inputCls} style={inputStyle} value={form.en} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" placeholder={fa ? "خودکار از فارسی" : "auto"} /></div>
           <div>{lbl(fa ? "رنگ (۰ تا ۳۶۰)" : "Hue")}<input className={inputCls} style={inputStyle} type="number" min={0} max={360} value={form.hue} onChange={(e) => setForm((f) => ({ ...f, hue: Number(e.target.value) || 0 }))} dir="ltr" /></div>
         </div>
         {/* subs */}
@@ -1545,8 +1553,8 @@ function MenuAdmin() {
         <h2 className="mb-1 text-[15px] font-extrabold">{fa ? "لینک‌های سفارشی" : "Custom links"}</h2>
         <p className="mb-3 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "لینک‌های اضافه کنار دسته‌ها (مثل «تماس با ما» یا لینک بیرونی)." : "Extra links beside categories."}</p>
         <div className="grid gap-3 sm:grid-cols-3">
-          <div>{lbl(fa ? "عنوان (فارسی)" : "Label (FA)")}<input className={inputCls} style={inputStyle} value={form.fa} onChange={(e) => setForm((f) => ({ ...f, fa: e.target.value }))} /></div>
-          <div>{lbl(fa ? "عنوان (انگلیسی)" : "Label (EN)")}<input className={inputCls} style={inputStyle} value={form.en} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" /></div>
+          <div>{lbl(fa ? "عنوان (فارسی)" : "Label (FA)")}<input className={inputCls} style={inputStyle} value={form.fa} onChange={(e) => setForm((f) => ({ ...f, fa: e.target.value }))} onBlur={async () => { if (form.fa.trim() && !form.en.trim()) { const v = await translateOne(form.fa.trim()); if (v) setForm((f) => ({ ...f, en: v })); } }} /></div>
+          <div>{lbl(fa ? "عنوان انگلیسی (خودکار)" : "Label (EN)")}<input className={inputCls} style={inputStyle} value={form.en} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" placeholder={fa ? "خودکار از فارسی" : "auto"} /></div>
           <div>{lbl(fa ? "آدرس (/about یا https://…)" : "URL")}<input className={inputCls} style={inputStyle} value={form.href} onChange={(e) => setForm((f) => ({ ...f, href: e.target.value }))} dir="ltr" placeholder="/about" /></div>
         </div>
         <div className="mt-3 flex gap-2">

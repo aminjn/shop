@@ -8,6 +8,7 @@ import { UploadButton } from "@/components/UploadButton";
 import { JalaliDateTimePicker } from "@/components/JalaliDateTimePicker";
 import { JALALI_MONTHS, jalaliMonthLength, jalaliYearNow, toGregorian, dateToJalaliParts } from "@/lib/jalali";
 import { Sparkle, Plus, Trash } from "@/components/Icons";
+import { aiSlug, translitSlug } from "@/lib/aitranslate";
 
 interface PostRow {
   id: number;
@@ -315,7 +316,9 @@ export function ArticleEditor() {
             <div className="flex flex-col gap-4">
               {/* title + slug */}
               <div className="p-5" style={card}>
-                <input className="mb-2 w-full bg-transparent text-[22px] font-extrabold outline-none" style={{ color: "var(--text)" }} value={form.title} placeholder={fa ? "عنوان مقاله را اینجا بنویس…" : "Article title…"} onChange={(e) => { set("title", e.target.value); if (!editing && (!form.slug || form.slug === slugify(form.title))) set("slug", slugify(e.target.value)); }} />
+                <input className="mb-2 w-full bg-transparent text-[22px] font-extrabold outline-none" style={{ color: "var(--text)" }} value={form.title} placeholder={fa ? "عنوان مقاله را اینجا بنویس…" : "Article title…"}
+                  onChange={(e) => { set("title", e.target.value); if (!editing && (!form.slug || form.slug === translitSlug(form.title))) set("slug", translitSlug(e.target.value)); }}
+                  onBlur={async () => { if (!editing && form.title.trim() && (!form.slug || form.slug === translitSlug(form.title))) { const s = await aiSlug(form.title); if (s) set("slug", s); } }} />
                 <div className="flex items-center gap-1 text-[12.5px]" style={{ color: "var(--muted)" }} dir="ltr">
                   <span className="whitespace-nowrap">/blog/</span>
                   <input className="w-full bg-transparent outline-none" style={{ color: "var(--muted)" }} value={form.slug} placeholder="slug" onChange={(e) => set("slug", e.target.value)} dir="ltr" />
@@ -323,7 +326,7 @@ export function ArticleEditor() {
                 {titleSug.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {titleSug.map((tt, i) => (
-                      <button key={i} onClick={() => { set("title", tt); set("slug", slugify(tt)); setTitleSug([]); }} className="cursor-pointer rounded-full px-3 py-1 text-[12px] font-bold" style={inputStyle}>{tt}</button>
+                      <button key={i} onClick={async () => { set("title", tt); setTitleSug([]); set("slug", translitSlug(tt)); const s = await aiSlug(tt); if (s) set("slug", s); }} className="cursor-pointer rounded-full px-3 py-1 text-[12px] font-bold" style={inputStyle}>{tt}</button>
                     ))}
                   </div>
                 )}
