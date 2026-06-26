@@ -201,15 +201,15 @@ export default function HomePage() {
       {deal && (
       <section className={`${SECTION} py-3`}>
         <div className="grid overflow-hidden rounded-[22px] md:grid-cols-[300px_1fr]" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <div className="flex flex-col justify-center p-[34px] text-white" style={{ background: grad(deal.hue, dark) }}>
+          <div className="flex flex-col justify-center p-6 text-white md:p-[34px]" style={{ background: grad(deal.hue, dark) }}>
             <span className="text-[13px] font-extrabold uppercase tracking-widest opacity-90">{t.dealOfDay}</span>
             <div className="mb-1 mt-2.5 text-[28px] font-black leading-tight">{dealName}</div>
             <div className="text-[14px] opacity-85">{t.endsIn}</div>
             <Countdown />
             <LocaleLink href={`/product/${deal.id}`} className="mt-5 self-start rounded-[11px] bg-white px-[22px] py-3 text-[14px] font-extrabold no-underline" style={{ color: "#111" }}>{t.grabDeal}</LocaleLink>
           </div>
-          <div className="flex items-center gap-7 p-7">
-            <LocaleLink href={`/product/${deal.id}`} className="flex h-[230px] w-[230px] flex-none items-center justify-center rounded-[18px] text-[64px] font-extrabold no-underline" style={{ background: grad(deal.hue, dark), color: "rgba(255,255,255,.55)" }}>{dealName.charAt(0)}</LocaleLink>
+          <div className="flex flex-col items-stretch gap-4 p-5 sm:flex-row sm:items-center sm:gap-7 sm:p-7">
+            <LocaleLink href={`/product/${deal.id}`} className="flex h-[170px] w-full flex-none items-center justify-center rounded-[18px] text-[64px] font-extrabold no-underline sm:h-[230px] sm:w-[230px]" style={{ background: grad(deal.hue, dark), color: "rgba(255,255,255,.55)" }}>{dealName.charAt(0)}</LocaleLink>
             <div>
               <div className="text-[13px] font-bold" style={{ color: "var(--accent)" }}>{dealCat ? (locale === "fa" ? dealCat.fa : dealCat.en) : ""}</div>
               <div className="my-1.5 text-[22px] font-extrabold tracking-tight">{dealName}</div>
@@ -254,8 +254,8 @@ export default function HomePage() {
         <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{t.popularBrands}</h2>
         <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-5">
           {topBrands(products).map((b) => (
-            <LocaleLink key={b} href={`/shop?brand=${encodeURIComponent(b)}`} className="row-hover flex items-center justify-center rounded-[14px] py-7 text-[18px] font-extrabold no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
-              {b}
+            <LocaleLink key={b} href={`/shop?brand=${encodeURIComponent(b)}`} className="row-hover flex min-w-0 items-center justify-center rounded-[14px] px-2 py-7 text-[18px] font-extrabold no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
+              <span className="truncate">{b}</span>
             </LocaleLink>
           ))}
         </div>
