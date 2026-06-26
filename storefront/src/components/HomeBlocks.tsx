@@ -23,17 +23,22 @@ function blankBlock(type: HomeBlockType): HomeBlock {
   return base; // image
 }
 
+/** Thin wrapper: drives the homepage's blocks through the inline edit context. */
 export function HomeBlocks() {
   const ctx = useHomeEdit();
+  if (!ctx?.content) return null;
+  if (!(ctx.content.blocks || []).length && !ctx.editMode) return null;
+  return <BlockEditor blocks={ctx.content.blocks || []} editing={ctx.editMode} onChange={(arr) => ctx.updateList("blocks", arr)} />;
+}
+
+/** Reusable block canvas — used by the homepage and by standalone surfaces. */
+export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]; editing: boolean; onChange: (b: HomeBlock[]) => void }) {
   const { locale, products, dark } = useShop();
   const [openId, setOpenId] = useState<string | null>(null);
-  if (!ctx?.content) return null;
   const fa = locale === "fa";
-  const editing = ctx.editMode;
-  const blocks = ctx.content.blocks || [];
   if (!blocks.length && !editing) return null;
 
-  const set = (arr: HomeBlock[]) => ctx.updateList("blocks", arr);
+  const set = (arr: HomeBlock[]) => onChange(arr);
   const upd = (i: number, patch: Partial<HomeBlock>) => set(blocks.map((b, x) => (x === i ? { ...b, ...patch } : b)));
   const rm = (i: number) => set(blocks.filter((_, x) => x !== i));
   const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const a = [...blocks]; [a[i], a[j]] = [a[j], a[i]]; set(a); };

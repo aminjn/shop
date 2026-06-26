@@ -6,6 +6,7 @@ import { useShop } from "@/lib/store";
 import { CATEGORIES } from "@/data/categories";
 import { num } from "@/lib/format";
 import { ProductCard } from "@/components/ProductCard";
+import { BlockCanvas } from "@/components/BlockCanvas";
 import { Grid, List, Sparkle, Close } from "@/components/Icons";
 import type { Product } from "@/lib/types";
 
@@ -13,9 +14,12 @@ const MAX_PRICE = 15_000_000;
 
 export default function ShopPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-[1280px] px-[22px] py-7" />}>
-      <ShopContent />
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="mx-auto max-w-[1280px] px-[22px] py-7" />}>
+        <ShopContent />
+      </Suspense>
+      <BlockCanvas blockKey="shop" />
+    </>
   );
 }
 

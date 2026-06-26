@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPage } from "@/lib/pages";
 import { renderMarkdown } from "@/lib/markdown";
+import { BlockCanvas } from "@/components/BlockCanvas";
 import { isLocale } from "@/i18n/config";
 import type { Locale } from "@/lib/types";
 
@@ -28,6 +29,7 @@ export default async function SitePageView({ params }: { params: Promise<{ local
     <div className="mx-auto max-w-[860px] px-[22px] py-10">
       <h1 className="mb-6 text-[30px] font-black tracking-tight">{title}</h1>
       <div className="prose-mini text-[15px] leading-loose" dangerouslySetInnerHTML={{ __html: html }} />
+      <BlockCanvas blockKey={`page:${slug}`} />
     </div>
   );
 }
