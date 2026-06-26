@@ -3122,6 +3122,14 @@ function Settings() {
                   );
                 })}
               </div>
+              {Object.keys(aiTaskModels).length > 0 && (
+                <button onClick={() => setAiTaskModels({})} className="mt-3 cursor-pointer rounded-[9px] px-3 py-1.5 text-[12px] font-bold" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--accent)" }}>
+                  ↺ {fa ? "همهٔ بخش‌ها از مدل پیش‌فرض استفاده کنند" : "Reset all to default model"}
+                </button>
+              )}
+              <p className="mt-2 text-[11px] leading-relaxed" style={{ color: "var(--muted)" }}>
+                {fa ? "وقتی سرویس هوش مصنوعی را عوض می‌کنی، حتماً این را بزن یا مدل هر بخش را به مدلی از سرویس جدید تغییر بده؛ وگرنه مدل قدیمی باعث خطای تولید می‌شود." : "After switching AI provider, reset these or pick models from the new service to avoid generation errors."}
+              </p>
             </div>
 
             <div className="flex gap-3">
