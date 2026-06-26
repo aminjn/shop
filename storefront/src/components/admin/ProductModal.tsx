@@ -106,13 +106,12 @@ export function ProductModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain scrollthin"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,.55)" }}
       onClick={onClose}
     >
-      <div className="flex min-h-full items-start justify-center p-4 sm:items-center">
       <div
-        className="my-auto w-full max-w-[680px] rounded-[16px] p-5 sm:p-6"
+        className="w-full max-w-[680px] max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain scrollthin rounded-[16px] p-5 sm:p-6"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -318,7 +317,6 @@ export function ProductModal({
             {locale === "fa" ? "ذخیره" : "Save"}
           </button>
         </div>
-      </div>
       </div>
     </div>
   );
