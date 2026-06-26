@@ -81,8 +81,10 @@ export async function callAIDetailed(
 ): Promise<{ text: string | null; error?: string }> {
   const c = aiConfig();
   if (!c.configured) return { text: null, error: "not-configured" };
-  // many models cap output tokens; keep within a widely-supported ceiling
-  const caps = [Math.min(4096, Math.max(256, maxTokens)), 2048, 1024];
+  // Try the requested size first (long articles need >4k output tokens); if the
+  // model rejects it (token/length/context error) we step down automatically.
+  const want = Math.max(256, maxTokens);
+  const caps = [Math.min(16000, want), Math.min(8192, want), Math.min(4096, want), 2048];
   let lastErr = "";
   let tokenParam: "max_tokens" | "max_completion_tokens" = "max_tokens";
 
