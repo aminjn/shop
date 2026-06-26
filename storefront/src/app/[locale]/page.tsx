@@ -22,7 +22,7 @@ import { Sparkle } from "@/components/Icons";
 const SECTION = "mx-auto max-w-[1280px] px-[22px]";
 
 export default function HomePage() {
-  const { locale, t, dark, addToCart, setChatOpen, products } = useShop();
+  const { locale, t, dark, addToCart, setChatOpen, products, brands } = useShop();
   const [tab, setTab] = useState<"featured" | "new" | "best" | "deal">("featured");
 
   const deal = dealOfDay(products);
@@ -249,17 +249,32 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Brands marquee */}
-      <section className={`${SECTION} py-6`}>
-        <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{t.popularBrands}</h2>
-        <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-5">
-          {topBrands(products).map((b) => (
-            <LocaleLink key={b} href={`/shop?brand=${encodeURIComponent(b)}`} className="row-hover flex min-w-0 items-center justify-center rounded-[14px] px-2 py-7 text-[18px] font-extrabold no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
-              <span className="truncate">{b}</span>
-            </LocaleLink>
-          ))}
-        </div>
-      </section>
+      {/* Brands marquee — managed brands (with logos); falls back to brands derived from products */}
+      {(() => {
+        const managed = brands.filter((b) => b.featured !== false);
+        const cards = managed.length
+          ? managed.map((b) => ({ key: b.id, label: b.name, href: b.name, logo: b.logo }))
+          : topBrands(products).map((b) => ({ key: b, label: b, href: b, logo: undefined as string | undefined }));
+        if (!cards.length) return null;
+        return (
+          <section className={`${SECTION} py-6`}>
+            <h2 className="mb-[18px] text-[24px] font-extrabold tracking-tight">{t.popularBrands}</h2>
+            <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-5">
+              {cards.map((b) => (
+                <LocaleLink key={b.key} href={`/shop?brand=${encodeURIComponent(b.href)}`} className="row-hover flex min-w-0 flex-col items-center justify-center gap-2 rounded-[14px] px-2 py-6 no-underline" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
+                  {b.logo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={b.logo} alt={b.label} className="h-12 w-full max-w-[120px] object-contain" />
+                  ) : (
+                    <span className="text-[18px] font-extrabold truncate max-w-full">{b.label}</span>
+                  )}
+                  {b.logo && <span className="truncate max-w-full text-[13px] font-bold">{b.label}</span>}
+                </LocaleLink>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Testimonials */}
       <section className={`${SECTION} py-6`}>

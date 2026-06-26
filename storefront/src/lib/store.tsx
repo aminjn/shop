@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { CartLine, Category, Coupon, Locale, Product } from "./types";
+import type { Brand, CartLine, Category, Coupon, Locale, Product } from "./types";
 import { getDict, type Dict } from "@/i18n/dictionaries";
 import { ROUNDNESS } from "./format";
 import { PRODUCTS as SEED_PRODUCTS } from "@/data/products";
@@ -57,6 +57,7 @@ interface ShopState {
   // live taxonomy & navigation (admin-editable)
   categories: Category[];
   menu: MenuLink[];
+  brands: Brand[];
   // store branding
   logoUrl: string;
 }
@@ -114,6 +115,7 @@ export function ShopProvider({
   const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
   const [categories, setCategories] = useState<Category[]>(SEED_CATEGORIES);
   const [menu, setMenu] = useState<MenuLink[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // hydrate from localStorage on mount
@@ -138,6 +140,10 @@ export function ShopProvider({
     fetch("/api/menu")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
+      .catch(() => {});
+    fetch("/api/brands")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
       .catch(() => {});
     // apply store branding (name / currency / logo) saved in admin
     fetch("/api/settings/store")
@@ -316,6 +322,7 @@ export function ShopProvider({
     productById: (id: number) => products.find((p) => p.id === id),
     categories,
     menu,
+    brands,
     logoUrl,
   };
 

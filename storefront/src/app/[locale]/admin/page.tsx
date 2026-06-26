@@ -28,6 +28,7 @@ type Section =
   | "products"
   | "categories"
   | "menu"
+  | "brands"
   | "orders"
   | "customers"
   | "discounts"
@@ -144,6 +145,7 @@ export default function AdminPage() {
     { id: "products", label: t.aProducts },
     { id: "categories", label: fa ? "دسته‌بندی‌ها" : "Categories" },
     { id: "menu", label: fa ? "منوها" : "Menus" },
+    { id: "brands", label: fa ? "برندها" : "Brands" },
     { id: "orders", label: t.aOrders },
     { id: "customers", label: t.aCustomers },
     { id: "discounts", label: t.aDiscounts },
@@ -290,6 +292,7 @@ export default function AdminPage() {
           )}
           {section === "categories" && <CategoriesAdmin />}
           {section === "menu" && <MenuAdmin />}
+          {section === "brands" && <BrandsAdmin />}
           {section === "orders" && <Orders />}
           {section === "customers" && <Customers />}
           {section === "discounts" && <Discounts />}
@@ -1505,6 +1508,114 @@ function CategoriesAdmin() {
               </div>
               <button onClick={() => startEdit(c)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
               <button onClick={() => del(c.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------- brands management ---------- */
+
+type BrandRow = { id: string; name: string; en?: string; logo?: string; featured?: boolean };
+
+function BrandsAdmin() {
+  const { locale, toast } = useShop();
+  const fa = locale === "fa";
+  const [brands, setBrands] = useState<BrandRow[]>([]);
+  const [editing, setEditing] = useState<BrandRow | null>(null);
+  const blank: BrandRow = { id: "", name: "", en: "", logo: "", featured: true };
+  const [form, setForm] = useState<BrandRow>(blank);
+  const [enBusy, setEnBusy] = useState(false);
+
+  const load = () => fetch("/api/brands").then((r) => r.json()).then((d) => Array.isArray(d?.brands) && setBrands(d.brands)).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const startNew = () => { setEditing(null); setForm(blank); };
+  const startEdit = (b: BrandRow) => { setEditing(b); setForm({ ...b }); window.scrollTo({ top: 0, behavior: "smooth" }); };
+
+  const fillEn = async () => {
+    if (!form.name.trim()) { toast(fa ? "اول نام برند را بنویس" : "Enter brand name"); return; }
+    setEnBusy(true);
+    try {
+      const v = await translateOne(form.name.trim());
+      if (v) setForm((f) => ({ ...f, en: v }));
+      else toast(fa ? "ترجمه‌ای دریافت نشد" : "No result");
+    } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setEnBusy(false); }
+  };
+
+  const post = async (body: Record<string, unknown>) => {
+    const r = await fetch("/api/brands", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok && Array.isArray(d.brands)) setBrands(d.brands);
+    return d;
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) { toast(fa ? "نام برند الزامی است" : "Name required"); return; }
+    const d = await post({ action: editing ? "update" : "add", id: form.id, name: form.name.trim(), en: (form.en || "").trim(), logo: (form.logo || "").trim(), featured: form.featured !== false });
+    if (d.ok) { startNew(); toast(fa ? "ذخیره شد ✓ (برای دیدن در سایت صفحه را تازه کن)" : "Saved ✓"); }
+    else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+  };
+  const del = async (id: string) => { const d = await post({ action: "delete", id }); if (d.ok) toast(fa ? "حذف شد" : "Deleted"); };
+
+  return (
+    <>
+      <H1>{fa ? "برندها" : "Brands"}</H1>
+      <p className="mb-5 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "برندها را اینجا با لوگو مدیریت کن. این‌ها در فرم محصول و صفحهٔ اصلی (با لینک) نمایش داده می‌شوند." : "Manage brands with logos, used in the product form and on the homepage."}</p>
+
+      <Card className="mb-6 p-5">
+        <h2 className="mb-3 text-[15px] font-extrabold">{editing ? (fa ? "ویرایش برند" : "Edit brand") : fa ? "افزودن برند جدید" : "Add brand"}</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>{lbl(fa ? "نام برند" : "Brand name")}<input className={inputCls} style={inputStyle} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder={fa ? "مثلاً سامسونگ یا Samsung" : "e.g. Samsung"} /></div>
+          <div>
+            {lbl(fa ? "نام انگلیسی / اسلاگ" : "English / slug")}
+            <div className="flex gap-2">
+              <input className={inputCls} style={inputStyle} value={form.en || ""} onChange={(e) => setForm((f) => ({ ...f, en: e.target.value }))} dir="ltr" placeholder={fa ? "خودکار با هوش مصنوعی" : "auto"} onBlur={async () => { if (form.name.trim() && !(form.en || "").trim()) { const v = await translateOne(form.name.trim()); if (v) setForm((f) => ({ ...f, en: v })); } }} />
+              <button type="button" onClick={fillEn} disabled={enBusy} title={fa ? "تکمیل با هوش مصنوعی" : "AI complete"} className="flex-none cursor-pointer rounded-[10px] px-3 text-[13px] font-bold disabled:opacity-60" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--accent)" }}>✨</button>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3">
+          {lbl(fa ? "لوگو" : "Logo")}
+          <div className="flex flex-wrap items-center gap-3">
+            {form.logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.logo} alt="logo" className="h-12 w-12 rounded-[10px] object-contain" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }} />
+            ) : (
+              <span className="flex h-12 w-12 items-center justify-center rounded-[10px] text-[16px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--muted)" }}>{(form.name || "?").charAt(0)}</span>
+            )}
+            <UploadButton accept="image/*" label={fa ? "آپلود لوگو" : "Upload logo"} onUploaded={(url) => setForm((f) => ({ ...f, logo: url }))} />
+            {form.logo && <button type="button" onClick={() => setForm((f) => ({ ...f, logo: "" }))} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف لوگو" : "Remove"}</button>}
+          </div>
+        </div>
+        <label className="mt-3 flex cursor-pointer items-center gap-2 text-[13.5px] font-bold">
+          <input type="checkbox" checked={form.featured !== false} onChange={(e) => setForm((f) => ({ ...f, featured: e.target.checked }))} style={{ accentColor: "var(--accent)" }} />
+          {fa ? "نمایش در صفحهٔ اصلی" : "Show on homepage"}
+        </label>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button onClick={save} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره تغییرات" : "Save") : fa ? "افزودن برند" : "Add"}</button>
+          {editing && <button onClick={startNew} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>}
+        </div>
+      </Card>
+
+      {brands.length === 0 ? <Empty text={fa ? "هنوز برندی ثبت نشده." : "No brands."} /> : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {brands.map((b) => (
+            <div key={b.id} className="flex items-center gap-3 rounded-[12px] p-3" style={{ ...cardStyle }}>
+              {b.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={b.logo} alt={b.name} className="h-10 w-10 flex-none rounded-[9px] object-contain" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }} />
+              ) : (
+                <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[9px] text-[14px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--muted)" }}>{b.name.charAt(0)}</span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[14px] font-bold">{b.name}</div>
+                <div className="truncate text-[12px]" style={{ color: "var(--muted)" }}>{b.en || "—"}{b.featured === false ? (fa ? " · مخفی از صفحهٔ اصلی" : " · hidden") : ""}</div>
+              </div>
+              <button onClick={() => startEdit(b)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? "ویرایش" : "Edit"}</button>
+              <button onClick={() => del(b.id)} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Delete"}</button>
             </div>
           ))}
         </div>

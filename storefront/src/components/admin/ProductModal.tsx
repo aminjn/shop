@@ -24,8 +24,9 @@ export function ProductModal({
   onClose: () => void;
   onSave: (p: Product) => void | Promise<void>;
 }) {
-  const { locale, t, toast, categories: liveCats } = useShop();
+  const { locale, t, toast, categories: liveCats, brands: liveBrands } = useShop();
   const CATEGORIES = liveCats.length ? liveCats : SEED_CATS;
+  const BRAND_NAMES = liveBrands.length ? liveBrands.map((b) => b.name) : BRANDS;
 
   const [fa, setFa] = useState(initial?.fa ?? "");
   const [en, setEn] = useState(initial?.en ?? "");
@@ -33,7 +34,7 @@ export function ProductModal({
   const [sub, setSub] = useState(initial?.sub ?? "");
   const curCat = CATEGORIES.find((c) => c.id === cat);
   const subOptions = curCat?.subs ?? [];
-  const [brand, setBrand] = useState(initial?.brand ?? BRANDS[0]);
+  const [brand, setBrand] = useState(initial?.brand ?? BRAND_NAMES[0] ?? "");
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [price, setPrice] = useState(String(initial?.price ?? ""));
   const [old, setOld] = useState(String(initial?.old ?? ""));
@@ -172,7 +173,8 @@ export function ProductModal({
           <div>
             {lbl(t.brand)}
             <select className={inputCls} style={inputStyle} value={brand} onChange={(e) => setBrand(e.target.value)}>
-              {BRANDS.map((b) => (
+              {brand && !BRAND_NAMES.includes(brand) && <option value={brand}>{brand}</option>}
+              {BRAND_NAMES.map((b) => (
                 <option key={b} value={b}>
                   {b}
                 </option>

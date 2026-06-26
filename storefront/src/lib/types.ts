@@ -9,6 +9,14 @@ export interface Category {
   hidden?: boolean; // hide from the site navigation menu
 }
 
+export interface Brand {
+  id: string;
+  name: string; // canonical brand value stored on products (e.g. "TechPro")
+  en?: string; // latin/slug for links & SEO
+  logo?: string; // logo image url
+  featured?: boolean; // show on homepage
+}
+
 export interface Variation {
   type: string;
   value: string;
