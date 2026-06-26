@@ -18,7 +18,7 @@ export default function BlogPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    fetch("/api/posts")
+    fetch("/api/posts", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (Array.isArray(d?.posts)) setPosts(d.posts as P[]); })
       .catch(() => {})

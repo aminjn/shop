@@ -67,16 +67,23 @@ export function ArticleEditor() {
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = () =>
-    fetch("/api/posts?all=1")
+    fetch("/api/posts?all=1", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => Array.isArray(d?.posts) && setPosts(d.posts))
       .catch(() => {});
   const loadCats = () =>
-    fetch("/api/blog/categories")
+    fetch("/api/blog/categories", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => Array.isArray(d?.categories) && setCats(d.categories))
       .catch(() => {});
-  useEffect(() => { load(); loadCats(); }, []);
+  // load on mount + auto-refresh so generated/published articles appear live
+  useEffect(() => {
+    load(); loadCats();
+    const t = setInterval(load, 12000);
+    const onVis = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
 
   const addCat = async () => {
     const name = window.prompt(fa ? "نام دستهٔ جدید:" : "New category name:");

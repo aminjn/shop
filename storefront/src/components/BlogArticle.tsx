@@ -15,7 +15,7 @@ export function BlogArticle({ slug }: { slug: string }) {
   // Prefer dynamic published posts; fall back to the seed list.
   const [posts, setPosts] = useState<Post[]>(POSTS);
   useEffect(() => {
-    fetch("/api/posts")
+    fetch("/api/posts", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (Array.isArray(d?.posts) && d.posts.length) setPosts(d.posts as Post[]);
