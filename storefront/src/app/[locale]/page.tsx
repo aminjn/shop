@@ -26,8 +26,8 @@ export default function HomePage() {
   const [tab, setTab] = useState<"featured" | "new" | "best" | "deal">("featured");
 
   const deal = dealOfDay(products);
-  const dealName = locale === "fa" ? deal.fa : deal.en;
-  const dealCat = CATEGORIES.find((c) => c.id === deal.cat);
+  const dealName = deal ? (locale === "fa" ? deal.fa : deal.en) : "";
+  const dealCat = deal ? CATEGORIES.find((c) => c.id === deal.cat) : undefined;
 
   const picks = smartPicks(products);
   const reasons =
@@ -198,6 +198,7 @@ export default function HomePage() {
       </section>
 
       {/* Deal of the day */}
+      {deal && (
       <section className={`${SECTION} py-3`}>
         <div className="grid overflow-hidden rounded-[22px] md:grid-cols-[300px_1fr]" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           <div className="flex flex-col justify-center p-[34px] text-white" style={{ background: grad(deal.hue, dark) }}>
@@ -222,6 +223,7 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Product tabs */}
       <section className={`${SECTION} py-3`}>
