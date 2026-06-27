@@ -4,6 +4,7 @@ import { getCatalog, getProduct } from "@/lib/catalog";
 import { findCoupon } from "@/lib/coupons";
 import { readStore } from "@/lib/settings";
 import { computeTotals } from "@/lib/cart";
+import { unitPrice } from "@/lib/format";
 import { updateUser, uid, nowIso, notify, type Order, type OrderItem } from "@/lib/userstore";
 import type { CartLine } from "@/lib/types";
 
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
   const store = readStore();
   const subtotalForCoupon = lines.reduce((sum, l) => {
     const p = getProduct(l.id);
-    return sum + (p ? p.price * l.qty : 0);
+    return sum + (p ? unitPrice(p) * l.qty : 0);
   }, 0);
   const coupon = b.coupon ? findCoupon(String(b.coupon), subtotalForCoupon) : null;
 
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
 
   const items: OrderItem[] = lines.map((l) => {
     const p = getProduct(l.id)!;
-    return { id: p.id, name: p.fa, qty: l.qty, price: p.price };
+    return { id: p.id, name: p.fa, qty: l.qty, price: unitPrice(p) };
   });
 
   let error = "";

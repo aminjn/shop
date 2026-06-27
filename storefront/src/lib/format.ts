@@ -1,4 +1,14 @@
-import type { Locale } from "./types";
+import type { Locale, Product } from "./types";
+
+/** Effective unit price: per-cm products are priced by «pricePerCm». */
+export function unitPrice(p: Pick<Product, "price" | "pricingType" | "pricePerCm">): number {
+  if (p.pricingType === "per_cm") return p.pricePerCm || p.price || 0;
+  return p.price || 0;
+}
+/** True when the product is sold by the centimetre (price label needs "/cm"). */
+export function isPerCm(p: Pick<Product, "pricingType">): boolean {
+  return p.pricingType === "per_cm";
+}
 
 export function num(n: number, locale: Locale): string {
   return Number(n).toLocaleString(locale === "fa" ? "fa-IR" : "en-US");

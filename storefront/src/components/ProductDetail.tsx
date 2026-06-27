@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
-import { grad, priceFmt, num } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
@@ -127,10 +127,14 @@ export function ProductDetail({ id }: { id: number }) {
           </div>
 
           <div className="mt-4 flex items-center gap-3">
-            <span className="text-[30px] font-black" style={{ color: "var(--accent)" }}>{priceFmt(p.price, locale, t.currency)}</span>
-            {p.old && <span className="text-[18px] line-through" style={{ color: "var(--muted)" }}>{num(p.old, locale)}</span>}
-            {disc > 0 && <span className="rounded-md px-2 py-1 text-[12px] font-extrabold text-white" style={{ background: "#e11d48" }}>{num(disc, locale)}٪-</span>}
+            <span className="text-[30px] font-black" style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p), locale, t.currency)}</span>
+            {isPerCm(p) && <span className="text-[14px] font-bold" style={{ color: "var(--muted)" }}>/ {locale === "fa" ? "سانت" : "cm"}</span>}
+            {p.old && !isPerCm(p) && <span className="text-[18px] line-through" style={{ color: "var(--muted)" }}>{num(p.old, locale)}</span>}
+            {disc > 0 && !isPerCm(p) && <span className="rounded-md px-2 py-1 text-[12px] font-extrabold text-white" style={{ background: "#e11d48" }}>{num(disc, locale)}٪-</span>}
           </div>
+          {isPerCm(p) && p.width ? (
+            <div className="mt-1 text-[13px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? `عرض رول: ${num(p.width, locale)} سانت` : `Width: ${p.width} cm`}</div>
+          ) : null}
 
           {/* AI box */}
           <div className="mt-5 rounded-[14px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
@@ -173,7 +177,7 @@ export function ProductDetail({ id }: { id: number }) {
           {pack > 1 && (
             <div className="mt-5 rounded-[12px] p-3.5 text-[13.5px]" style={{ background: "color-mix(in srgb, var(--accent) 9%, var(--surface))", border: "1px solid var(--border)" }}>
               📦 <b>{locale === "fa" ? `این محصول کارتنی فروخته می‌شود — هر کارتن ${num(pack, locale)} عدد.` : `Sold by the carton — ${pack} units each.`}</b>
-              <div className="mt-1" style={{ color: "var(--muted)" }}>{locale === "fa" ? `قیمت هر کارتن: ` : `Price per carton: `}<b style={{ color: "var(--accent)" }}>{priceFmt(p.price * pack, locale, t.currency)}</b></div>
+              <div className="mt-1" style={{ color: "var(--muted)" }}>{locale === "fa" ? `قیمت هر کارتن: ` : `Price per carton: `}<b style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p) * pack, locale, t.currency)}</b></div>
             </div>
           )}
 

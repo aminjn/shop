@@ -1,4 +1,5 @@
 import { productById as seedById } from "@/data/products";
+import { unitPrice } from "./format";
 import type { CartLine, Coupon, Product } from "./types";
 
 export interface TotalsConfig {
@@ -32,7 +33,7 @@ export function computeTotals(
 
   const subtotal = cart.reduce((s, l) => {
     const p = lookup(l.id);
-    return s + (p ? p.price * l.qty : 0);
+    return s + (p ? unitPrice(p) * l.qty : 0);
   }, 0);
 
   let discount = 0;
