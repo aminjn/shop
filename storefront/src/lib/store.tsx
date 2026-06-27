@@ -122,7 +122,6 @@ export function ShopProvider({
   const [brands, setBrands] = useState<Brand[]>([]);
   const [home, setHome] = useState<HomeContent | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pathname = usePathname();
 
   // live data (admin-editable). `cache: "no-store"` stops the browser cache,
   // and a unique `?_=<ts>` query busts any CDN/edge (Arvan) cache so edits made
@@ -196,16 +195,6 @@ export function ShopProvider({
       window.removeEventListener("focus", refreshData);
     };
   }, [accentColor, defaultRoundness, refreshData]);
-
-  // Refetch live data after each client-side navigation so edits made in the
-  // admin panel show up without a hard refresh. The fetch is deferred to a
-  // macrotask so the route transition commits FIRST — running the setState
-  // storm synchronously on pathname change interrupted Next's navigation and
-  // made links appear to need two clicks.
-  useEffect(() => {
-    const id = setTimeout(refreshData, 0);
-    return () => clearTimeout(id);
-  }, [pathname, refreshData]);
 
   // reflect theme on <html> for SSR-safe theming via CSS vars
   useEffect(() => {
@@ -376,7 +365,26 @@ export function ShopProvider({
     logoUrl,
   };
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      <RouteRefresher onRoute={refreshData} />
+      {children}
+    </Ctx.Provider>
+  );
+}
+
+/** Leaf component that refetches live data after each client-side navigation.
+ *  Keeping `usePathname()` here (instead of in ShopProvider) means a navigation
+ *  re-renders only this null-rendering node — not the whole provider tree — so
+ *  it never interferes with the route transition (which made links need two
+ *  clicks). The refetch is deferred so the new route commits first. */
+function RouteRefresher({ onRoute }: { onRoute: () => void }) {
+  const pathname = usePathname();
+  useEffect(() => {
+    const id = setTimeout(onRoute, 0);
+    return () => clearTimeout(id);
+  }, [pathname, onRoute]);
+  return null;
 }
 
 export function useShop() {
