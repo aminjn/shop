@@ -1751,6 +1751,7 @@ function SeoAdmin() {
   const fa = locale === "fa";
   const [seo, setSeo] = useState<SeoSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
 
   useEffect(() => { fetch("/api/seo").then((r) => r.json()).then((d) => d?.seo && setSeo(d.seo)).catch(() => {}); }, []);
   if (!seo) return <><H1>{fa ? "سئو" : "SEO"}</H1><Empty text={fa ? "در حال بارگذاری…" : "Loading…"} /></>;
@@ -1761,9 +1762,31 @@ function SeoAdmin() {
     try {
       const r = await fetch("/api/seo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seo }) });
       const d = await r.json();
-      if (d.ok) { setSeo(d.seo); toast(fa ? "سئو ذخیره شد ✓ (برای اعمال کامل، دیپلوی/Purge کن)" : "Saved ✓"); }
+      if (d.ok) { setSeo(d.seo); toast(fa ? "سئو ذخیره شد ✓ — برای دیدن، صفحهٔ سایت را تازه کن" : "Saved ✓ — refresh the site to see it"); }
       else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
     } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setSaving(false); }
+  };
+  // one-click: AI fills the SEO texts from the store name, categories & products
+  const aiFill = async () => {
+    setAiBusy(true);
+    try {
+      const r = await fetch("/api/ai/seo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
+      const d = await r.json();
+      if (d.ok && d.seo) {
+        setSeo((s) => (s ? {
+          ...s,
+          defaultTitle: String(d.seo.defaultTitle || s.defaultTitle),
+          titleTemplate: String(d.seo.titleTemplate || s.titleTemplate),
+          defaultDescription: String(d.seo.defaultDescription || s.defaultDescription),
+          keywords: String(d.seo.keywords || s.keywords),
+          orgName: String(d.seo.orgName || s.orgName),
+        } : s));
+        toast(fa ? "سئو با هوش مصنوعی پر شد ✓ — بررسی و ذخیره کن" : "Filled by AI ✓");
+      } else {
+        const msg = `${d.error || ""}`;
+        toast(/quota|insufficient|credit|balance/i.test(msg) ? (fa ? "اعتبار سرویس هوش مصنوعی تمام شده" : "AI out of credit") : (fa ? "تولید سئو ناموفق بود" : "AI failed"));
+      }
+    } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setAiBusy(false); }
   };
 
   const fld = (k: keyof SeoSettings, label: string, ph = "", area = false, ltr = true) => (
@@ -1782,7 +1805,15 @@ function SeoAdmin() {
   return (
     <>
       <H1>{fa ? "سئو و داده‌های ساختاریافته" : "SEO & structured data"}</H1>
-      <p className="mb-4 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "مدیریت کامل سئوی سایت: عنوان و توضیحات، اتصال به گوگل، اسکیما/Schema، آنالیتیکس، نقشهٔ سایت و robots." : "Full SEO control: titles, Google integration, schema, analytics, sitemap & robots."}</p>
+      <p className="mb-3 text-[13px]" style={{ color: "var(--muted)" }}>{fa ? "مدیریت کامل سئوی سایت: عنوان و توضیحات، اتصال به گوگل، اسکیما/Schema، آنالیتیکس، نقشهٔ سایت و robots." : "Full SEO control: titles, Google integration, schema, analytics, sitemap & robots."}</p>
+      <div className="mb-5 rounded-[12px] p-4" style={{ background: "color-mix(in srgb, var(--accent) 8%, var(--surface))", border: "1px solid var(--border)" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[13px]"><b>{fa ? "نمی‌دونی چی بنویسی؟" : "Not sure what to write?"}</b> <span style={{ color: "var(--muted)" }}>{fa ? "بذار هوش مصنوعی عنوان، توضیح متا و کلمات کلیدی رو بر اساس فروشگاهت پر کنه." : "Let AI fill the title, meta description and keywords."}</span></div>
+          <button onClick={aiFill} disabled={aiBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+            <Sparkle size={15} /> {aiBusy ? (fa ? "در حال تولید…" : "…") : fa ? "تکمیل خودکار سئو با هوش مصنوعی" : "Auto-fill SEO with AI"}
+          </button>
+        </div>
+      </div>
 
       {/* status */}
       <Card className="mb-5 p-5">
