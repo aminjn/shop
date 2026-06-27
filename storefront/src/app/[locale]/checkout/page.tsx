@@ -25,6 +25,15 @@ export default function CheckoutPage() {
   const [shipMethods, setShipMethods] = useState<ShipMethod[]>([]);
   const [payMethods, setPayMethods] = useState<PayMethod[]>([]);
   const [cfg, setCfg] = useState({ freeShipThreshold: 2_000_000, taxRate: 9 });
+  // loyalty tier auto-discount (read from the member's status)
+  const [tier, setTier] = useState<{ fa: string; en: string; discountPct: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/account/loyalty", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.ok && d.loyalty?.enabled && d.tier?.discountPct > 0) setTier(d.tier); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/settings/store").then((r) => r.json()).then((d) => {
@@ -50,6 +59,8 @@ export default function CheckoutPage() {
     () => computeTotals(cart, coupon, { products, config: { shipFee: selShip?.price ?? 50000, freeShipThreshold: cfg.freeShipThreshold, taxRate: cfg.taxRate } }),
     [cart, coupon, products, selShip?.price, cfg.freeShipThreshold, cfg.taxRate],
   );
+  const tierDiscount = tier ? Math.round((totals.grand * tier.discountPct) / 100) : 0;
+  const grandFinal = Math.max(0, totals.grand - tierDiscount);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -205,11 +216,17 @@ export default function CheckoutPage() {
             {totals.discount > 0 && <div className="flex justify-between" style={{ color: "var(--accent)" }}><span style={{ color: "var(--muted)" }}>{t.discount}</span><span className="font-bold">−{priceFmt(totals.discount, locale, t.currency)}</span></div>}
             <div className="flex justify-between"><span style={{ color: "var(--muted)" }}>{t.shipping}</span><span className="font-bold">{totals.freeShip ? t.free : priceFmt(totals.shipping, locale, t.currency)}</span></div>
             <div className="flex justify-between"><span style={{ color: "var(--muted)" }}>{t.tax}</span><span className="font-bold">{priceFmt(totals.tax, locale, t.currency)}</span></div>
+            {tierDiscount > 0 && tier && (
+              <div className="flex justify-between" style={{ color: "#1f8a5b" }}>
+                <span style={{ color: "var(--muted)" }}>{locale === "fa" ? `تخفیف باشگاه (${tier.fa} ${num(tier.discountPct, locale)}٪)` : `Loyalty (${tier.en} ${tier.discountPct}%)`}</span>
+                <span className="font-bold">−{priceFmt(tierDiscount, locale, t.currency)}</span>
+              </div>
+            )}
           </div>
           <div className="my-4 h-px" style={{ background: "var(--border)" }} />
           <div className="flex items-center justify-between">
             <span className="text-[15px] font-bold">{t.grandTotal}</span>
-            <span className="text-[20px] font-black" style={{ color: "var(--accent)" }}>{priceFmt(totals.grand, locale, t.currency)}</span>
+            <span className="text-[20px] font-black" style={{ color: "var(--accent)" }}>{priceFmt(grandFinal, locale, t.currency)}</span>
           </div>
           <button onClick={place} disabled={placing} className="mt-5 w-full cursor-pointer rounded-[12px] border-none py-3.5 text-[15px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>{placing ? (locale === "fa" ? "در حال ثبت…" : "Placing…") : t.placeOrder}</button>
         </div>

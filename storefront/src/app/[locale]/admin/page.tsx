@@ -42,6 +42,7 @@ type Section =
   | "reports"
   | "ai"
   | "seo"
+  | "loyalty"
   | "settings";
 
 /* ---------- shared data types (mirror the API responses) ---------- */
@@ -166,6 +167,7 @@ export default function AdminPage() {
     { id: "reports", label: t.aReports },
     { id: "ai", label: t.aAi },
     { id: "seo", label: fa ? "سئو" : "SEO" },
+    { id: "loyalty", label: fa ? "باشگاه وفاداری" : "Loyalty" },
     { id: "settings", label: t.aSettings },
   ];
 
@@ -316,6 +318,7 @@ export default function AdminPage() {
           {section === "reports" && <Reports />}
           {section === "ai" && <AiStudio />}
           {section === "seo" && <SeoAdmin />}
+          {section === "loyalty" && <LoyaltyAdmin />}
           {section === "settings" && <Settings />}
         </section>
       </div>
@@ -2583,6 +2586,131 @@ function Field({ label, value }: { label: string; value: string }) {
       </div>
       <div className="text-[13px]" style={{ color: "var(--text)" }}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- loyalty / rewards program ---------- */
+
+type LoyTier = { key: string; fa: string; en: string; min: number; discountPct: number };
+type LoyCfg = {
+  enabled: boolean; earnPerToman: number; signupBonus: number; reviewBonus: number;
+  pointValue: number; redeemEnabled: boolean; redeemMinPoints: number; expiryMonths: number;
+  tiers: LoyTier[];
+};
+
+function LoyaltyAdmin() {
+  const { locale, t, toast } = useShop();
+  const fa = locale === "fa";
+  const [cfg, setCfg] = useState<LoyCfg | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings/loyalty", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.loyalty && setCfg(d.loyalty))
+      .catch(() => {});
+  }, []);
+
+  if (!cfg) return <div className="py-16 text-center" style={{ color: "var(--muted)" }}>{fa ? "در حال بارگذاری…" : "Loading…"}</div>;
+
+  const set = <K extends keyof LoyCfg>(k: K, v: LoyCfg[K]) => setCfg((c) => (c ? { ...c, [k]: v } : c));
+  const intv = (s: string) => Number(s.replace(/[^\d]/g, "")) || 0;
+  const grp = (v: number) => (v ? v.toLocaleString("en-US") : "");
+  const updTier = (i: number, patch: Partial<LoyTier>) => set("tiers", cfg.tiers.map((tr, x) => (x === i ? { ...tr, ...patch } : tr)));
+  const addTier = () => set("tiers", [...cfg.tiers, { key: "tier-" + Date.now().toString(36), fa: "", en: "", min: 0, discountPct: 0 }]);
+  const rmTier = (i: number) => set("tiers", cfg.tiers.filter((_, x) => x !== i));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch("/api/settings/loyalty", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(cfg) });
+      const d = await r.json();
+      if (d.ok && d.loyalty) { setCfg(d.loyalty); toast(t.saved); }
+      else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+    } catch { toast(fa ? "خطای شبکه" : "Network error"); }
+    finally { setSaving(false); }
+  };
+
+  const card = { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16 } as const;
+  const mini = "w-full rounded-[8px] px-2.5 py-2 text-[12.5px] outline-none";
+  const numField = (label: string, val: number, on: (n: number) => void, hint?: string, grouped = true) => (
+    <div>
+      {lbl(label)}
+      <input className={inputCls} style={inputStyle} inputMode="numeric" dir="ltr" value={grouped ? grp(val) : String(val || "")} onChange={(e) => on(intv(e.target.value))} />
+      {hint && <div className="mt-1 text-[11.5px]" style={{ color: "var(--muted)" }}>{hint}</div>}
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-[22px] font-extrabold tracking-tight">{fa ? "باشگاه وفاداری" : "Loyalty program"}</h1>
+        <label className="flex cursor-pointer items-center gap-2 text-[13.5px] font-bold">
+          <input type="checkbox" checked={cfg.enabled} onChange={(e) => set("enabled", e.target.checked)} style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
+          {cfg.enabled ? (fa ? "فعال" : "Enabled") : (fa ? "غیرفعال" : "Disabled")}
+        </label>
+      </div>
+
+      {/* earning */}
+      <div className="p-5" style={card}>
+        <h2 className="mb-3 text-[15px] font-extrabold">{fa ? "کسب امتیاز" : "Earning points"}</h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {numField(fa ? "هر چند تومان خرید = ۱ امتیاز" : "Toman spent per 1 point", cfg.earnPerToman, (n) => set("earnPerToman", Math.max(1, n)), fa ? `مثال: ۱۰۰٬۰۰۰ یعنی هر ۱۰۰هزار تومان ۱ امتیاز` : "")}
+          {numField(fa ? "امتیاز هدیهٔ عضویت" : "Sign-up bonus", cfg.signupBonus, (n) => set("signupBonus", n), fa ? "به کاربر جدید موقع ثبت‌نام" : "")}
+          {numField(fa ? "امتیاز هر نظر تأییدشده" : "Points per review", cfg.reviewBonus, (n) => set("reviewBonus", n))}
+        </div>
+      </div>
+
+      {/* redemption */}
+      <div className="p-5" style={card}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[15px] font-extrabold">{fa ? "تبدیل امتیاز به اعتبار" : "Redeem points"}</h2>
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] font-bold">
+            <input type="checkbox" checked={cfg.redeemEnabled} onChange={(e) => set("redeemEnabled", e.target.checked)} style={{ accentColor: "var(--accent)", width: 16, height: 16 }} />
+            {fa ? "فعال" : "On"}
+          </label>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {numField(fa ? "ارزش هر امتیاز (تومان)" : "Value per point (Toman)", cfg.pointValue, (n) => set("pointValue", n), fa ? "موقع تبدیل به کیف پول" : "")}
+          {numField(fa ? "حداقل امتیاز برای تبدیل" : "Min points to redeem", cfg.redeemMinPoints, (n) => set("redeemMinPoints", n))}
+          {numField(fa ? "انقضای امتیاز (ماه، ۰=بدون انقضا)" : "Expiry (months, 0=never)", cfg.expiryMonths, (n) => set("expiryMonths", n), undefined, false)}
+        </div>
+      </div>
+
+      {/* tiers */}
+      <div className="p-5" style={card}>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-[15px] font-extrabold">{fa ? "سطح‌های باشگاه" : "Membership tiers"}</h2>
+            <div className="mt-0.5 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "هر سطح می‌تواند تخفیف خودکار در پرداخت بدهد." : "Each tier can give an automatic checkout discount."}</div>
+          </div>
+          <button onClick={addTier} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold" style={{ background: "var(--surface2)", color: "var(--accent)" }}><Plus size={14} /> {fa ? "افزودن سطح" : "Add tier"}</button>
+        </div>
+        <div className="hidden grid-cols-[1fr_1fr_110px_110px_40px] gap-2 px-1 pb-1.5 text-[11.5px] font-bold sm:grid" style={{ color: "var(--muted)" }}>
+          <span>{fa ? "نام (فارسی)" : "Name (FA)"}</span>
+          <span>{fa ? "نام (انگلیسی)" : "Name (EN)"}</span>
+          <span>{fa ? "حداقل امتیاز" : "Min points"}</span>
+          <span>{fa ? "تخفیف ٪" : "Discount %"}</span>
+          <span />
+        </div>
+        <div className="flex flex-col gap-2">
+          {cfg.tiers.map((tr, i) => (
+            <div key={i} className="grid grid-cols-2 gap-2 rounded-[12px] p-2.5 sm:grid-cols-[1fr_1fr_110px_110px_40px]" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+              <input className={mini} style={inputStyle} placeholder={fa ? "نام" : "Name FA"} value={tr.fa} onChange={(e) => updTier(i, { fa: e.target.value })} />
+              <input className={mini} style={inputStyle} placeholder="Name EN" dir="ltr" value={tr.en} onChange={(e) => updTier(i, { en: e.target.value })} />
+              <input className={mini} style={inputStyle} inputMode="numeric" dir="ltr" placeholder={fa ? "امتیاز" : "min"} value={String(tr.min || "")} onChange={(e) => updTier(i, { min: intv(e.target.value) })} />
+              <input className={mini} style={inputStyle} inputMode="numeric" dir="ltr" placeholder="%" value={String(tr.discountPct || "")} onChange={(e) => updTier(i, { discountPct: Math.min(100, intv(e.target.value)) })} />
+              <button onClick={() => rmTier(i)} aria-label={t.del} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[8px] border-none" style={{ background: "var(--surface)", color: "#e11d48" }}><Trash size={15} /></button>
+            </div>
+          ))}
+          {cfg.tiers.length === 0 && <div className="py-4 text-center text-[12.5px]" style={{ color: "var(--muted)" }}>{fa ? "هیچ سطحی تعریف نشده" : "No tiers"}</div>}
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button onClick={save} disabled={saving} className="cursor-pointer rounded-[12px] border-none px-7 py-3 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)", opacity: saving ? 0.6 : 1 }}>{saving ? (fa ? "در حال ذخیره…" : "Saving…") : (fa ? "ذخیرهٔ تنظیمات وفاداری" : "Save loyalty settings")}</button>
       </div>
     </div>
   );

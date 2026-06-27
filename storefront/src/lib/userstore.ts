@@ -2,11 +2,15 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { readStore } from "./settings";
+import { readStore, readLoyalty } from "./settings";
 
 /** Live store name (set in super admin) with a neutral fallback. */
 function storeName(): string {
   try { return readStore().storeName || "فروشگاه"; } catch { return "فروشگاه"; }
+}
+/** Sign-up bonus points configured in the loyalty program (0 if disabled). */
+function signupBonus(): number {
+  try { const l = readLoyalty(); return l.enabled ? Math.max(0, l.signupBonus || 0) : 0; } catch { return 0; }
 }
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
@@ -94,9 +98,16 @@ function defaultUser(mobile: string): UserData {
     orders: [],
     tickets: [],
     notifications: [
-      { id: uid(), text: `به ${storeName()} خوش آمدید!`, date: nowIso(), read: false },
+      {
+        id: uid(),
+        text: signupBonus() > 0
+          ? `به ${storeName()} خوش آمدید! ${signupBonus().toLocaleString("fa-IR")} امتیاز هدیهٔ عضویت دریافت کردید.`
+          : `به ${storeName()} خوش آمدید!`,
+        date: nowIso(),
+        read: false,
+      },
     ],
-    points: 0,
+    points: signupBonus(),
     createdAt: nowIso(),
   };
 }

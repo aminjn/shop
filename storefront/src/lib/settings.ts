@@ -56,6 +56,63 @@ export function writeAi(patch: StoredAi) {
 export interface ShipMethod { id: string; fa: string; en: string; price: number; etaFa: string; etaEn: string; enabled: boolean }
 export interface PayMethod { id: string; fa: string; en: string; kind: "online" | "wallet" | "cod"; enabled: boolean }
 
+/* ---------------- Loyalty / rewards program ---------------- */
+export interface LoyaltyTier {
+  key: string;
+  fa: string;
+  en: string;
+  min: number;          // points required to reach this tier
+  discountPct: number;  // automatic discount this tier gives at checkout
+}
+export interface LoyaltyConfig {
+  enabled: boolean;
+  earnPerToman: number;    // 1 point per this many toman spent (e.g. 100000)
+  signupBonus: number;     // points granted on first sign-up
+  reviewBonus: number;     // points granted per approved review
+  pointValue: number;      // toman value of 1 point when redeemed to wallet
+  redeemEnabled: boolean;  // allow converting points to wallet credit
+  redeemMinPoints: number; // minimum points needed to redeem
+  expiryMonths: number;    // 0 = never expire (informational)
+  tiers: LoyaltyTier[];
+}
+export const LOYALTY_DEFAULTS: LoyaltyConfig = {
+  enabled: true,
+  earnPerToman: 100000,
+  signupBonus: 0,
+  reviewBonus: 0,
+  pointValue: 1000,
+  redeemEnabled: true,
+  redeemMinPoints: 100,
+  expiryMonths: 0,
+  tiers: [
+    { key: "bronze", fa: "برنزی", en: "Bronze", min: 0, discountPct: 0 },
+    { key: "silver", fa: "نقره‌ای", en: "Silver", min: 50, discountPct: 2 },
+    { key: "gold", fa: "طلایی", en: "Gold", min: 150, discountPct: 5 },
+    { key: "platinum", fa: "پلاتینیوم", en: "Platinum", min: 400, discountPct: 8 },
+  ],
+};
+export function readLoyalty(): LoyaltyConfig {
+  const raw = readJson<Partial<LoyaltyConfig>>("loyalty.json");
+  const tiers = Array.isArray(raw.tiers) && raw.tiers.length ? raw.tiers : LOYALTY_DEFAULTS.tiers;
+  return { ...LOYALTY_DEFAULTS, ...raw, tiers };
+}
+export function writeLoyalty(cfg: LoyaltyConfig): LoyaltyConfig {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmp = path.join(DATA_DIR, "loyalty.json.tmp");
+  const dst = path.join(DATA_DIR, "loyalty.json");
+  fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2), "utf8");
+  fs.renameSync(tmp, dst);
+  return readLoyalty();
+}
+/** The tier a member with `points` currently belongs to. */
+export function tierFor(points: number, cfg?: LoyaltyConfig): LoyaltyTier {
+  const c = cfg || readLoyalty();
+  const sorted = [...c.tiers].sort((a, b) => a.min - b.min);
+  let cur = sorted[0];
+  for (const tr of sorted) if (points >= tr.min) cur = tr;
+  return cur;
+}
+
 export interface StoreSettings {
   storeName?: string;
   tagline?: string; // شعار سایت

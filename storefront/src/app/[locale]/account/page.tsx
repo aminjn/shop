@@ -34,18 +34,21 @@ type Section =
   | "wishlist" | "tickets" | "notifications" | "loyalty" | "profile";
 
 interface Rec { id: number; reason: string }
+interface LoyTier { key: string; fa: string; en: string; min: number; discountPct: number }
+interface LoyCfg { enabled: boolean; earnPerToman: number; signupBonus: number; pointValue: number; redeemEnabled: boolean; redeemMinPoints: number; tiers: LoyTier[] }
 
-const TIERS = [
-  { key: "bronze", fa: "برنزی", en: "Bronze", min: 0 },
-  { key: "silver", fa: "نقره‌ای", en: "Silver", min: 50 },
-  { key: "gold", fa: "طلایی", en: "Gold", min: 150 },
-  { key: "platinum", fa: "پلاتینیوم", en: "Platinum", min: 400 },
+const FALLBACK_TIERS: LoyTier[] = [
+  { key: "bronze", fa: "برنزی", en: "Bronze", min: 0, discountPct: 0 },
+  { key: "silver", fa: "نقره‌ای", en: "Silver", min: 50, discountPct: 2 },
+  { key: "gold", fa: "طلایی", en: "Gold", min: 150, discountPct: 5 },
+  { key: "platinum", fa: "پلاتینیوم", en: "Platinum", min: 400, discountPct: 8 },
 ];
 
 export default function AccountPage() {
   const { locale, t, dark, toast, wishlist, productById } = useShop();
   const fa = locale === "fa";
   const [data, setData] = useState<UserData | null>(null);
+  const [loy, setLoy] = useState<LoyCfg | null>(null);
   const [section, setSection] = useState<Section>("dashboard");
 
   const load = () =>
@@ -55,6 +58,15 @@ export default function AccountPage() {
       .catch(() => {});
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    fetch("/api/settings/loyalty", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.loyalty && setLoy(d.loyalty))
+      .catch(() => {});
+  }, []);
+
+  const tiers: LoyTier[] = loy?.tiers?.length ? loy.tiers : FALLBACK_TIERS;
+  const curTier = (pts: number) => { const s = [...tiers].sort((a, b) => a.min - b.min); let c = s[0]; for (const tr of s) if (pts >= tr.min) c = tr; return c; };
 
   const post = async (url: string, body?: unknown, okMsg?: string) => {
     try {
@@ -136,7 +148,7 @@ export default function AccountPage() {
   }
 
   function Dashboard() {
-    const tier = [...TIERS].reverse().find((x) => data!.points >= x.min) || TIERS[0];
+    const tier = curTier(data!.points);
     return (
       <>
         <div className="mb-5 overflow-hidden rounded-[18px] p-6 text-white" style={{ background: grad(255, dark) }}>
@@ -507,23 +519,57 @@ export default function AccountPage() {
   }
 
   function Loyalty() {
-    const cur = [...TIERS].reverse().find((x) => data!.points >= x.min) || TIERS[0];
-    const next = TIERS.find((x) => x.min > data!.points);
+    const cur = curTier(data!.points);
+    const sorted = [...tiers].sort((a, b) => a.min - b.min);
+    const next = sorted.find((x) => x.min > data!.points);
+    const pointValue = loy?.pointValue ?? 0;
+    const redeemOn = !!loy?.enabled && !!loy?.redeemEnabled && pointValue > 0;
+    const minRedeem = loy?.redeemMinPoints ?? 0;
+    const [pts, setPts] = useState("");
+    const want = Math.max(0, parseInt((pts || "").replace(/\D/g, "")) || 0);
+    const redeem = async () => {
+      if (want < minRedeem) { toast(fa ? `حداقل ${num(minRedeem, locale)} امتیاز لازم است` : `Min ${minRedeem} points`); return; }
+      if (want > data!.points) { toast(fa ? "امتیاز کافی نیست" : "Not enough points"); return; }
+      await post("/api/account/loyalty", { points: want }, fa ? "امتیاز به اعتبار تبدیل شد ✓" : "Redeemed ✓");
+      setPts("");
+    };
     return (
       <>
         <H>{t.loyalty}</H>
+        {loy && !loy.enabled && (
+          <div className="mb-4 rounded-[12px] p-3 text-[13px]" style={{ background: "var(--surface2)", color: "var(--muted)" }}>{fa ? "باشگاه وفاداری در حال حاضر غیرفعال است." : "The loyalty program is currently disabled."}</div>
+        )}
         <div className="mb-5 overflow-hidden rounded-[18px] p-6 text-white" style={{ background: grad(45, dark) }}>
           <div className="text-[13px] opacity-90">{t.yourPoints}</div>
           <div className="mt-1 text-[32px] font-black">{num(data!.points, locale)}</div>
-          <div className="mt-1 text-[13px] opacity-90">{fa ? `سطح فعلی: ${cur.fa}` : `Current tier: ${cur.en}`}{next && (fa ? ` — ${num(next.min - data!.points, locale)} امتیاز تا ${next.fa}` : ` — ${num(next.min - data!.points, locale)} pts to ${next.en}`)}</div>
+          <div className="mt-1 text-[13px] opacity-90">
+            {fa ? `سطح فعلی: ${cur.fa}` : `Current tier: ${cur.en}`}
+            {cur.discountPct > 0 && (fa ? ` — تخفیف ${num(cur.discountPct, locale)}٪ روی همهٔ خریدها` : ` — ${cur.discountPct}% off every order`)}
+            {next && (fa ? ` • ${num(next.min - data!.points, locale)} امتیاز تا ${next.fa}` : ` • ${num(next.min - data!.points, locale)} pts to ${next.en}`)}
+          </div>
         </div>
+
+        {/* redeem points -> wallet */}
+        {redeemOn && (
+          <div className="mb-5 p-5" style={card}>
+            <div className="mb-1 text-[14px] font-bold">{fa ? "تبدیل امتیاز به اعتبار کیف پول" : "Redeem points to wallet"}</div>
+            <div className="mb-3 text-[12.5px]" style={{ color: "var(--muted)" }}>{fa ? `هر امتیاز = ${priceFmt(pointValue, locale, t.currency)} • حداقل ${num(minRedeem, locale)} امتیاز` : `1 point = ${priceFmt(pointValue, locale, t.currency)} • min ${minRedeem}`}</div>
+            <div className="flex flex-wrap items-center gap-3">
+              <input value={pts} onChange={(e) => setPts(e.target.value)} placeholder={fa ? "تعداد امتیاز" : "Points"} dir="ltr" className={inputCls} style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
+              {want > 0 && <span className="text-[13px] font-bold" style={{ color: "var(--accent)" }}>≈ {priceFmt(want * pointValue, locale, t.currency)}</span>}
+              <button onClick={redeem} className="cursor-pointer rounded-[10px] border-none px-5 py-2.5 text-[13.5px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{fa ? "تبدیل" : "Redeem"}</button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
-          {TIERS.map((tr) => {
+          {sorted.map((tr) => {
             const active = cur.key === tr.key;
             return (
               <div key={tr.key} className="p-4 text-center" style={{ ...card, outline: active ? "2px solid var(--accent)" : "none" }}>
                 <div className="text-[15px] font-extrabold">{fa ? tr.fa : tr.en}</div>
                 <div className="mt-1 text-[12.5px]" style={{ color: "var(--muted)" }}>{num(tr.min, locale)}+ {fa ? "امتیاز" : "pts"}</div>
+                {tr.discountPct > 0 && <div className="mt-1 text-[12px] font-bold" style={{ color: "#1f8a5b" }}>{fa ? `${num(tr.discountPct, locale)}٪ تخفیف` : `${tr.discountPct}% off`}</div>}
                 {active && <div className="mt-2 inline-flex items-center gap-1 text-[12px] font-bold" style={{ color: "var(--accent)" }}><Check size={13} /> {fa ? "سطح شما" : "Your tier"}</div>}
               </div>
             );

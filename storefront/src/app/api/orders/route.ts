@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getCatalog, getProduct } from "@/lib/catalog";
 import { findCoupon } from "@/lib/coupons";
-import { readStore } from "@/lib/settings";
+import { readStore, readLoyalty, tierFor } from "@/lib/settings";
 import { computeTotals } from "@/lib/cart";
 import { variantPrice } from "@/lib/format";
 import { updateUser, uid, nowIso, notify, type Order, type OrderItem } from "@/lib/userstore";
@@ -48,22 +48,31 @@ export async function POST(req: Request) {
     return { id: p.id, name: p.fa + vName, qty: l.qty, price: variantPrice(p, l.variant) };
   });
 
+  const loy = readLoyalty();
   let error = "";
   let orderId = "";
+  let finalTotal = totals.grand;
   const u = updateUser(s.mobile, (u) => {
+    // loyalty tier discount, based on the member's points before this order
+    const tier = loy.enabled ? tierFor(u.points, loy) : null;
+    const tierDisc = tier && tier.discountPct > 0 ? Math.round(totals.grand * tier.discountPct / 100) : 0;
+    finalTotal = Math.max(0, totals.grand - tierDisc);
     if (payKind === "wallet") {
-      if (u.wallet.balance < totals.grand) { error = "insufficient-wallet"; return; }
-      u.wallet.balance -= totals.grand;
-      u.wallet.txns.unshift({ id: uid(), type: "order", amount: totals.grand, date: nowIso(), note: "پرداخت سفارش" });
+      if (u.wallet.balance < finalTotal) { error = "insufficient-wallet"; return; }
+      u.wallet.balance -= finalTotal;
+      u.wallet.txns.unshift({ id: uid(), type: "order", amount: finalTotal, date: nowIso(), note: "پرداخت سفارش" });
     }
     orderId = String(Math.floor(100000 + Math.random() * 900000));
-    const order: Order = { id: orderId, date: nowIso(), status: "processing", total: totals.grand, items, payment, shipping };
+    const order: Order = { id: orderId, date: nowIso(), status: "processing", total: finalTotal, items, payment, shipping };
     u.orders.unshift(order);
-    const earned = Math.floor(totals.grand / 100000);
+    const earned = loy.enabled ? Math.floor(finalTotal / loy.earnPerToman) : 0;
     u.points += earned;
-    notify(u, `سفارش #${orderId} با موفقیت ثبت شد و ${earned} امتیاز دریافت کردید.`);
+    const parts = [`سفارش #${orderId} با موفقیت ثبت شد`];
+    if (earned > 0) parts.push(`${earned} امتیاز دریافت کردید`);
+    if (tierDisc > 0) parts.push(`تخفیف باشگاه ${tier!.discountPct}٪ اعمال شد`);
+    notify(u, parts.join(" و ") + ".");
   });
 
   if (error) return NextResponse.json({ ok: false, error }, { status: 400 });
-  return NextResponse.json({ ok: true, orderId, total: totals.grand, user: u });
+  return NextResponse.json({ ok: true, orderId, total: finalTotal, user: u });
 }

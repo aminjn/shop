@@ -12,6 +12,7 @@ export interface Review {
   date: string; // ISO
   status: ReviewStatus;
   reply?: string; // admin reply
+  pointsAwarded?: boolean; // loyalty points granted once on first approval
 }
 
 const FILE = "reviews.json";
