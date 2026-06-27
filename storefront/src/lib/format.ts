@@ -1,13 +1,25 @@
 import type { Locale, Product } from "./types";
 
-/** Effective unit price: per-cm products are priced by «pricePerCm». */
-export function unitPrice(p: Pick<Product, "price" | "pricingType" | "pricePerCm">): number {
-  if (p.pricingType === "per_cm") return p.pricePerCm || p.price || 0;
+/** Price of ONE unit. For per-cm products the unit is a piece of «width» cm,
+ *  so the piece price = pricePerCm × width (e.g. 5cm × 320,000 = 1,600,000). */
+export function unitPrice(p: Pick<Product, "price" | "pricingType" | "pricePerCm" | "width">): number {
+  if (p.pricingType === "per_cm") {
+    const per = p.pricePerCm || 0;
+    const size = p.width && p.width > 0 ? p.width : 1;
+    return per * size;
+  }
   return p.price || 0;
 }
-/** True when the product is sold by the centimetre (price label needs "/cm"). */
+/** True when the product is priced by the centimetre. */
 export function isPerCm(p: Pick<Product, "pricingType">): boolean {
   return p.pricingType === "per_cm";
+}
+/** Human breakdown for a per-cm piece, e.g. "۵ سانت × ۳۲۰٬۰۰۰". */
+export function perCmNote(p: Pick<Product, "pricingType" | "pricePerCm" | "width">, locale: Locale): string {
+  if (p.pricingType !== "per_cm") return "";
+  const size = p.width && p.width > 0 ? p.width : 1;
+  const fa = locale === "fa";
+  return `${num(size, locale)} ${fa ? "سانت" : "cm"} × ${num(p.pricePerCm || 0, locale)}`;
 }
 
 export function num(n: number, locale: Locale): string {

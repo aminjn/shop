@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useShop, usePageTitle } from "@/lib/store";
 import { computeTotals } from "@/lib/cart";
-import { grad, priceFmt, num, unitPrice, isPerCm } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Plus, Minus, Trash, Cart as CartIcon, ArrowBack } from "@/components/Icons";
 
@@ -76,7 +76,8 @@ export default function CartPage() {
                 <div className="min-w-0 flex-1">
                   <LocaleLink href={`/product/${p.id}`} className="block text-[15px] font-bold no-underline" style={{ color: "var(--text)" }}>{name}</LocaleLink>
                   <div className="mt-0.5 text-[12.5px]" style={{ color: "var(--muted)" }}>{p.brand}</div>
-                  <div className="mt-1 text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p), locale, t.currency)}{isPerCm(p) ? <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}> / {locale === "fa" ? "سانت" : "cm"}</span> : pack > 1 ? <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}> / {locale === "fa" ? "عدد" : "unit"}</span> : null}</div>
+                  <div className="mt-1 text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p), locale, t.currency)}{!isPerCm(p) && pack > 1 ? <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}> / {locale === "fa" ? "عدد" : "unit"}</span> : null}</div>
+                  {isPerCm(p) && <div className="mt-0.5 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>📏 {perCmNote(p, locale)}</div>}
                   {pack > 1 && <div className="mt-0.5 text-[12px] font-bold" style={{ color: "var(--muted)" }}>📦 {locale === "fa" ? `${num(Math.round(line.qty / pack), locale)} کارتن (${num(line.qty, locale)} عدد)` : `${Math.round(line.qty / pack)} cartons (${line.qty} units)`}</div>}
                   <div className="mt-1 text-[13.5px] font-extrabold">{locale === "fa" ? "جمع: " : "Total: "}{priceFmt(unitPrice(p) * line.qty, locale, t.currency)}</div>
                 </div>

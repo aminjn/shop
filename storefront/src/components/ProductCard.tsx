@@ -2,7 +2,7 @@
 
 import type { Product } from "@/lib/types";
 import { useShop } from "@/lib/store";
-import { grad, priceFmt, num, unitPrice, isPerCm } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote } from "@/lib/format";
 import { LocaleLink } from "./LocaleLink";
 import { Heart } from "./Icons";
 
@@ -124,16 +124,16 @@ export function ProductCard({
           <span className="text-[16px] font-extrabold" style={{ color: "var(--accent)" }}>
             {priceFmt((p.packSize && p.packSize > 1 ? unitPrice(p) * p.packSize : unitPrice(p)), locale, t.currency)}
           </span>
-          {isPerCm(p) && <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>/ {locale === "fa" ? "سانت" : "cm"}</span>}
           {p.old && !(p.packSize && p.packSize > 1) && !isPerCm(p) && (
             <span className="text-[13px] line-through" style={{ color: "var(--muted)" }}>
               {num(p.old, locale)}
             </span>
           )}
         </div>
-        {p.packSize && p.packSize > 1 ? (
-          <div className="mb-3 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>📦 {locale === "fa" ? `کارتن ${num(p.packSize, locale)} عددی` : `Carton of ${p.packSize}`}</div>
-        ) : <div className="mb-3" />}
+        <div className="mb-3 flex flex-col gap-0.5 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
+          {isPerCm(p) && <span>📏 {perCmNote(p, locale)}</span>}
+          {p.packSize && p.packSize > 1 ? <span>📦 {locale === "fa" ? `کارتن ${num(p.packSize, locale)} عددی` : `Carton of ${p.packSize}`}</span> : null}
+        </div>
         <button
           onClick={() => addToCart(p.id, p.packSize && p.packSize > 1 ? p.packSize : 1)}
           className="add-btn mt-auto w-full cursor-pointer rounded-[10px] border p-2.5 text-[13px] font-bold transition"

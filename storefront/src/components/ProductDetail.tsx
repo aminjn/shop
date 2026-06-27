@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
-import { grad, priceFmt, num, unitPrice, isPerCm } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
@@ -128,12 +128,11 @@ export function ProductDetail({ id }: { id: number }) {
 
           <div className="mt-4 flex items-center gap-3">
             <span className="text-[30px] font-black" style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p), locale, t.currency)}</span>
-            {isPerCm(p) && <span className="text-[14px] font-bold" style={{ color: "var(--muted)" }}>/ {locale === "fa" ? "سانت" : "cm"}</span>}
             {p.old && !isPerCm(p) && <span className="text-[18px] line-through" style={{ color: "var(--muted)" }}>{num(p.old, locale)}</span>}
             {disc > 0 && !isPerCm(p) && <span className="rounded-md px-2 py-1 text-[12px] font-extrabold text-white" style={{ background: "#e11d48" }}>{num(disc, locale)}٪-</span>}
           </div>
-          {isPerCm(p) && p.width ? (
-            <div className="mt-1 text-[13px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? `عرض رول: ${num(p.width, locale)} سانت` : `Width: ${p.width} cm`}</div>
+          {isPerCm(p) ? (
+            <div className="mt-1 text-[13px]" style={{ color: "var(--muted)" }}>📏 {perCmNote(p, locale)} {t.currency}</div>
           ) : null}
 
           {/* AI box */}
