@@ -18,6 +18,14 @@ export function isPerCm(p: Pick<Product, "pricingType">): boolean {
 export function hasVariations(p: Pick<Product, "variations">): boolean {
   return !!(p.variations && p.variations.length);
 }
+/** Effective stock. For variant products the base stock is usually 0 and the
+ *  real stock lives on each variant, so sum the variants. */
+export function totalStock(p: Pick<Product, "stock" | "variations">): number {
+  if (p.variations && p.variations.length) {
+    return p.variations.reduce((s, v) => s + (v.stock || 0), 0);
+  }
+  return p.stock || 0;
+}
 /** Effective unit price. When a product has variations its base price is often
  *  0 and the real prices live on each variant — so use the chosen variant
  *  (by index) or, if none is chosen, the cheapest variant. Falls back to

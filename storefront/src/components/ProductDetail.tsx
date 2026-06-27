@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
-import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations, totalStock } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
@@ -42,6 +42,8 @@ export function ProductDetail({ id }: { id: number }) {
   const variations = p.variations ?? [];
   // price for the chosen variant (or the cheapest one) — falls back to unitPrice
   const price = hasVariations(p) ? variantPrice(p, variant) : unitPrice(p);
+  // stock: the chosen variant's stock when variants exist, else the product's
+  const stock = hasVariations(p) ? (variations[variant]?.stock ?? 0) : p.stock;
   const disc = p.old ? Math.round((1 - p.price / p.old) * 100) : 0;
   const wished = wishlist.includes(p.id);
 
@@ -53,14 +55,14 @@ export function ProductDetail({ id }: { id: number }) {
           p.country ? ["کشور سازنده", p.country] : null,
           hasWarranty ? ["گارانتی", p.warranty] : null,
           ["کد کالا", p.sku || `SKU-${1000 + p.id}`],
-          ["وضعیت", p.stock > 0 ? "موجود" : "ناموجود"],
+          ["وضعیت", stock > 0 ? "موجود" : "ناموجود"],
         ]
       : [
           ["Brand", p.brand],
           p.country ? ["Origin", p.country] : null,
           hasWarranty ? ["Warranty", p.warranty] : null,
           ["SKU", p.sku || `SKU-${1000 + p.id}`],
-          ["Status", p.stock > 0 ? "In stock" : "Out of stock"],
+          ["Status", stock > 0 ? "In stock" : "Out of stock"],
         ];
   // custom technical specs entered in admin come first; base specs are only
   // appended when their label isn't already covered by a custom spec (no dupes)
@@ -126,7 +128,7 @@ export function ProductDetail({ id }: { id: number }) {
           <div className="mt-2 flex items-center gap-3">
             <span className="text-[16px]" style={{ color: "#f59e0b", letterSpacing: 2 }}>{"★★★★★".slice(0, Math.round(p.rating))}</span>
             <span className="text-[13px]" style={{ color: "var(--muted)" }}>{num(p.rating, locale)} ({num(p.reviews, locale)} {t.tabReviews})</span>
-            <span className="text-[13px] font-bold" style={{ color: p.stock > 0 ? "#1f8a5b" : "#e11d48" }}>{p.stock > 0 ? t.inStock : t.outStock}</span>
+            <span className="text-[13px] font-bold" style={{ color: stock > 0 ? "#1f8a5b" : "#e11d48" }}>{stock > 0 ? t.inStock : t.outStock}</span>
           </div>
 
           <div className="mt-4 flex items-center gap-3">

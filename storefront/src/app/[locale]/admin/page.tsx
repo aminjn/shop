@@ -9,7 +9,7 @@ import type { ShipMethod, PayMethod } from "@/lib/settings";
 import type { SeoSettings } from "@/lib/seo";
 import type { Post } from "@/data/posts";
 import type { OrderStatus } from "@/lib/userstore";
-import { grad, priceFmt, num, formatDate } from "@/lib/format";
+import { grad, priceFmt, num, formatDate, variantPrice, hasVariations, totalStock } from "@/lib/format";
 import { AI_MODELS } from "@/data/aiModels";
 import { ProductModal } from "@/components/admin/ProductModal";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -650,9 +650,10 @@ function Products({
     const q = query.trim().toLowerCase();
     return products.filter((p) => {
       if (catFilter && p.cat !== catFilter) return false;
-      if (stockFilter === "in" && p.stock <= 20) return false;
-      if (stockFilter === "low" && !(p.stock > 0 && p.stock <= 20)) return false;
-      if (stockFilter === "out" && p.stock !== 0) return false;
+      const stk = totalStock(p);
+      if (stockFilter === "in" && stk <= 20) return false;
+      if (stockFilter === "low" && !(stk > 0 && stk <= 20)) return false;
+      if (stockFilter === "out" && stk !== 0) return false;
       if (typeFilter === "per_cm" && p.pricingType !== "per_cm") return false;
       if (typeFilter === "unit" && p.pricingType === "per_cm") return false;
       if (q && !(`${p.fa} ${p.en} ${p.brand} ${p.sku ?? ""}`.toLowerCase().includes(q))) return false;
@@ -779,16 +780,22 @@ function Products({
             <td className="px-4 py-2 text-[12px] font-bold" colSpan={6} style={{ textAlign: "start", color: "var(--muted)" }}>{fa ? "انتخاب همه (در این فیلتر)" : "Select all (filtered)"}</td>
           </tr>
           {filtered.map((p) => {
-            const st = statusOf(p.stock);
+            const stk = totalStock(p);
+            const st = statusOf(stk);
             const isSel = selected.has(p.id);
             return (
               <tr key={p.id} style={{ borderTop: "1px solid var(--border)", background: isSel ? "var(--surface2)" : undefined }}>
                 <td className="px-4 py-3"><input type="checkbox" checked={isSel} onChange={() => toggle(p.id)} aria-label="select" style={{ width: 16, height: 16, cursor: "pointer", accentColor: "var(--accent)" }} /></td>
                 <td className="px-4 py-3" style={{ textAlign: "start" }}>
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[9px] text-[14px] font-extrabold" style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}>
-                      {(fa ? p.fa : p.en).charAt(0)}
-                    </span>
+                    {p.images && p.images[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.images[0]} alt={fa ? p.fa : p.en} className="h-10 w-10 flex-none rounded-[9px] object-cover" />
+                    ) : (
+                      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[9px] text-[14px] font-extrabold" style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}>
+                        {(fa ? p.fa : p.en).charAt(0)}
+                      </span>
+                    )}
                     <div className="min-w-0">
                       <div className="truncate text-[13px] font-bold">{fa ? p.fa : p.en}</div>
                       <div className="text-[11.5px]" style={{ color: "var(--muted)" }}>{p.brand}</div>
@@ -797,11 +804,13 @@ function Products({
                 </td>
                 <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>{catName(p.cat)}</td>
                 <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-                  {p.pricingType === "per_cm"
+                  {hasVariations(p)
+                    ? <span>{fa ? "از " : "from "}{priceFmt(variantPrice(p), locale, t.currency)}</span>
+                    : p.pricingType === "per_cm"
                     ? <span>{priceFmt(p.pricePerCm ?? 0, locale, t.currency)}<span className="text-[11px] font-normal" style={{ color: "var(--muted)" }}> /{fa ? "سانت" : "cm"}{p.width ? ` • ${num(p.width, locale)}${fa ? "س عرض" : "cm"}` : ""}</span></span>
                     : priceFmt(p.price, locale, t.currency)}
                 </td>
-                <td className="px-4 py-3" style={{ textAlign: "start" }}>{num(p.stock, locale)}</td>
+                <td className="px-4 py-3" style={{ textAlign: "start" }}>{num(stk, locale)}</td>
                 <td className="px-4 py-3" style={{ textAlign: "start" }}><Badge label={st.label} color={st.color} /></td>
                 <td className="px-4 py-3" style={{ textAlign: "start" }}>
                   <div className="flex gap-2">
