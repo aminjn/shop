@@ -9,8 +9,10 @@ import { LocaleLink } from "./LocaleLink";
 import { Sparkle, Send, ArrowBack, ArrowForward } from "./Icons";
 
 export function BlogArticle({ slug }: { slug: string }) {
-  const { locale, t, dark, toast, productById } = useShop();
+  const { locale, t, dark, productById } = useShop();
   const [question, setQuestion] = useState("");
+  const [chat, setChat] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [asking, setAsking] = useState(false);
 
   // Prefer dynamic published posts; fall back to the seed list.
   const [posts, setPosts] = useState<Post[]>(POSTS);
@@ -52,26 +54,42 @@ export function BlogArticle({ slug }: { slug: string }) {
   const summary =
     locale === "fa" ? p.excerptFa : p.excerptEn;
 
-  const keyPoints =
+  // clickable starter questions the reader can ask the AI about THIS article
+  const suggestions =
     locale === "fa"
       ? [
-          "نکات کلیدی پیش از خرید و تصمیم‌گیری آگاهانه",
-          "مقایسه‌ی گزینه‌ها بر اساس نیاز و بودجه",
-          "جمع‌بندی عملی برای انتخاب بهتر",
+          "خلاصهٔ این مقاله را بگو",
+          "مهم‌ترین نکات این مقاله چیست؟",
+          "این مطلب برای چه کسانی مفید است؟",
+          "یک جمع‌بندی عملی بده",
         ]
       : [
-          "Key points before buying and deciding wisely",
-          "Comparing options based on needs and budget",
-          "A practical takeaway for a better choice",
+          "Summarize this article",
+          "What are the key points?",
+          "Who is this useful for?",
+          "Give me a practical takeaway",
         ];
 
-  const askArticle = () => {
-    toast(
-      locale === "fa"
-        ? "هوش مصنوعی در حال مطالعه‌ی مقاله است..."
-        : "AI is reading the article...",
-    );
+  const askArticle = async (text?: string) => {
+    const content = (text ?? question).trim();
+    if (!content || asking) return;
+    const next = [...chat, { role: "user" as const, content }];
+    setChat(next);
     setQuestion("");
+    setAsking(true);
+    try {
+      const r = await fetch("/api/blog/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug: p.slug, id: p.id, messages: next }),
+      });
+      const d = await r.json().catch(() => ({}));
+      setChat((c) => [...c, { role: "assistant", content: d.reply || (locale === "fa" ? "متاسفم، پاسخی پیدا نشد." : "Sorry, no answer.") }]);
+    } catch {
+      setChat((c) => [...c, { role: "assistant", content: locale === "fa" ? "خطای شبکه — دوباره تلاش کن." : "Network error." }]);
+    } finally {
+      setAsking(false);
+    }
   };
 
   const related = posts.filter((x) => x.id !== p.id).slice(0, 3);
@@ -117,14 +135,39 @@ export function BlogArticle({ slug }: { slug: string }) {
         </div>
         <div className="flex flex-col gap-4 p-5">
           <p className="text-[14px] leading-relaxed" style={{ color: "var(--text)" }}>{summary}</p>
-          <ul className="flex flex-col gap-2">
-            {keyPoints.map((k, i) => (
-              <li key={i} className="flex items-start gap-2 text-[13.5px]" style={{ color: "var(--text)" }}>
-                <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-none rounded-full" style={{ background: "var(--accent)" }} />
-                <span>{k}</span>
-              </li>
+
+          {/* clickable starter questions */}
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((q) => (
+              <button
+                key={q}
+                onClick={() => askArticle(q)}
+                disabled={asking}
+                className="cursor-pointer rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition disabled:opacity-50"
+                style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                {q}
+              </button>
             ))}
-          </ul>
+          </div>
+
+          {/* conversation */}
+          {chat.length > 0 && (
+            <div className="flex flex-col gap-2.5">
+              {chat.map((m, i) => (
+                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className="max-w-[85%] whitespace-pre-wrap rounded-[14px] px-3.5 py-2.5 text-[13.5px] leading-relaxed"
+                    style={m.role === "user" ? { background: "var(--accent)", color: "#fff" } : { background: "var(--surface2)", color: "var(--text)" }}
+                  >
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {asking && <div className="text-[13px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? "در حال مطالعهٔ مقاله…" : "Reading the article…"}</div>}
+            </div>
+          )}
+
           {/* ask this article */}
           <div className="flex gap-2">
             <input
@@ -136,9 +179,10 @@ export function BlogArticle({ slug }: { slug: string }) {
               style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}
             />
             <button
-              onClick={askArticle}
+              onClick={() => askArticle()}
+              disabled={asking}
               aria-label={t.send}
-              className="flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-4 text-[13.5px] font-bold text-white"
+              className="flex cursor-pointer items-center gap-1.5 rounded-[10px] border-none px-4 text-[13.5px] font-bold text-white disabled:opacity-50"
               style={{ background: "var(--accent)" }}
             >
               <Send size={16} />
