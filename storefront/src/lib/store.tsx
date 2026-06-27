@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import type { Brand, CartLine, Category, Coupon, Locale, Product } from "./types";
 import type { HomeContent } from "./home";
 import { getDict, type Dict } from "@/i18n/dictionaries";
@@ -120,6 +121,33 @@ export function ShopProvider({
   const [brands, setBrands] = useState<Brand[]>([]);
   const [home, setHome] = useState<HomeContent | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pathname = usePathname();
+
+  // live data (admin-editable). `cache: "no-store"` guarantees the browser
+  // never serves a stale copy, so edits made in the admin panel always win.
+  const refreshData = useCallback(() => {
+    const noStore: RequestInit = { cache: "no-store" };
+    fetch("/api/products", noStore)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
+      .catch(() => {});
+    fetch("/api/categories", noStore)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) setCategories(d.categories); })
+      .catch(() => {});
+    fetch("/api/menu", noStore)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
+      .catch(() => {});
+    fetch("/api/brands", noStore)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
+      .catch(() => {});
+    fetch("/api/home", noStore)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.home) setHome(d.home); })
+      .catch(() => {});
+  }, []);
 
   // hydrate from localStorage on mount
   useEffect(() => {
@@ -130,36 +158,13 @@ export function ShopProvider({
     setWishlist(load("wishlist", []));
     setCompare(load("compare", []));
     setMounted(true);
-    // live data (admin-editable). Refetched on tab focus so edits made in the
-    // admin panel show up on the site without a hard refresh.
-    const refreshData = () => {
-      fetch("/api/products")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
-        .catch(() => {});
-      fetch("/api/categories")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) setCategories(d.categories); })
-        .catch(() => {});
-      fetch("/api/menu")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
-        .catch(() => {});
-      fetch("/api/brands")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
-        .catch(() => {});
-      fetch("/api/home")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (d?.home) setHome(d.home); })
-        .catch(() => {});
-    };
-    refreshData();
+    // Refetch live data when the tab regains focus / becomes visible so edits
+    // made in the admin panel show up on the site without a hard refresh.
     const onVisible = () => { if (document.visibilityState === "visible") refreshData(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", refreshData);
     // apply store branding (name / currency / logo) saved in admin
-    fetch("/api/settings/store")
+    fetch("/api/settings/store", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d?.settings && setBrand({
         storeName: d.settings.storeName,
@@ -173,7 +178,14 @@ export function ShopProvider({
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", refreshData);
     };
-  }, [accentColor, defaultRoundness]);
+  }, [accentColor, defaultRoundness, refreshData]);
+
+  // Refetch live data on every client-side navigation (pathname change) so
+  // moving from the admin panel to the site — without switching tabs — always
+  // shows the latest data. This is the key fix for "changes need a hard refresh".
+  useEffect(() => {
+    refreshData();
+  }, [pathname, refreshData]);
 
   // reflect theme on <html> for SSR-safe theming via CSS vars
   useEffect(() => {
