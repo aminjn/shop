@@ -11,7 +11,7 @@ export interface HomeFeature { icon: string; fa: string; faSub: string; en: stri
 export interface HomeTestimonial { fa: string; faText: string; en: string; enText: string; rating: number }
 export interface HomeFaq { qFa: string; aFa: string; qEn: string; aEn: string }
 
-export type HomeBlockType = "hero" | "richtext" | "image" | "cta" | "products" | "spacer";
+export type HomeBlockType = "hero" | "richtext" | "image" | "cta" | "products" | "blog" | "spacer";
 export interface HomeBlock {
   id: string;
   type: HomeBlockType;
@@ -23,6 +23,7 @@ export interface HomeBlock {
   hue?: number; // -1 = default surface
   source?: "featured" | "newest" | "bestsellers" | "onsale";
   cat?: string;
+  count?: number; // products/blog: how many items to show
   height?: number; // spacer
   align?: "start" | "center";
 }

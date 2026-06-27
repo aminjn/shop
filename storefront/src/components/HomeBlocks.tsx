@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { HomeBlock, HomeBlockType } from "@/lib/home";
 import { useShop } from "@/lib/store";
 import { useHomeEdit } from "./HomeEdit";
-import { grad } from "@/lib/format";
+import { grad, formatDate } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 import { LocaleLink } from "./LocaleLink";
 import { UploadButton } from "./UploadButton";
@@ -18,9 +18,58 @@ function blankBlock(type: HomeBlockType): HomeBlock {
   if (type === "hero") return { ...base, titleFa: "عنوان جدید", titleEn: "New title", textFa: "توضیح کوتاه", textEn: "Short description", btnFa: "بیشتر", btnEn: "More", href: "/shop", hue: 255 };
   if (type === "cta") return { ...base, titleFa: "یک پیشنهاد ویژه", titleEn: "A special offer", btnFa: "مشاهده", btnEn: "View", href: "/shop", hue: 255, align: "center" };
   if (type === "richtext") return { ...base, titleFa: "عنوان", titleEn: "Title", textFa: "متن دلخواه شما…", textEn: "Your text…" };
-  if (type === "products") return { ...base, titleFa: "محصولات", titleEn: "Products", source: "featured" };
+  if (type === "products") return { ...base, titleFa: "محصولات", titleEn: "Products", source: "featured", count: 4 };
+  if (type === "blog") return { ...base, titleFa: "از وبلاگ", titleEn: "From the blog", count: 6 };
   if (type === "spacer") return { ...base, height: 40 };
   return base; // image
+}
+
+/** Horizontal slider of the latest published blog articles. */
+interface BlogItem { id: number; slug: string; fa: string; en: string; catFa: string; catEn: string; date: string; hue: number; cover?: string }
+function BlogStrip({ block }: { block: HomeBlock }) {
+  const { locale, dark } = useShop();
+  const fa = locale === "fa";
+  const [posts, setPosts] = useState<BlogItem[]>([]);
+  const n = block.count && block.count > 0 ? block.count : 6;
+  useEffect(() => {
+    fetch("/api/posts", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.posts)) setPosts(d.posts.slice(0, n)); })
+      .catch(() => {});
+  }, [n]);
+  const title = (fa ? block.titleFa : block.titleEn) || (fa ? "از وبلاگ" : "From the blog");
+  if (!posts.length) return (
+    <div className="rounded-[18px] p-8 text-center text-[14px]" style={{ background: "var(--surface2)", border: "1px dashed var(--border)", color: "var(--muted)" }}>
+      {fa ? "هنوز مقاله‌ای منتشر نشده — از بخش مقالات اضافه کن" : "No articles yet"}
+    </div>
+  );
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-[22px] font-extrabold tracking-tight">{title}</h2>
+        <LocaleLink href="/blog" className="text-[13px] font-bold no-underline" style={{ color: "var(--accent)" }}>{fa ? "همهٔ مقاله‌ها ←" : "All articles →"}</LocaleLink>
+      </div>
+      <div className="scrollthin flex gap-4 overflow-x-auto pb-2" style={{ scrollSnapType: "x mandatory" }}>
+        {posts.map((p) => (
+          <LocaleLink key={p.id} href={`/blog/${p.slug}`} className="block w-[280px] flex-none no-underline" style={{ scrollSnapAlign: "start", color: "var(--text)" }}>
+            <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              {p.cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.cover} alt={fa ? p.fa : p.en} className="h-[150px] w-full object-cover" />
+              ) : (
+                <div className="h-[150px] w-full" style={{ background: grad(p.hue ?? 215, dark) }} />
+              )}
+              <div className="p-4">
+                <div className="text-[11.5px] font-bold" style={{ color: "var(--accent)" }}>{fa ? p.catFa : p.catEn}</div>
+                <div className="mt-1 line-clamp-2 text-[14.5px] font-bold leading-snug">{fa ? p.fa : p.en}</div>
+                <div className="mt-1.5 text-[12px]" style={{ color: "var(--muted)" }}>{formatDate(p.date, locale)}</div>
+              </div>
+            </div>
+          </LocaleLink>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /** Thin wrapper: drives the homepage's blocks through the inline edit context. */
@@ -92,6 +141,8 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
           </div>
         );
       }
+      case "blog":
+        return <BlogStrip block={b} />;
       case "hero":
       default:
         return (
@@ -143,11 +194,17 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
         </div>
       )}
 
+      {(b.type === "products" || b.type === "blog") && (
+        <label className="mt-2 flex items-center gap-2 text-[12.5px] font-bold">{fa ? "تعداد نمایش" : "Items to show"}
+          <input type="number" min={1} max={12} value={b.count || (b.type === "blog" ? 6 : 4)} onChange={(e) => upd(i, { count: Math.min(12, Math.max(1, Number(e.target.value) || 1)) })} className="w-[80px] rounded-[8px] px-2 py-1 text-[12.5px]" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} dir="ltr" />
+        </label>
+      )}
+
       {b.type === "image" && <div className="mt-2"><UploadButton accept="image/*" label={fa ? "آپلود تصویر" : "Upload image"} onUploaded={(url) => upd(i, { image: url })} />{b.image && <span className="ms-2 text-[11.5px]" style={{ color: "var(--accent)" }}>{fa ? "تصویر بارگذاری شد" : "uploaded"}</span>}</div>}
 
       {b.type === "spacer" && <label className="mt-2 flex items-center gap-2 text-[12.5px] font-bold">{fa ? "ارتفاع (px)" : "Height"}<input type="number" min={8} max={240} value={b.height || 40} onChange={(e) => upd(i, { height: Number(e.target.value) || 40 })} className="w-[80px] rounded-[8px] px-2 py-1 text-[12.5px]" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} dir="ltr" /></label>}
 
-      {b.type !== "spacer" && b.type !== "image" && b.type !== "products" && (
+      {b.type !== "spacer" && b.type !== "image" && b.type !== "products" && b.type !== "blog" && (
         <div className="mt-2 flex flex-wrap items-center gap-3">
           {(b.type === "hero" || b.type === "cta") && (
             <label className="flex items-center gap-2 text-[12.5px] font-bold">{fa ? "رنگ" : "Color"}
@@ -173,6 +230,7 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
     { type: "richtext", label: fa ? "متن" : "Text" },
     { type: "image", label: fa ? "تصویر" : "Image" },
     { type: "products", label: fa ? "ردیف محصولات" : "Products" },
+    { type: "blog", label: fa ? "اسلایدر وبلاگ" : "Blog slider" },
     { type: "spacer", label: fa ? "فاصله" : "Spacer" },
   ];
 
@@ -182,20 +240,20 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
         <div
           key={b.id}
           className="relative my-4"
-          onDragOver={editing && dragI !== null ? (e) => { e.preventDefault(); if (overI !== i) setOverI(i); } : undefined}
-          onDrop={editing && dragI !== null ? (e) => { e.preventDefault(); reorder(dragI, i); setDragI(null); setOverI(null); } : undefined}
+          onDragOver={editing ? (e) => { if (dragI === null) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (overI !== i) setOverI(i); } : undefined}
+          onDrop={editing ? (e) => { if (dragI === null) return; e.preventDefault(); reorder(dragI, i); setDragI(null); setOverI(null); } : undefined}
           style={editing && overI === i && dragI !== null && dragI !== i ? { outline: "2px dashed var(--accent)", outlineOffset: 4, borderRadius: 18 } : undefined}
         >
           {editing && (
             <div className="absolute z-[15] flex items-center gap-1 rounded-[10px] p-1" style={{ insetInlineEnd: 8, top: 8, background: "rgba(0,0,0,.6)", backdropFilter: "blur(4px)" }}>
               <span
                 draggable
-                onDragStart={(e) => { setDragI(i); e.dataTransfer.effectAllowed = "move"; }}
+                onDragStart={(e) => { setDragI(i); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }}
                 onDragEnd={() => { setDragI(null); setOverI(null); }}
                 title={fa ? "بکش و رها کن برای جابه‌جایی" : "Drag to reorder"}
-                className="flex h-7 w-7 cursor-grab items-center justify-center rounded-[7px] text-[14px] text-white active:cursor-grabbing"
-                style={{ background: "rgba(255,255,255,.15)", touchAction: "none" }}
-              >⠿</span>
+                className="flex h-7 cursor-grab items-center justify-center gap-1 rounded-[7px] px-2 text-[14px] text-white active:cursor-grabbing"
+                style={{ background: "rgba(255,255,255,.22)", touchAction: "none" }}
+              >⠿ <span className="text-[11px] font-bold">{fa ? "جابه‌جایی" : "Move"}</span></span>
               <button onClick={() => move(i, -1)} title={fa ? "بالا" : "Up"} className="h-7 w-7 cursor-pointer rounded-[7px] border-none text-[13px] text-white" style={{ background: "rgba(255,255,255,.15)" }}>↑</button>
               <button onClick={() => move(i, 1)} title={fa ? "پایین" : "Down"} className="h-7 w-7 cursor-pointer rounded-[7px] border-none text-[13px] text-white" style={{ background: "rgba(255,255,255,.15)" }}>↓</button>
               <button onClick={() => setOpenId(openId === b.id ? null : b.id)} title={fa ? "تنظیمات" : "Settings"} className="h-7 cursor-pointer rounded-[7px] border-none px-2 text-[12px] font-bold text-white" style={{ background: "var(--accent)" }}>⚙ {fa ? "تنظیم" : "Edit"}</button>
