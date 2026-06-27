@@ -23,7 +23,14 @@ export function BlogArticle({ slug }: { slug: string }) {
       .catch(() => {});
   }, []);
 
-  const p = posts.find((x) => x.slug === slug) ?? postBySlug(slug);
+  // match by slug; fall back to the trailing id (slugs are "<topic>-<id>") and to
+  // a decoded comparison, so URL-encoding of Persian slugs can't break the lookup.
+  const dec = (() => { try { return decodeURIComponent(slug); } catch { return slug; } })();
+  const tailId = (() => { const m = dec.match(/-(\d+)$/); return m ? Number(m[1]) : null; })();
+  const p =
+    posts.find((x) => x.slug === slug || x.slug === dec) ??
+    (tailId != null ? posts.find((x) => x.id === tailId) : undefined) ??
+    postBySlug(slug);
 
   if (!p) {
     return (

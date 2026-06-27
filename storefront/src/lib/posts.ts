@@ -63,7 +63,13 @@ export function getScheduledPosts(): StoredPost[] {
 }
 
 export function postBySlugStore(slug: string): StoredPost | undefined {
-  return getAllPosts().find((p) => p.slug === slug);
+  const all = getAllPosts();
+  let dec = slug;
+  try { dec = decodeURIComponent(slug); } catch { /* keep */ }
+  const hit = all.find((p) => p.slug === slug || p.slug === dec);
+  if (hit) return hit;
+  const m = dec.match(/-(\d+)$/);
+  return m ? all.find((p) => p.id === Number(m[1])) : undefined;
 }
 
 export function nextPostId(): number {
