@@ -1928,6 +1928,17 @@ function PagesAdmin() {
       toast(fa ? "ترجمه شد ✓" : "Translated ✓");
     } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setBusy(false); }
   };
+  const [aiBusy, setAiBusy] = useState(false);
+  const aiGenerate = async () => {
+    if (!form.titleFa.trim()) { toast(fa ? "اول عنوان صفحه را بنویس" : "Enter a title first"); return; }
+    setAiBusy(true);
+    try {
+      const r = await fetch("/api/ai/page", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: form.titleFa.trim() }) });
+      const d = await r.json();
+      if (d.ok && d.body) { setForm((f) => ({ ...f, bodyFa: d.body })); toast(fa ? "محتوا با هوش مصنوعی تولید شد ✓ — بررسی و ذخیره کن" : "Generated ✓"); }
+      else { const m = `${d.error || ""}`; toast(/quota|insufficient|credit|balance/i.test(m) ? (fa ? "اعتبار سرویس هوش مصنوعی تمام شده" : "AI out of credit") : (fa ? "تولید محتوا ناموفق بود" : "Generate failed")); }
+    } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setAiBusy(false); }
+  };
 
   const post = async (body: Record<string, unknown>) => {
     const r = await fetch("/api/pages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -1970,6 +1981,7 @@ function PagesAdmin() {
         </label>
         <div className="mt-4 flex flex-wrap gap-2">
           <button onClick={save} className="cursor-pointer rounded-[12px] border-none px-6 py-2.5 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{editing ? (fa ? "ذخیره تغییرات" : "Save") : fa ? "ایجاد صفحه" : "Create"}</button>
+          <button onClick={aiGenerate} disabled={aiBusy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold disabled:opacity-60" style={{ ...inputStyle, color: "var(--accent)" }}><Sparkle size={15} /> {aiBusy ? (fa ? "در حال تولید…" : "…") : fa ? "تولید محتوا با هوش مصنوعی" : "AI write content"}</button>
           <button onClick={aiTranslate} disabled={busy} className="inline-flex cursor-pointer items-center gap-1.5 rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold disabled:opacity-60" style={{ ...inputStyle, color: "var(--accent)" }}><Sparkle size={15} /> {busy ? (fa ? "در حال ترجمه…" : "…") : fa ? "ترجمه به انگلیسی با AI" : "AI translate"}</button>
           {editing && <a href={`/${locale}/p/${editing.slug}`} target="_blank" rel="noreferrer" className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold no-underline" style={{ ...inputStyle, color: "var(--accent)" }}>{fa ? "مشاهده ↗" : "View ↗"}</a>}
           {editing && <button onClick={startNew} className="cursor-pointer rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold" style={inputStyle}>{fa ? "انصراف" : "Cancel"}</button>}
