@@ -3019,41 +3019,7 @@ function Settings() {
           </div>
         </Card>
 
-        {/* SEO settings */}
-        <Card className="p-5 lg:col-span-2">
-          <h2 className="mb-1 text-[15px] font-extrabold">{fa ? "بهینه‌سازی موتور جستجو (SEO)" : "Search engine optimization (SEO)"}</h2>
-          <p className="mb-4 text-[12.5px]" style={{ color: "var(--muted)" }}>
-            {fa ? "عنوان و توضیحات متا، کلمات کلیدی و تصویر اشتراک‌گذاری سایت در گوگل و شبکه‌های اجتماعی." : "Meta title/description, keywords and social share image."}
-          </p>
-          <div className="flex flex-col gap-3.5">
-            <div>
-              {lbl(fa ? "عنوان متا (Meta Title)" : "Meta title")}
-              <input className={inputCls} style={inputStyle} value={store.metaTitle} onChange={(e) => setS("metaTitle", e.target.value)} placeholder={fa ? "حداکثر ۶۰ کاراکتر" : "max 60 chars"} maxLength={70} />
-            </div>
-            <div>
-              {lbl(fa ? "توضیحات متا (Meta Description)" : "Meta description")}
-              <textarea className="w-full rounded-[10px] px-3 py-2.5 text-[13.5px] outline-none" style={{ ...inputStyle, minHeight: 70, resize: "vertical" }} value={store.metaDescription} onChange={(e) => setS("metaDescription", e.target.value)} placeholder={fa ? "حداکثر ۱۵۵ کاراکتر" : "max 155 chars"} maxLength={320} />
-            </div>
-            <div>
-              {lbl(fa ? "کلمات کلیدی (با ویرگول جدا کن)" : "Keywords (comma separated)")}
-              <input className={inputCls} style={inputStyle} value={store.metaKeywords} onChange={(e) => setS("metaKeywords", e.target.value)} placeholder={fa ? "فروشگاه، خرید آنلاین، …" : "shop, online, …"} />
-            </div>
-            <div>
-              {lbl(fa ? "تصویر اشتراک‌گذاری (OG Image)" : "Open Graph image")}
-              <div className="flex items-center gap-3">
-                {store.ogImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={store.ogImage} alt="og" className="h-14 w-24 rounded-[8px] object-cover" style={{ border: "1px solid var(--border)" }} />
-                ) : null}
-                <UploadButton accept="image/*" label={fa ? "آپلود تصویر" : "Upload image"} onUploaded={(url) => setS("ogImage", url)} />
-                {store.ogImage && <button type="button" onClick={() => setS("ogImage", "")} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>}
-              </div>
-            </div>
-            <button onClick={saveStore} disabled={storeSaving} className="mt-1 cursor-pointer rounded-[12px] border-none py-3 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
-              {storeSaving ? (fa ? "در حال ذخیره…" : "Saving…") : fa ? "ذخیره سئو" : "Save SEO"}
-            </button>
-          </div>
-        </Card>
+        {/* SEO moved to its own dedicated section */}
 
         {/* AI settings (GapGPT) */}
         <Card className="p-5">
