@@ -113,12 +113,15 @@ export function ProductCard({
         >
           {name}
         </LocaleLink>
-        <div className="mt-1 text-[13px]" style={{ color: "#f59e0b", letterSpacing: 2 }}>
-          {"★★★★★".slice(0, Math.round(p.rating))}
-          <span style={{ color: "var(--muted)" }} className="text-[12px]">
-            {" "}
-            ({num(p.reviews, locale)})
-          </span>
+        <div className="mt-1 flex items-center gap-1.5 text-[13px]">
+          <span style={{ color: "#f59e0b", letterSpacing: 2 }}>{"★★★★★".slice(0, Math.round(p.rating))}</span>
+          {p.packSize && p.packSize > 1 ? (
+            <span className="text-[12px] font-bold" style={{ color: "var(--muted)" }}>
+              {locale === "fa" ? "تکی " : "each "}{priceFmt(unitPrice(p), locale, t.currency)}
+            </span>
+          ) : p.reviews > 0 ? (
+            <span className="text-[12px]" style={{ color: "var(--muted)" }}>({num(p.reviews, locale)})</span>
+          ) : null}
         </div>
         <div className="mb-1 mt-1.5 flex items-center gap-2">
           <span className="text-[16px] font-extrabold" style={{ color: "var(--accent)" }}>
