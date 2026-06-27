@@ -14,6 +14,26 @@ export function unitPrice(p: Pick<Product, "price" | "pricingType" | "pricePerCm
 export function isPerCm(p: Pick<Product, "pricingType">): boolean {
   return p.pricingType === "per_cm";
 }
+/** True when the product is sold in priced variants (e.g. خشک / روغنی). */
+export function hasVariations(p: Pick<Product, "variations">): boolean {
+  return !!(p.variations && p.variations.length);
+}
+/** Effective unit price. When a product has variations its base price is often
+ *  0 and the real prices live on each variant — so use the chosen variant
+ *  (by index) or, if none is chosen, the cheapest variant. Falls back to
+ *  unitPrice() for ordinary / per-cm / carton products. */
+export function variantPrice(
+  p: Pick<Product, "price" | "pricingType" | "pricePerCm" | "width" | "variations">,
+  idx?: number,
+): number {
+  const vs = p.variations;
+  if (vs && vs.length) {
+    if (typeof idx === "number" && vs[idx]) return vs[idx].price || 0;
+    const prices = vs.map((v) => v.price || 0).filter((n) => n > 0);
+    return prices.length ? Math.min(...prices) : vs[0].price || 0;
+  }
+  return unitPrice(p);
+}
 /** Human breakdown for a per-cm piece, e.g. "۵ سانت × ۳۲۰٬۰۰۰". */
 export function perCmNote(p: Pick<Product, "pricingType" | "pricePerCm" | "width">, locale: Locale): string {
   if (p.pricingType !== "per_cm") return "";

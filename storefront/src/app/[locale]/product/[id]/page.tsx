@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ProductDetail } from "@/components/ProductDetail";
 import { getProduct } from "@/lib/catalog";
-import { unitPrice } from "@/lib/format";
+import { variantPrice } from "@/lib/format";
 import { siteOrigin, getSeo } from "@/lib/seo";
 import { readStore } from "@/lib/settings";
 import { getDict } from "@/i18n/dictionaries";
@@ -68,7 +68,7 @@ export default async function ProductPage({
               : {}),
             offers: {
               "@type": "Offer",
-              price: unitPrice(p),
+              price: variantPrice(p),
               priceCurrency: "IRR",
               url,
               priceValidUntil: validUntil,

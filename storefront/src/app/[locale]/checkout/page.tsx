@@ -194,7 +194,7 @@ export default function CheckoutPage() {
               return (
                 <div key={line.key} className="flex items-center gap-3">
                   <span className="flex h-12 w-12 flex-none items-center justify-center rounded-[10px] text-[16px] font-extrabold" style={{ background: grad(p.hue, dark), color: "rgba(255,255,255,.5)" }}>{(locale === "fa" ? p.fa : p.en).charAt(0)}</span>
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{locale === "fa" ? p.fa : p.en}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{locale === "fa" ? p.fa : p.en}{(() => { const v = p.variations && typeof line.variant === "number" ? p.variations[line.variant] : undefined; return v ? <span style={{ color: "var(--muted)" }}> — {v.type || v.value}</span> : null; })()}</span>
                   <span className="text-[12.5px]" style={{ color: "var(--muted)" }}>×{num(line.qty, locale)}</span>
                 </div>
               );

@@ -34,7 +34,7 @@ interface ShopState {
   setRoundness: (r: Roundness) => void;
   // cart
   cart: CartLine[];
-  addToCart: (id: number, qty?: number, color?: number, size?: number) => void;
+  addToCart: (id: number, qty?: number, color?: number, size?: number, variant?: number) => void;
   changeLine: (key: string, delta: number) => void;
   removeLine: (key: string) => void;
   clearCart: () => void;
@@ -123,27 +123,29 @@ export function ShopProvider({
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pathname = usePathname();
 
-  // live data (admin-editable). `cache: "no-store"` guarantees the browser
-  // never serves a stale copy, so edits made in the admin panel always win.
+  // live data (admin-editable). `cache: "no-store"` stops the browser cache,
+  // and a unique `?_=<ts>` query busts any CDN/edge (Arvan) cache so edits made
+  // in the admin panel always show up without a hard refresh.
   const refreshData = useCallback(() => {
     const noStore: RequestInit = { cache: "no-store" };
-    fetch("/api/products", noStore)
+    const bust = () => `?_=${Date.now()}`;
+    fetch("/api/products" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
       .catch(() => {});
-    fetch("/api/categories", noStore)
+    fetch("/api/categories" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) setCategories(d.categories); })
       .catch(() => {});
-    fetch("/api/menu", noStore)
+    fetch("/api/menu" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
       .catch(() => {});
-    fetch("/api/brands", noStore)
+    fetch("/api/brands" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
       .catch(() => {});
-    fetch("/api/home", noStore)
+    fetch("/api/home" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.home) setHome(d.home); })
       .catch(() => {});
@@ -240,13 +242,13 @@ export function ShopProvider({
   }, []);
 
   const addToCart = useCallback(
-    (id: number, qty = 1, color = 0, size = 0) => {
-      const key = `${id}_${color}_${size}`;
+    (id: number, qty = 1, color = 0, size = 0, variant = 0) => {
+      const key = `${id}_${color}_${size}_${variant}`;
       setCart((prev) => {
         const next = [...prev];
         const i = next.findIndex((c) => c.key === key);
         if (i >= 0) next[i] = { ...next[i], qty: next[i].qty + qty };
-        else next.push({ key, id, qty, color, size });
+        else next.push({ key, id, qty, color, size, variant });
         save("cart", next);
         return next;
       });

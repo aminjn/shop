@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useShop, usePageTitle } from "@/lib/store";
 import { computeTotals } from "@/lib/cart";
-import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote } from "@/lib/format";
+import { grad, priceFmt, num, isPerCm, perCmNote, variantPrice, hasVariations } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Plus, Minus, Trash, Cart as CartIcon, ArrowBack } from "@/components/Icons";
 
@@ -21,7 +21,7 @@ export default function CartPage() {
       .catch(() => {});
   }, []);
 
-  const subtotal = cart.reduce((sum, l) => { const p = productById(l.id); return sum + (p ? unitPrice(p) * l.qty : 0); }, 0);
+  const subtotal = cart.reduce((sum, l) => { const p = productById(l.id); return sum + (p ? variantPrice(p, l.variant) * l.qty : 0); }, 0);
   const totals = computeTotals(cart, coupon, { products, config: cfg });
 
   const applyCoupon = async () => {
@@ -68,6 +68,8 @@ export default function CartPage() {
             const p = productById(line.id);
             if (!p) return null;
             const name = locale === "fa" ? p.fa : p.en;
+            const lineV = p.variations && typeof line.variant === "number" ? p.variations[line.variant] : undefined;
+            const lineUnit = variantPrice(p, line.variant);
             const pack = p.packSize && p.packSize > 1 ? p.packSize : 1;
             const dec = () => { if (line.qty - pack < pack) removeLine(line.key); else changeLine(line.key, -pack); };
             return (
@@ -76,10 +78,11 @@ export default function CartPage() {
                 <div className="min-w-0 flex-1">
                   <LocaleLink href={`/product/${p.id}`} className="block text-[15px] font-bold no-underline" style={{ color: "var(--text)" }}>{name}</LocaleLink>
                   <div className="mt-0.5 text-[12.5px]" style={{ color: "var(--muted)" }}>{p.brand}</div>
-                  <div className="mt-1 text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p), locale, t.currency)}{!isPerCm(p) && pack > 1 ? <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}> / {locale === "fa" ? "عدد" : "unit"}</span> : null}</div>
-                  {isPerCm(p) && <div className="mt-0.5 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>📏 {perCmNote(p, locale)}</div>}
+                  {lineV && <div className="mt-0.5 text-[12px] font-bold" style={{ color: "var(--accent)" }}>{lineV.type || lineV.value}</div>}
+                  <div className="mt-1 text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(lineUnit, locale, t.currency)}{!isPerCm(p) && pack > 1 ? <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}> / {locale === "fa" ? "عدد" : "unit"}</span> : null}</div>
+                  {isPerCm(p) && !hasVariations(p) && <div className="mt-0.5 text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>📏 {perCmNote(p, locale)}</div>}
                   {pack > 1 && <div className="mt-0.5 text-[12px] font-bold" style={{ color: "var(--muted)" }}>📦 {locale === "fa" ? `${num(Math.round(line.qty / pack), locale)} کارتن (${num(line.qty, locale)} عدد)` : `${Math.round(line.qty / pack)} cartons (${line.qty} units)`}</div>}
-                  <div className="mt-1 text-[13.5px] font-extrabold">{locale === "fa" ? "جمع: " : "Total: "}{priceFmt(unitPrice(p) * line.qty, locale, t.currency)}</div>
+                  <div className="mt-1 text-[13.5px] font-extrabold">{locale === "fa" ? "جمع: " : "Total: "}{priceFmt(lineUnit * line.qty, locale, t.currency)}</div>
                 </div>
                 <div className="flex items-center gap-2 rounded-[10px] px-1.5 py-1" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
                   <button onClick={dec} aria-label="-" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Minus size={14} /></button>

@@ -66,6 +66,7 @@ export interface CartLine {
   qty: number;
   color: number;
   size: number;
+  variant?: number;
 }
 
 export interface Coupon {

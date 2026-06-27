@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
-import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
@@ -18,6 +18,7 @@ export function ProductDetail({ id }: { id: number }) {
   const [gallery, setGallery] = useState(0);
   const [color, setColor] = useState(0);
   const [size, setSize] = useState(0);
+  const [variant, setVariant] = useState(0);
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState<"desc" | "specs" | "reviews">("desc");
   const [showVideo, setShowVideo] = useState(false);
@@ -38,6 +39,9 @@ export function ProductDetail({ id }: { id: number }) {
   const cat = catById(p.cat);
   const pack = p.packSize && p.packSize > 1 ? p.packSize : 1; // units per carton (1 = normal)
   const cartons = Math.max(1, Math.round(qty / pack));
+  const variations = p.variations ?? [];
+  // price for the chosen variant (or the cheapest one) — falls back to unitPrice
+  const price = hasVariations(p) ? variantPrice(p, variant) : unitPrice(p);
   const disc = p.old ? Math.round((1 - p.price / p.old) * 100) : 0;
   const wished = wishlist.includes(p.id);
 
@@ -126,13 +130,37 @@ export function ProductDetail({ id }: { id: number }) {
           </div>
 
           <div className="mt-4 flex items-center gap-3">
-            <span className="text-[30px] font-black" style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p), locale, t.currency)}</span>
-            {p.old && !isPerCm(p) && <span className="text-[18px] line-through" style={{ color: "var(--muted)" }}>{num(p.old, locale)}</span>}
-            {disc > 0 && !isPerCm(p) && <span className="rounded-md px-2 py-1 text-[12px] font-extrabold text-white" style={{ background: "#e11d48" }}>{num(disc, locale)}٪-</span>}
+            <span className="text-[30px] font-black" style={{ color: "var(--accent)" }}>{priceFmt(price, locale, t.currency)}</span>
+            {p.old && !isPerCm(p) && !hasVariations(p) && <span className="text-[18px] line-through" style={{ color: "var(--muted)" }}>{num(p.old, locale)}</span>}
+            {disc > 0 && !isPerCm(p) && !hasVariations(p) && <span className="rounded-md px-2 py-1 text-[12px] font-extrabold text-white" style={{ background: "#e11d48" }}>{num(disc, locale)}٪-</span>}
           </div>
           {isPerCm(p) ? (
             <div className="mt-1 text-[13px]" style={{ color: "var(--muted)" }}>📏 {perCmNote(p, locale)} {t.currency}</div>
           ) : null}
+
+          {/* priced variants (e.g. خشک / روغنی) */}
+          {variations.length > 0 && (
+            <div className="mt-5">
+              <div className="mb-2 text-[13.5px] font-bold">{locale === "fa" ? "انتخاب نوع" : "Choose option"}</div>
+              <div className="flex flex-wrap gap-2">
+                {variations.map((v, i) => {
+                  const label = v.type || v.value || (locale === "fa" ? `نوع ${num(i + 1, locale)}` : `Option ${i + 1}`);
+                  const sel = variant === i;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setVariant(i)}
+                      className="cursor-pointer rounded-[10px] px-3.5 py-2 text-[13.5px] font-bold"
+                      style={{ background: sel ? "var(--accent)" : "var(--surface2)", color: sel ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}
+                    >
+                      {label}
+                      {v.price > 0 && <span className="ms-1.5 text-[12px] font-extrabold" style={{ opacity: 0.85 }}>· {priceFmt(v.price, locale, t.currency)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* variations */}
           {p.colors && (
@@ -171,8 +199,8 @@ export function ProductDetail({ id }: { id: number }) {
               <span className="min-w-[24px] text-center text-[15px] font-bold">{pack > 1 ? `${num(cartons, locale)} ${locale === "fa" ? "کارتن" : "carton"}` : num(qty, locale)}</span>
               <button onClick={() => setQty((q) => q + pack)} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Plus size={16} /></button>
             </div>
-            <button onClick={() => addToCart(p.id, qty, color, size)} className="flex-1 cursor-pointer rounded-[12px] border-none px-6 py-3.5 text-[15px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.addToCart}</button>
-            <button onClick={() => { addToCart(p.id, qty, color, size); router.push(`/${locale}/cart`); }} className="cursor-pointer rounded-[12px] px-6 py-3.5 text-[15px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{t.buyNow}</button>
+            <button onClick={() => addToCart(p.id, qty, color, size, variant)} className="flex-1 cursor-pointer rounded-[12px] border-none px-6 py-3.5 text-[15px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.addToCart}</button>
+            <button onClick={() => { addToCart(p.id, qty, color, size, variant); router.push(`/${locale}/cart`); }} className="cursor-pointer rounded-[12px] px-6 py-3.5 text-[15px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{t.buyNow}</button>
             <button onClick={() => toggleWish(p.id)} aria-label={t.addToWishlist} className="flex h-[50px] w-[50px] cursor-pointer items-center justify-center rounded-[12px]" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: wished ? "#e11d48" : "var(--muted)" }}><Heart size={20} fill={wished ? "#e11d48" : "none"} /></button>
           </div>
 
