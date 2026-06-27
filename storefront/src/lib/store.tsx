@@ -2,7 +2,6 @@
 
 import {
   createContext,
-  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -10,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { usePathname } from "next/navigation";
 import type { Brand, CartLine, Category, Coupon, Locale, Product } from "./types";
 import type { HomeContent } from "./home";
 import { getDict, type Dict } from "@/i18n/dictionaries";
@@ -129,28 +127,25 @@ export function ShopProvider({
   const refreshData = useCallback(() => {
     const noStore: RequestInit = { cache: "no-store" };
     const bust = () => `?_=${Date.now()}`;
-    // Mark these data updates as non-urgent so a fetch resolving mid-navigation
-    // yields to the route transition instead of interrupting it (which made
-    // links appear to need two clicks).
     fetch("/api/products" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.products)) startTransition(() => setProducts(d.products)); })
+      .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
       .catch(() => {});
     fetch("/api/categories" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) startTransition(() => setCategories(d.categories)); })
+      .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) setCategories(d.categories); })
       .catch(() => {});
     fetch("/api/menu" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.menu)) startTransition(() => setMenu(d.menu)); })
+      .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
       .catch(() => {});
     fetch("/api/brands" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.brands)) startTransition(() => setBrands(d.brands)); })
+      .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
       .catch(() => {});
     fetch("/api/home" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d?.home) startTransition(() => setHome(d.home)); })
+      .then((d) => { if (d?.home) setHome(d.home); })
       .catch(() => {});
   }, []);
 
@@ -163,8 +158,12 @@ export function ShopProvider({
     setWishlist(load("wishlist", []));
     setCompare(load("compare", []));
     setMounted(true);
-    // Refetch live data when the tab regains focus / becomes visible so edits
-    // made in the admin panel show up on the site without a hard refresh.
+    // Load live data once on mount, then refetch when the tab regains focus /
+    // becomes visible so edits made in the admin panel show up without a hard
+    // refresh. (We deliberately do NOT refetch on every route change — running
+    // fetches that resolve mid-navigation interrupted the route transition and
+    // made links feel like they need two clicks.)
+    refreshData();
     const onVisible = () => { if (document.visibilityState === "visible") refreshData(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", refreshData);
@@ -365,26 +364,7 @@ export function ShopProvider({
     logoUrl,
   };
 
-  return (
-    <Ctx.Provider value={value}>
-      <RouteRefresher onRoute={refreshData} />
-      {children}
-    </Ctx.Provider>
-  );
-}
-
-/** Leaf component that refetches live data after each client-side navigation.
- *  Keeping `usePathname()` here (instead of in ShopProvider) means a navigation
- *  re-renders only this null-rendering node — not the whole provider tree — so
- *  it never interferes with the route transition (which made links need two
- *  clicks). The refetch is deferred so the new route commits first. */
-function RouteRefresher({ onRoute }: { onRoute: () => void }) {
-  const pathname = usePathname();
-  useEffect(() => {
-    const id = setTimeout(onRoute, 0);
-    return () => clearTimeout(id);
-  }, [pathname, onRoute]);
-  return null;
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useShop() {
