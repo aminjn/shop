@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ProductDetail } from "@/components/ProductDetail";
 import { getProduct } from "@/lib/catalog";
+import { siteOrigin, getSeo } from "@/lib/seo";
+import { readStore } from "@/lib/settings";
 import { getDict } from "@/i18n/dictionaries";
 import { isLocale } from "@/i18n/config";
 import type { Locale } from "@/lib/types";
@@ -39,27 +41,50 @@ export default async function ProductPage({
   const { locale, id } = await params;
   const loc = (isLocale(locale) ? locale : "fa") as Locale;
   const p = getProduct(Number(id));
+  const origin = siteOrigin();
+  const seo = getSeo();
+  const store = readStore();
+  const sellerName = seo.orgName || store.storeName || "";
 
+  const name = p ? (loc === "fa" ? p.fa : p.en) : "";
+  const url = `${origin}/${loc}/product/${id}`;
+  const validUntil = `${new Date().getFullYear() + 1}-12-31`;
   const jsonLd = p
     ? {
         "@context": "https://schema.org",
-        "@type": "Product",
-        name: loc === "fa" ? p.fa : p.en,
-        brand: { "@type": "Brand", name: p.brand },
-        aggregateRating: {
-          "@type": "AggregateRating",
-          ratingValue: p.rating,
-          reviewCount: p.reviews,
-        },
-        offers: {
-          "@type": "Offer",
-          price: p.price,
-          priceCurrency: "IRT",
-          availability:
-            p.stock > 0
-              ? "https://schema.org/InStock"
-              : "https://schema.org/OutOfStock",
-        },
+        "@graph": [
+          {
+            "@type": "Product",
+            name,
+            url,
+            sku: p.sku || `SKU-${1000 + p.id}`,
+            ...(p.images?.length ? { image: p.images.map((i) => (i.startsWith("http") ? i : origin + i)) } : {}),
+            description: (loc === "fa" ? p.shortFa : p.shortEn) || `${name} — ${p.brand}`,
+            brand: { "@type": "Brand", name: p.brand },
+            ...(p.country ? { countryOfOrigin: p.country } : {}),
+            ...(p.reviews > 0
+              ? { aggregateRating: { "@type": "AggregateRating", ratingValue: p.rating, reviewCount: p.reviews, bestRating: 5 } }
+              : {}),
+            offers: {
+              "@type": "Offer",
+              price: p.price,
+              priceCurrency: "IRR",
+              url,
+              priceValidUntil: validUntil,
+              itemCondition: "https://schema.org/NewCondition",
+              availability: p.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+              ...(sellerName ? { seller: { "@type": "Organization", name: sellerName } } : {}),
+            },
+          },
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: loc === "fa" ? "خانه" : "Home", item: `${origin}/${loc}` },
+              { "@type": "ListItem", position: 2, name: loc === "fa" ? "فروشگاه" : "Shop", item: `${origin}/${loc}/shop` },
+              { "@type": "ListItem", position: 3, name, item: url },
+            ],
+          },
+        ],
       }
     : null;
 

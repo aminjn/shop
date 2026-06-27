@@ -20,6 +20,7 @@ import { LocaleLink } from "@/components/LocaleLink";
 import { Sparkle } from "@/components/Icons";
 import { HomeEditProvider, useHomeEdit, Ed, HueEdit, LinkEdit, ListEdit } from "@/components/HomeEdit";
 import { HomeBlocks } from "@/components/HomeBlocks";
+import { JsonLd } from "@/components/JsonLd";
 
 const SECTION = "mx-auto max-w-[1280px] px-[22px]";
 
@@ -316,6 +317,9 @@ function HomeBody() {
       {/* FAQ */}
       <section className={`${SECTION} pb-10 pt-3`}>
         <Ed as="h2" k="titleFaq" fallback={t.faqTitle} className="mb-[18px] block text-[24px] font-extrabold tracking-tight" />
+        {!edit?.editMode && faqs.length > 0 && (
+          <JsonLd id="home-faq-ld" data={{ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faqs.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) }} />
+        )}
         <ListEdit kind="faqs" />
         <div className="flex flex-col gap-2.5">
           {faqs.map(([q, a], i) => (
