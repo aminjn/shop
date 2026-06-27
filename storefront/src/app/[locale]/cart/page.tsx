@@ -78,6 +78,7 @@ export default function CartPage() {
                   <div className="mt-0.5 text-[12.5px]" style={{ color: "var(--muted)" }}>{p.brand}</div>
                   <div className="mt-1 text-[15px] font-extrabold" style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p), locale, t.currency)}{isPerCm(p) ? <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}> / {locale === "fa" ? "سانت" : "cm"}</span> : pack > 1 ? <span className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}> / {locale === "fa" ? "عدد" : "unit"}</span> : null}</div>
                   {pack > 1 && <div className="mt-0.5 text-[12px] font-bold" style={{ color: "var(--muted)" }}>📦 {locale === "fa" ? `${num(Math.round(line.qty / pack), locale)} کارتن (${num(line.qty, locale)} عدد)` : `${Math.round(line.qty / pack)} cartons (${line.qty} units)`}</div>}
+                  <div className="mt-1 text-[13.5px] font-extrabold">{locale === "fa" ? "جمع: " : "Total: "}{priceFmt(unitPrice(p) * line.qty, locale, t.currency)}</div>
                 </div>
                 <div className="flex items-center gap-2 rounded-[10px] px-1.5 py-1" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
                   <button onClick={dec} aria-label="-" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Minus size={14} /></button>

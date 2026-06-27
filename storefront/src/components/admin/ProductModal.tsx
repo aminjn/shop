@@ -56,6 +56,10 @@ export function ProductModal({
   const [pricePerCm, setPricePerCm] = useState(String(initial?.pricePerCm ?? ""));
   const [width, setWidth] = useState(String(initial?.width ?? ""));
 
+  // group digits with thousands separators for price fields (state stays raw digits)
+  const grp = (v: string) => { const d = String(v).replace(/[^\d]/g, ""); return d ? Number(d).toLocaleString("en-US") : ""; };
+  const digits = (v: string) => v.replace(/[^\d]/g, "");
+
   const lbl = (s: string) => (
     <label className="mb-1 block text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>
       {s}
@@ -217,11 +221,11 @@ export function ProductModal({
           </div>
           <div>
             {lbl(t.thPrice)}
-            <input className={inputCls} style={inputStyle} inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} />
+            <input className={inputCls} style={inputStyle} inputMode="numeric" dir="ltr" value={grp(price)} onChange={(e) => setPrice(digits(e.target.value))} />
           </div>
           <div>
             {lbl(locale === "fa" ? "قیمت قبل از تخفیف" : "Compare-at price")}
-            <input className={inputCls} style={inputStyle} inputMode="numeric" value={old} onChange={(e) => setOld(e.target.value)} />
+            <input className={inputCls} style={inputStyle} inputMode="numeric" dir="ltr" value={grp(old)} onChange={(e) => setOld(digits(e.target.value))} />
           </div>
           <div>
             {lbl(t.thStock)}
@@ -258,7 +262,7 @@ export function ProductModal({
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   {lbl(locale === "fa" ? "قیمت هر سانت (تومان)" : "Price per cm")}
-                  <input className={inputCls} style={inputStyle} inputMode="numeric" value={pricePerCm} onChange={(e) => setPricePerCm(e.target.value)} dir="ltr" />
+                  <input className={inputCls} style={inputStyle} inputMode="numeric" value={grp(pricePerCm)} onChange={(e) => setPricePerCm(digits(e.target.value))} dir="ltr" />
                 </div>
                 <div>
                   {lbl(locale === "fa" ? "عرض (سانت)" : "Width (cm)")}
