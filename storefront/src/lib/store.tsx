@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -129,25 +130,28 @@ export function ShopProvider({
   const refreshData = useCallback(() => {
     const noStore: RequestInit = { cache: "no-store" };
     const bust = () => `?_=${Date.now()}`;
+    // Mark these data updates as non-urgent so a fetch resolving mid-navigation
+    // yields to the route transition instead of interrupting it (which made
+    // links appear to need two clicks).
     fetch("/api/products" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.products)) setProducts(d.products); })
+      .then((d) => { if (Array.isArray(d?.products)) startTransition(() => setProducts(d.products)); })
       .catch(() => {});
     fetch("/api/categories" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) setCategories(d.categories); })
+      .then((d) => { if (Array.isArray(d?.categories) && d.categories.length) startTransition(() => setCategories(d.categories)); })
       .catch(() => {});
     fetch("/api/menu" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.menu)) setMenu(d.menu); })
+      .then((d) => { if (Array.isArray(d?.menu)) startTransition(() => setMenu(d.menu)); })
       .catch(() => {});
     fetch("/api/brands" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (Array.isArray(d?.brands)) setBrands(d.brands); })
+      .then((d) => { if (Array.isArray(d?.brands)) startTransition(() => setBrands(d.brands)); })
       .catch(() => {});
     fetch("/api/home" + bust(), noStore)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d?.home) setHome(d.home); })
+      .then((d) => { if (d?.home) startTransition(() => setHome(d.home)); })
       .catch(() => {});
   }, []);
 
@@ -193,11 +197,14 @@ export function ShopProvider({
     };
   }, [accentColor, defaultRoundness, refreshData]);
 
-  // Refetch live data on every client-side navigation (pathname change) so
-  // moving from the admin panel to the site — without switching tabs — always
-  // shows the latest data. This is the key fix for "changes need a hard refresh".
+  // Refetch live data after each client-side navigation so edits made in the
+  // admin panel show up without a hard refresh. The fetch is deferred to a
+  // macrotask so the route transition commits FIRST — running the setState
+  // storm synchronously on pathname change interrupted Next's navigation and
+  // made links appear to need two clicks.
   useEffect(() => {
-    refreshData();
+    const id = setTimeout(refreshData, 0);
+    return () => clearTimeout(id);
   }, [pathname, refreshData]);
 
   // reflect theme on <html> for SSR-safe theming via CSS vars
