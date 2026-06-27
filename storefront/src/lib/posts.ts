@@ -117,9 +117,9 @@ export async function processQueue(): Promise<boolean> {
     const kw = next.genKeyword ? `\nکلمهٔ کلیدی اصلی «${next.genKeyword}» را طبیعی به کار ببر.` : "";
     const prods = relevantProducts(next.genTopic || "", "fa", 8);
     const linkRule = prods.length
-      ? `\nدر متن، ۳ تا ۵ لینک داخلی به محصولات مرتبط زیر را به‌صورت طبیعی با Markdown [نام](آدرس) اضافه کن و در انتها بخش «محصولات پیشنهادی» بیاور. فقط از همین آدرس‌ها استفاده کن:\n${prods.map((p) => `- ${p.name} (${p.brand}) → ${p.url}`).join("\n")}`
-      : "";
-    const system = "تو نویسندهٔ حرفه‌ای بلاگ فارسی و متخصص سئو هستی. body را به‌صورت متن Markdown خام بنویس و هرگز داخل بلوک کد (```) قرار نده. فقط یک JSON معتبر برگردان، بدون متن اضافه.";
+      ? `\nفقط و فقط به آدرس‌های محصول زیر لینک بده (۲ تا ۴ لینک طبیعی داخل متن) و در انتها بخش «محصولات پیشنهادی مرتبط» را با همین‌ها بساز. هیچ لینک یا محصول دیگری نساز و آدرس از خودت اختراع نکن:\n${prods.map((p) => `- [${p.name}](${p.url})`).join("\n")}`
+      : `\nهیچ لینکی در متن نگذار و بخش «محصولات پیشنهادی» نساز (هیچ محصول یا آدرسی در دسترس نیست).`;
+    const system = "تو نویسندهٔ حرفه‌ای بلاگ فارسی و متخصص سئو هستی. body را به‌صورت متن Markdown خام بنویس و هرگز داخل بلوک کد (```) قرار نده. برای زیرعنوان‌ها از ## و ### استفاده کن و بعد از هر زیرعنوان یک خط خالی بگذار. زیرعنوان‌ها را شماره‌گذاری نکن. هرگز لینک جعلی یا محصولی که وجود ندارد نساز. فقط یک JSON معتبر برگردان، بدون متن اضافه.";
     const prompt = `یک مقالهٔ کامل و سئوشده دربارهٔ «${next.genTopic}» بنویس (حدود ${words} کلمه، حداقل ${targetChars} کاراکتر، با زیرعنوان ## و فهرست‌ها).${tone}${kw}${linkRule}\n\n{"title":"عنوان جذاب","excerpt":"خلاصه","body":"متن Markdown","category":"دسته","tags":["۴ تا ۶ برچسب"],"seoTitle":"عنوان سئو","metaDesc":"متا","keyword":"کلمهٔ کلیدی"}`;
     const r = await callAIDetailed(system, [{ role: "user", content: prompt }], modelFor("article"), Math.min(16000, Math.ceil(targetChars / 1.5) + 1500));
     const j = r.text ? parseJson<{ title: string; excerpt: string; body: string; category: string; tags: string[]; seoTitle?: string; metaDesc?: string; keyword?: string }>(r.text) : null;

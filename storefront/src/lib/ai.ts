@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { PRODUCTS } from "@/data/products";
 import { catById } from "@/data/categories";
+import { getCatalog } from "./catalog";
 import { readAi } from "./settings";
 import type { Locale } from "./types";
 
@@ -235,18 +236,28 @@ export function localSearch(
 
 /** Products most relevant to a topic, with internal URLs for in-article links. */
 export function relevantProducts(topic: string, locale: Locale, limit = 8) {
-  const { ids } = localSearch(topic, locale);
-  return ids
-    .map((id) => PRODUCTS.find((p) => p.id === id))
-    .filter((p): p is (typeof PRODUCTS)[number] => Boolean(p))
-    .slice(0, limit)
-    .map((p) => ({
-      name: locale === "fa" ? p.fa : p.en,
-      url: `/${locale}/product/${p.id}`,
-      brand: p.brand,
-      price: p.price,
-      cat: catById(p.cat)?.[locale] ?? p.cat,
-    }));
+  // use the LIVE catalog (never the seed demo products) and only return items
+  // that actually match the topic — otherwise no internal product links.
+  const live = getCatalog();
+  if (!live.length) return [];
+  const words = (topic || "").toLowerCase().split(/[\s،,]+/).filter((w) => w.length > 2);
+  const scored = live
+    .map((p) => {
+      const hay = `${p.fa} ${p.en} ${p.brand} ${p.cat} ${p.sub || ""}`.toLowerCase();
+      let score = 0;
+      for (const w of words) if (hay.includes(w)) score += 1;
+      return { p, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+  return scored.map(({ p }) => ({
+    name: locale === "fa" ? p.fa : p.en,
+    url: `/${locale}/product/${p.id}`,
+    brand: p.brand,
+    price: p.price,
+    cat: p.cat,
+  }));
 }
 
 export function localChat(query: string, locale: Locale): string {

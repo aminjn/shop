@@ -44,7 +44,11 @@ export function renderMarkdown(src: string): string {
   const fence = cleaned.match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```$/);
   if (fence) cleaned = fence[1].trim();
 
-  const blocks = cleaned.replace(/\r/g, "").split(/\n{2,}/);
+  // isolate heading lines into their own block so "### x\ntext" (no blank line
+  // after the heading) still renders as a heading, not literal "###".
+  cleaned = cleaned.replace(/\r/g, "").replace(/^(#{1,6}[ \t]+.*)$/gm, "\n$1\n");
+
+  const blocks = cleaned.split(/\n{2,}/);
   const html: string[] = [];
 
   for (const block of blocks) {

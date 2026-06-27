@@ -31,9 +31,16 @@ function computeSchedule(opts: {
   count: number; perDay: number; startHour: number; endHour: number;
   weekdays: number[]; sy: number; sm: number; sd: number;
 }): string[] {
-  const { count, perDay, startHour, endHour, weekdays, sy, sm, sd } = opts;
+  let { sy, sm, sd } = opts;
+  const { count, perDay, startHour, endHour, weekdays } = opts;
   const allow = new Set(weekdays);
   const slots = spreadHours(perDay, startHour, endHour);
+  const nowMs = Date.now();
+  // never schedule in the past: clamp the start day to today (Tehran)
+  const tnow = new Date(nowMs + TEHRAN_OFFSET_MIN * 60000);
+  if (Date.UTC(sy, sm - 1, sd, 12) < Date.UTC(tnow.getUTCFullYear(), tnow.getUTCMonth(), tnow.getUTCDate(), 12)) {
+    sy = tnow.getUTCFullYear(); sm = tnow.getUTCMonth() + 1; sd = tnow.getUTCDate();
+  }
   const out: string[] = [];
   let dayOff = 0;
   let guard = 0;
@@ -43,7 +50,9 @@ function computeSchedule(opts: {
     const wd = dt.getUTCDay();
     if (allow.size === 0 || allow.has(wd)) {
       for (let i = 0; i < slots.length && out.length < count; i++) {
-        out.push(tehranISO(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), slots[i].h, slots[i].m));
+        const iso = tehranISO(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), slots[i].h, slots[i].m);
+        // skip slots already in the past (e.g. earlier today)
+        if (new Date(iso).getTime() > nowMs) out.push(iso);
       }
     }
     dayOff++;
