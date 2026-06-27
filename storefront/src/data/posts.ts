@@ -16,6 +16,10 @@ export interface Post {
   cover?: string;
   relatedProducts?: number[];
   featured?: boolean; // show in the blog hero slider
+  // SEO
+  seoTitle?: string;
+  metaDesc?: string;
+  keyword?: string;
 }
 
 export const POSTS: Post[] = [

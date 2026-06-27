@@ -25,6 +25,9 @@ interface PostRow {
   genError?: string;
   relatedProducts?: number[];
   featured?: boolean;
+  seoTitle?: string;
+  metaDesc?: string;
+  keyword?: string;
 }
 
 const blank = {
@@ -103,7 +106,7 @@ export function ArticleEditor() {
 
   const newPost = () => { setForm({ ...blank }); setEditing(false); setPublishAt(""); setAiTopic(""); setTitleSug([]); setRelatedIds([]); setFeatured(false); };
   const editPost = (p: PostRow) => {
-    setForm({ id: p.id, title: p.fa, slug: p.slug, catFa: p.catFa, tags: (p.tags || []).join("، "), cover: p.cover || "", excerpt: p.excerptFa, body: p.bodyFa, keyword: "", seoTitle: "", metaDesc: "" });
+    setForm({ id: p.id, title: p.fa, slug: p.slug, catFa: p.catFa, tags: (p.tags || []).join("، "), cover: p.cover || "", excerpt: p.excerptFa, body: p.bodyFa, keyword: p.keyword || "", seoTitle: p.seoTitle || "", metaDesc: p.metaDesc || "" });
     setEditing(true);
     setPublishAt(p.publishAt || "");
     setRelatedIds(p.relatedProducts || []);
@@ -249,6 +252,9 @@ export function ArticleEditor() {
         cover: form.cover || undefined,
         relatedProducts: relatedIds,
         featured,
+        seoTitle: form.seoTitle.trim() || undefined,
+        metaDesc: form.metaDesc.trim() || undefined,
+        keyword: form.keyword.trim() || undefined,
       };
       const body = { action: editing ? "update" : "create", id: form.id, status, publishAt: status === "scheduled" ? new Date(publishAt).toISOString() : undefined, post };
       const r = await fetch("/api/posts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

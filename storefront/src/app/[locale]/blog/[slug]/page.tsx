@@ -18,12 +18,13 @@ export async function generateMetadata({
   const t = getDict(loc);
   const p = postBySlugStore(slug);
   if (!p) return { title: t.blogTitle };
-  const title = loc === "fa" ? p.fa : p.en;
-  const desc = loc === "fa" ? p.excerptFa : p.excerptEn;
+  const title = (p.seoTitle && p.seoTitle.trim()) || (loc === "fa" ? p.fa : p.en);
+  const desc = (p.metaDesc && p.metaDesc.trim()) || (loc === "fa" ? p.excerptFa : p.excerptEn);
   return {
     title,
     description: desc,
-    openGraph: { title, description: desc, type: "article" },
+    keywords: p.keyword ? [p.keyword] : undefined,
+    openGraph: { title, description: desc, type: "article", ...(p.cover ? { images: [p.cover] } : {}) },
   };
 }
 

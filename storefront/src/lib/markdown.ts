@@ -84,7 +84,9 @@ export function renderMarkdown(src: string): string {
       const v = videoEmbed(vm[1].trim());
       if (v) { html.push(v); continue; }
     }
-    html.push(`<p>${lines.map(inline).join("<br>")}</p>`);
+    // join soft-wrapped lines into one string before inline parsing so links /
+    // bold that span a wrap (e.g. "[name](\nurl)") still render correctly
+    html.push(`<p>${inline(lines.join(" "))}</p>`);
   }
   return html.join("\n");
 }
