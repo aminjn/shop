@@ -75,7 +75,11 @@ export default function BlogPage() {
         <p className="mt-1.5 text-[14px]" style={{ color: "var(--muted)" }}>{t.blogSub}</p>
       </div>
 
-      {loaded && posts.length === 0 ? (
+      {!loaded ? (
+        <div className="rounded-[16px] py-20 text-center text-[15px] font-bold" style={{ ...card, color: "var(--muted)" }}>
+          {fa ? "در حال بارگذاری مقالات…" : "Loading articles…"}
+        </div>
+      ) : posts.length === 0 ? (
         <div className="rounded-[16px] py-20 text-center text-[15px] font-bold" style={{ ...card, color: "var(--muted)" }}>
           {fa ? "هنوز مقاله‌ای منتشر نشده است." : "No articles published yet."}
         </div>

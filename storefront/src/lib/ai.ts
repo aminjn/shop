@@ -1,8 +1,30 @@
 import "server-only";
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
 import { PRODUCTS } from "@/data/products";
 import { catById } from "@/data/categories";
 import { readAi } from "./settings";
 import type { Locale } from "./types";
+
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
+
+/** Persist a base64 data URL to the uploads dir and return its public URL, so
+ *  large images are never stored inline in JSON (which bloats & slows reads). */
+export function persistDataUrl(dataUrl: string): string | null {
+  const m = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
+  if (!m) return null;
+  try {
+    const ext = (m[1].split("/")[1] || "png").replace(/[^a-z0-9]/gi, "") || "png";
+    const dir = path.join(DATA_DIR, "uploads");
+    fs.mkdirSync(dir, { recursive: true });
+    const name = `ai-${Date.now()}-${crypto.randomBytes(5).toString("hex")}.${ext}`;
+    fs.writeFileSync(path.join(dir, name), Buffer.from(m[2], "base64"));
+    return `/api/uploads/${name}`;
+  } catch {
+    return null;
+  }
+}
 
 export const DEFAULT_AI_BASE_URL = "https://api.gapgpt.app/v1";
 export const DEFAULT_AI_MODEL = "gpt-4o";
@@ -156,7 +178,10 @@ export async function generateImage(prompt: string, size = "1536x1024"): Promise
     if (!res.ok) return null;
     const data = await res.json().catch(() => null);
     const item = data?.data?.[0];
-    return item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : null);
+    if (item?.url) return item.url;
+    // base64 → write to a file and return a URL (never inline megabytes of base64)
+    if (item?.b64_json) return persistDataUrl(`data:image/png;base64,${item.b64_json}`);
+    return null;
   } catch {
     return null;
   }

@@ -62,6 +62,22 @@ export function getScheduledPosts(): StoredPost[] {
   return getAllPosts().filter((p) => p.status !== "published");
 }
 
+/** One-time cleanup: move any inline base64 cover images to files so posts.json
+ *  stays small (inline base64 made every read/response multi-megabyte & slow). */
+export async function migrateInlineImages(): Promise<number> {
+  const { persistDataUrl } = await import("./ai");
+  const list = read();
+  let changed = 0;
+  for (const p of list) {
+    if (typeof p.cover === "string" && p.cover.startsWith("data:image")) {
+      const url = persistDataUrl(p.cover);
+      if (url) { p.cover = url; changed++; }
+    }
+  }
+  if (changed) write(list);
+  return changed;
+}
+
 export function postBySlugStore(slug: string): StoredPost | undefined {
   const all = getAllPosts();
   let dec = slug;
