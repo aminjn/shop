@@ -9,7 +9,7 @@ import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote } from "@/lib/format
 import { ProductCard } from "./ProductCard";
 import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
-import { Sparkle, Heart, Play, Download, Plus, Minus, ArrowBack } from "./Icons";
+import { Heart, Play, Download, Plus, Minus, ArrowBack } from "./Icons";
 
 export function ProductDetail({ id }: { id: number }) {
   const router = useRouter();
@@ -40,7 +40,6 @@ export function ProductDetail({ id }: { id: number }) {
   const cartons = Math.max(1, Math.round(qty / pack));
   const disc = p.old ? Math.round((1 - p.price / p.old) * 100) : 0;
   const wished = wishlist.includes(p.id);
-  const match = 88 + (p.id % 9);
 
   const hasWarranty = !!p.warranty && p.warranty.trim() !== "" && p.warranty.trim() !== "-";
   const base: ([string, string] | null)[] =
@@ -134,21 +133,6 @@ export function ProductDetail({ id }: { id: number }) {
           {isPerCm(p) ? (
             <div className="mt-1 text-[13px]" style={{ color: "var(--muted)" }}>📏 {perCmNote(p, locale)} {t.currency}</div>
           ) : null}
-
-          {/* AI box */}
-          <div className="mt-5 rounded-[14px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg text-white" style={{ background: "var(--accent)" }}><Sparkle size={15} /></span>
-              <span className="text-[14px] font-extrabold">{t.pdpAiTitle}</span>
-              <span className="ms-auto rounded-full px-2.5 py-1 text-[11.5px] font-extrabold text-white" style={{ background: "var(--accent)" }}>✨ {num(match, locale)}٪ {t.aiMatchWord}</span>
-            </div>
-            <p className="mt-2.5 text-[13px] leading-relaxed" style={{ color: "var(--muted)" }}>{t.pdpAiVerdict}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[t.pdpAiQ1, t.pdpAiQ2, t.pdpAiQ3].map((q) => (
-                <span key={q} className="rounded-full px-3 py-1.5 text-[12px] font-semibold" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>{q}</span>
-              ))}
-            </div>
-          </div>
 
           {/* variations */}
           {p.colors && (
