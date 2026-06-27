@@ -213,9 +213,9 @@ export default function AccountPage() {
           <h2 className="text-[15px] font-extrabold">{fa ? "پیشنهادهای هوشمند برای شما" : "AI picks for you"}</h2>
         </div>
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
-          {recs.map((r, i) => {
+          {recs.map((r) => {
             const p = productById(r.id);
-            return p ? <ProductCard key={r.id} p={p} reason={r.reason} aiMatch={94 - i * 2} /> : null;
+            return p ? <ProductCard key={r.id} p={p} reason={r.reason} /> : null;
           })}
         </div>
       </div>

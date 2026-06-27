@@ -4,7 +4,7 @@ export const DICT = {
   fa: {
     dir: "rtl",
     currency: "تومان",
-    storeName: "مارکت‌لند",
+    storeName: "تامین طب",
     promoLeft: "ارسال رایگان برای خرید بالای ۲ میلیون تومان",
     promoRight: "۷ روز ضمانت بازگشت کالا",
     searchPh: "جستجوی محصول، دسته یا برند...",
@@ -251,7 +251,7 @@ export const DICT = {
   en: {
     dir: "ltr",
     currency: "Toman",
-    storeName: "MarketLand",
+    storeName: "Teb Tamin",
     promoLeft: "Free shipping on orders over 2M Toman",
     promoRight: "7-day easy returns",
     searchPh: "Search products, categories or brands...",

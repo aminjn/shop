@@ -168,13 +168,24 @@ export function ShopProvider({
     // apply store branding (name / currency / logo) saved in admin
     fetch("/api/settings/store", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.settings && setBrand({
-        storeName: d.settings.storeName,
-        currencyFa: d.settings.currencyFa,
-        currencyEn: d.settings.currencyEn,
-        logoUrl: d.settings.logoUrl,
-        faviconUrl: d.settings.faviconUrl,
-      }))
+      .then((d) => {
+        if (!d?.settings) return;
+        setBrand({
+          storeName: d.settings.storeName,
+          currencyFa: d.settings.currencyFa,
+          currencyEn: d.settings.currencyEn,
+          logoUrl: d.settings.logoUrl,
+          faviconUrl: d.settings.faviconUrl,
+        });
+        // apply the site-wide theme set in super admin, unless this visitor
+        // has personally customized their accent/roundness (localStorage).
+        if (d.settings.themeAccent && localStorage.getItem("shopx_accent") == null) {
+          setAccentState(d.settings.themeAccent);
+        }
+        if (d.settings.themeRadius && localStorage.getItem("shopx_roundness") == null) {
+          setRoundnessState(d.settings.themeRadius as Roundness);
+        }
+      })
       .catch(() => {});
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
@@ -198,16 +209,16 @@ export function ShopProvider({
     root.style.setProperty("--radius", ROUNDNESS[roundness]);
   }, [dark, accent, roundness, mounted]);
 
-  // live-apply favicon set in admin (pages are prerendered, so do it client-side)
+  // live-apply favicon set in admin. Pages are prerendered with a build-time
+  // icon, so on the client we remove every existing icon link and add the
+  // uploaded one — guaranteeing it wins on the homepage and every page.
   useEffect(() => {
     if (!brand.faviconUrl) return;
-    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
-    if (!link) {
-      link = document.createElement("link");
-      link.rel = "icon";
-      document.head.appendChild(link);
-    }
+    document.querySelectorAll("link[rel~='icon'],link[rel='shortcut icon']").forEach((l) => l.remove());
+    const link = document.createElement("link");
+    link.rel = "icon";
     link.href = brand.faviconUrl;
+    document.head.appendChild(link);
   }, [brand.faviconUrl]);
 
   // keep the document title in sync with the store name on the client

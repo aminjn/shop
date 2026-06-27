@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getUser } from "@/lib/userstore";
 import { callAI, catalog, modelFor, type ChatMessage } from "@/lib/ai";
+import { readStore } from "@/lib/settings";
 
 export async function POST(req: Request) {
   const s = await getSession();
@@ -17,7 +18,8 @@ export async function POST(req: Request) {
     .map((o) => `#${o.id} (${o.status}, ${o.total} تومان, ${o.items.map((i) => i.name + "×" + i.qty).join("، ")})`)
     .join(" | ") || "بدون سفارش";
 
-  const system = `تو دستیار هوشمند شخصی فروشگاه «مارکت‌لند» برای مشتری «${name}» هستی. مودب، صمیمی و کوتاه پاسخ بده (حداکثر ۴ جمله) و فارسی بنویس.
+  const storeName = readStore().storeName || "فروشگاه";
+  const system = `تو دستیار هوشمند شخصی فروشگاه «${storeName}» برای مشتری «${name}» هستی. مودب، صمیمی و کوتاه پاسخ بده (حداکثر ۴ جمله) و فارسی بنویس.
 اطلاعات این مشتری:
 - امتیاز باشگاه: ${u.points}
 - موجودی کیف پول: ${u.wallet.balance} تومان

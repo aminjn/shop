@@ -2,6 +2,12 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { readStore } from "./settings";
+
+/** Live store name (set in super admin) with a neutral fallback. */
+function storeName(): string {
+  try { return readStore().storeName || "فروشگاه"; } catch { return "فروشگاه"; }
+}
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const USERS_DIR = path.join(DATA_DIR, "users");
@@ -88,7 +94,7 @@ function defaultUser(mobile: string): UserData {
     orders: [],
     tickets: [],
     notifications: [
-      { id: uid(), text: "به مارکت‌لند خوش آمدید!", date: nowIso(), read: false },
+      { id: uid(), text: `به ${storeName()} خوش آمدید!`, date: nowIso(), read: false },
     ],
     points: 0,
     createdAt: nowIso(),
@@ -98,7 +104,16 @@ function defaultUser(mobile: string): UserData {
 export function getUser(mobile: string): UserData {
   try {
     const raw = JSON.parse(fs.readFileSync(fileFor(mobile), "utf8")) as UserData;
-    return { ...defaultUser(mobile), ...raw, mobile };
+    const u = { ...defaultUser(mobile), ...raw, mobile };
+    // migrate leftover template branding to the real store name
+    if (Array.isArray(u.notifications)) {
+      u.notifications = u.notifications.map((n) =>
+        n.text && n.text.includes("مارکت‌لند")
+          ? { ...n, text: n.text.replace(/مارکت‌لند/g, storeName()) }
+          : n,
+      );
+    }
+    return u;
   } catch {
     return defaultUser(mobile);
   }

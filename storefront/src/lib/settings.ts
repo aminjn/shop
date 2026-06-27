@@ -63,6 +63,9 @@ export interface StoreSettings {
   currencyEn?: string;
   logoUrl?: string;
   faviconUrl?: string;
+  // theme (site-wide colors set in super admin)
+  themeAccent?: string; // primary/brand color, e.g. "#4f46e5"
+  themeRadius?: string; // "sharp" | "soft" | "round"
   // SEO
   metaTitle?: string;
   metaDescription?: string;
@@ -83,6 +86,8 @@ export const STORE_DEFAULTS: Required<StoreSettings> = {
   currencyEn: "",
   logoUrl: "",
   faviconUrl: "",
+  themeAccent: "",
+  themeRadius: "",
   metaTitle: "",
   metaDescription: "",
   metaKeywords: "",

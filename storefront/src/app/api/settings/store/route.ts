@@ -37,6 +37,8 @@ export async function POST(req: Request) {
     currencyEn: String(b.currencyEn ?? cur.currencyEn).slice(0, 20),
     logoUrl: String(b.logoUrl ?? cur.logoUrl).slice(0, 500),
     faviconUrl: String(b.faviconUrl ?? cur.faviconUrl).slice(0, 500),
+    themeAccent: String(b.themeAccent ?? cur.themeAccent).slice(0, 30),
+    themeRadius: String(b.themeRadius ?? cur.themeRadius).slice(0, 10),
     metaTitle: String(b.metaTitle ?? cur.metaTitle).slice(0, 70),
     metaDescription: String(b.metaDescription ?? cur.metaDescription).slice(0, 320),
     metaKeywords: String(b.metaKeywords ?? cur.metaKeywords).slice(0, 300),

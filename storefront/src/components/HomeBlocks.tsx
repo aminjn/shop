@@ -35,6 +35,8 @@ export function HomeBlocks() {
 export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]; editing: boolean; onChange: (b: HomeBlock[]) => void }) {
   const { locale, products, dark } = useShop();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [dragI, setDragI] = useState<number | null>(null);
+  const [overI, setOverI] = useState<number | null>(null);
   const fa = locale === "fa";
   if (!blocks.length && !editing) return null;
 
@@ -42,6 +44,8 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
   const upd = (i: number, patch: Partial<HomeBlock>) => set(blocks.map((b, x) => (x === i ? { ...b, ...patch } : b)));
   const rm = (i: number) => set(blocks.filter((_, x) => x !== i));
   const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const a = [...blocks]; [a[i], a[j]] = [a[j], a[i]]; set(a); };
+  // drag-and-drop reorder: pull item `from` out and insert it at `to`
+  const reorder = (from: number, to: number) => { if (from === to || from < 0 || to < 0) return; const a = [...blocks]; const [m] = a.splice(from, 1); a.splice(to, 0, m); set(a); };
   const add = (type: HomeBlockType) => set([...blocks, blankBlock(type)]);
 
   const tx = (f?: string, e?: string) => (fa ? f : e) || "";
@@ -175,9 +179,23 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
   return (
     <section className="mx-auto max-w-[1280px] px-[22px] py-4">
       {blocks.map((b, i) => (
-        <div key={b.id} className="relative my-4">
+        <div
+          key={b.id}
+          className="relative my-4"
+          onDragOver={editing && dragI !== null ? (e) => { e.preventDefault(); if (overI !== i) setOverI(i); } : undefined}
+          onDrop={editing && dragI !== null ? (e) => { e.preventDefault(); reorder(dragI, i); setDragI(null); setOverI(null); } : undefined}
+          style={editing && overI === i && dragI !== null && dragI !== i ? { outline: "2px dashed var(--accent)", outlineOffset: 4, borderRadius: 18 } : undefined}
+        >
           {editing && (
             <div className="absolute z-[15] flex items-center gap-1 rounded-[10px] p-1" style={{ insetInlineEnd: 8, top: 8, background: "rgba(0,0,0,.6)", backdropFilter: "blur(4px)" }}>
+              <span
+                draggable
+                onDragStart={(e) => { setDragI(i); e.dataTransfer.effectAllowed = "move"; }}
+                onDragEnd={() => { setDragI(null); setOverI(null); }}
+                title={fa ? "بکش و رها کن برای جابه‌جایی" : "Drag to reorder"}
+                className="flex h-7 w-7 cursor-grab items-center justify-center rounded-[7px] text-[14px] text-white active:cursor-grabbing"
+                style={{ background: "rgba(255,255,255,.15)", touchAction: "none" }}
+              >⠿</span>
               <button onClick={() => move(i, -1)} title={fa ? "بالا" : "Up"} className="h-7 w-7 cursor-pointer rounded-[7px] border-none text-[13px] text-white" style={{ background: "rgba(255,255,255,.15)" }}>↑</button>
               <button onClick={() => move(i, 1)} title={fa ? "پایین" : "Down"} className="h-7 w-7 cursor-pointer rounded-[7px] border-none text-[13px] text-white" style={{ background: "rgba(255,255,255,.15)" }}>↓</button>
               <button onClick={() => setOpenId(openId === b.id ? null : b.id)} title={fa ? "تنظیمات" : "Settings"} className="h-7 cursor-pointer rounded-[7px] border-none px-2 text-[12px] font-bold text-white" style={{ background: "var(--accent)" }}>⚙ {fa ? "تنظیم" : "Edit"}</button>

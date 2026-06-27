@@ -88,6 +88,8 @@ type StoreSettings = {
   currencyEn: string;
   logoUrl: string;
   faviconUrl: string;
+  themeAccent?: string;
+  themeRadius?: string;
   metaTitle: string;
   metaDescription: string;
   metaKeywords: string;
@@ -2910,6 +2912,36 @@ function Settings() {
                   {store.faviconUrl && <button type="button" onClick={() => setS("faviconUrl", "")} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "حذف" : "Remove"}</button>}
                 </div>
               </div>
+
+              {/* site-wide theme */}
+              <div className="sm:col-span-2 rounded-[12px] p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                <div className="mb-1 text-[13.5px] font-extrabold">🎨 {fa ? "تم سایت — رنگ‌بندی کل سایت" : "Site theme — site-wide colors"}</div>
+                <div className="mb-3 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "رنگ اصلیِ دکمه‌ها، لینک‌ها، قیمت‌ها و هایلایت‌ها در کل سایت برای همهٔ بازدیدکننده‌ها." : "Primary color for buttons, links, prices and highlights across the whole site."}</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {["#4f46e5", "#2563eb", "#0ea5e9", "#0d9488", "#059669", "#16a34a", "#f59e0b", "#ea580c", "#e11d48", "#db2777", "#7c3aed", "#475569"].map((c) => (
+                    <button key={c} type="button" aria-label={c}
+                      onClick={() => { setS("themeAccent", c); document.documentElement.style.setProperty("--accent", c); }}
+                      className="h-8 w-8 cursor-pointer rounded-full"
+                      style={{ background: c, outline: (store.themeAccent || "") === c ? "2px solid var(--text)" : "2px solid transparent", outlineOffset: 2 }} />
+                  ))}
+                  <input type="color" value={store.themeAccent || "#4f46e5"}
+                    onChange={(e) => { setS("themeAccent", e.target.value); document.documentElement.style.setProperty("--accent", e.target.value); }}
+                    className="h-8 w-12 cursor-pointer rounded-[8px] p-0" style={{ border: "1px solid var(--border)", background: "transparent" }} aria-label={fa ? "رنگ دلخواه" : "Custom color"} />
+                  {store.themeAccent && (
+                    <button type="button" onClick={() => setS("themeAccent", "")} className="cursor-pointer border-none bg-transparent text-[12.5px] font-bold" style={{ color: "#e11d48" }}>{fa ? "بازنشانی" : "Reset"}</button>
+                  )}
+                </div>
+                <div className="mt-3 text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{fa ? "گردیِ گوشه‌ها" : "Corner roundness"}</div>
+                <div className="mt-1.5 flex gap-2">
+                  {([["sharp", fa ? "تیز" : "Sharp"], ["soft", fa ? "ملایم" : "Soft"], ["round", fa ? "گرد" : "Round"]] as const).map(([id, label]) => (
+                    <button key={id} type="button" onClick={() => setS("themeRadius", id)}
+                      className="cursor-pointer rounded-[10px] px-4 py-2 text-[13px] font-bold"
+                      style={{ background: (store.themeRadius || "") === id ? "var(--accent)" : "var(--surface)", color: (store.themeRadius || "") === id ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}>{label}</button>
+                  ))}
+                </div>
+                <div className="mt-3 text-[12px]" style={{ color: "var(--muted)" }}>{fa ? "بعد از ذخیره، رنگ برای همهٔ کاربران اعمال می‌شود (مگر کاربری خودش رنگ را شخصی‌سازی کرده باشد)." : "After saving, applies to all visitors unless they personally customized it."}</div>
+              </div>
+
               <div>
                 {lbl(fa ? "هزینه ارسال پایه" : "Base shipping fee")}
                 <input
