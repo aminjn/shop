@@ -81,6 +81,9 @@ export async function generateMetadata({
       icon: store.faviconUrl || "/icons/icon-192.png",
       apple: "/icons/apple-touch-icon.png",
     },
+    // Opt out of browser auto-translation, which rewrites text nodes and crashes
+    // React with "removeChild of null" during navigation.
+    other: { google: "notranslate" },
     appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: name },
   };
 }
@@ -96,7 +99,7 @@ export default async function LocaleLayout({
   if (!isLocale(locale)) notFound();
 
   return (
-    <html lang={locale} dir={dir(locale)} className={vazir.variable} suppressHydrationWarning>
+    <html lang={locale} dir={dir(locale)} translate="no" className={vazir.variable} suppressHydrationWarning>
       <body className="scrollthin pb-[calc(60px+env(safe-area-inset-bottom))] md:pb-0">
         <SeoClient origin={siteOrigin()} />
         <ShopProvider locale={locale}>

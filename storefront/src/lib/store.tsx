@@ -204,16 +204,20 @@ export function ShopProvider({
     root.style.setProperty("--radius", ROUNDNESS[roundness]);
   }, [dark, accent, roundness, mounted]);
 
-  // live-apply favicon set in admin. Pages are prerendered with a build-time
-  // icon, so on the client we remove every existing icon link and add the
-  // uploaded one — guaranteeing it wins on the homepage and every page.
+  // live-apply favicon set in admin. We manage ONLY our own <link> (never
+  // removing React/Next-managed icon links — doing so crashed React with
+  // "removeChild of null" during navigation). The browser uses the last icon
+  // link, so updating ours is enough.
   useEffect(() => {
     if (!brand.faviconUrl) return;
-    document.querySelectorAll("link[rel~='icon'],link[rel='shortcut icon']").forEach((l) => l.remove());
-    const link = document.createElement("link");
-    link.rel = "icon";
+    let link = document.querySelector<HTMLLinkElement>("link#dynamic-favicon");
+    if (!link) {
+      link = document.createElement("link");
+      link.id = "dynamic-favicon";
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
     link.href = brand.faviconUrl;
-    document.head.appendChild(link);
   }, [brand.faviconUrl]);
 
   // keep the document title in sync with the store name on the client
