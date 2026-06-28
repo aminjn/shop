@@ -223,7 +223,7 @@ export function ProductModal({
               ))}
             </select>
           </div>
-          <div>
+          <div className="sm:col-span-2">
             {lbl(locale === "fa" ? `${t.brand} (می‌توانی چند برند انتخاب کنی)` : `${t.brand} (multiple allowed)`)}
             <div className="flex flex-col gap-2 rounded-[10px] p-2" style={{ ...inputStyle }}>
               <div className="flex flex-wrap gap-1.5">
