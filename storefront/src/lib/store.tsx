@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import type { Brand, CartLine, Category, Coupon, Locale, Product } from "./types";
 import type { HomeContent } from "./home";
 import { getDict, type Dict } from "@/i18n/dictionaries";
@@ -158,12 +159,8 @@ export function ShopProvider({
     setWishlist(load("wishlist", []));
     setCompare(load("compare", []));
     setMounted(true);
-    // Load live data once on mount, then refetch when the tab regains focus /
-    // becomes visible so edits made in the admin panel show up without a hard
-    // refresh. (We deliberately do NOT refetch on every route change — running
-    // fetches that resolve mid-navigation interrupted the route transition and
-    // made links feel like they need two clicks.)
-    refreshData();
+    // Live data is loaded on mount + each navigation by <RouteRefresher>; also
+    // refetch when the tab regains focus / becomes visible.
     const onVisible = () => { if (document.visibilityState === "visible") refreshData(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", refreshData);
@@ -368,7 +365,25 @@ export function ShopProvider({
     logoUrl,
   };
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      <RouteRefresher onRoute={refreshData} />
+      {children}
+    </Ctx.Provider>
+  );
+}
+
+/** Refetches live data after each client-side navigation so admin edits show up
+ *  without a hard refresh. Lives in its own null-rendering leaf (owns
+ *  usePathname) so navigation re-renders only this node, not the whole provider,
+ *  and the refetch is deferred so the route transition commits first. */
+function RouteRefresher({ onRoute }: { onRoute: () => void }) {
+  const pathname = usePathname();
+  useEffect(() => {
+    const id = setTimeout(onRoute, 0);
+    return () => clearTimeout(id);
+  }, [pathname, onRoute]);
+  return null;
 }
 
 export function useShop() {
