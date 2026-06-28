@@ -9,7 +9,7 @@ import type { ShipMethod, PayMethod } from "@/lib/settings";
 import type { SeoSettings } from "@/lib/seo";
 import type { Post } from "@/data/posts";
 import type { OrderStatus } from "@/lib/userstore";
-import { grad, priceFmt, num, formatDate, variantPrice, hasVariations, totalStock } from "@/lib/format";
+import { grad, priceFmt, num, formatDate, hasVariations, totalStock, isBrandPriced, priceFor } from "@/lib/format";
 import { AI_MODELS } from "@/data/aiModels";
 import { ProductModal } from "@/components/admin/ProductModal";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -809,8 +809,8 @@ function Products({
                 </td>
                 <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>{catName(p.cat)}</td>
                 <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-                  {hasVariations(p)
-                    ? <span>{fa ? "از " : "from "}{priceFmt(variantPrice(p), locale, t.currency)}</span>
+                  {hasVariations(p) || isBrandPriced(p)
+                    ? <span>{fa ? "از " : "from "}{priceFmt(priceFor(p), locale, t.currency)}</span>
                     : p.pricingType === "per_cm"
                     ? <span>{priceFmt(p.pricePerCm ?? 0, locale, t.currency)}<span className="text-[11px] font-normal" style={{ color: "var(--muted)" }}> /{fa ? "سانت" : "cm"}{p.width ? ` • ${num(p.width, locale)}${fa ? "س عرض" : "cm"}` : ""}</span></span>
                     : priceFmt(p.price, locale, t.currency)}

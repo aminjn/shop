@@ -33,7 +33,7 @@ interface ShopState {
   setRoundness: (r: Roundness) => void;
   // cart
   cart: CartLine[];
-  addToCart: (id: number, qty?: number, color?: number, size?: number, variant?: number) => void;
+  addToCart: (id: number, qty?: number, color?: number, size?: number, variant?: number, brandIdx?: number) => void;
   changeLine: (key: string, delta: number) => void;
   removeLine: (key: string) => void;
   clearCart: () => void;
@@ -252,13 +252,13 @@ export function ShopProvider({
   }, []);
 
   const addToCart = useCallback(
-    (id: number, qty = 1, color = 0, size = 0, variant = 0) => {
-      const key = `${id}_${color}_${size}_${variant}`;
+    (id: number, qty = 1, color = 0, size = 0, variant = 0, brandIdx = 0) => {
+      const key = `${id}_${color}_${size}_${variant}_${brandIdx}`;
       setCart((prev) => {
         const next = [...prev];
         const i = next.findIndex((c) => c.key === key);
         if (i >= 0) next[i] = { ...next[i], qty: next[i].qty + qty };
-        else next.push({ key, id, qty, color, size, variant });
+        else next.push({ key, id, qty, color, size, variant, brandIdx });
         save("cart", next);
         return next;
       });

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
-import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations, totalStock, productBrands } from "@/lib/format";
+import { grad, priceFmt, num, isPerCm, perCmNote, hasVariations, totalStock, productBrands, productBrandList, isBrandPriced, priceFor } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
@@ -19,6 +19,7 @@ export function ProductDetail({ id }: { id: number }) {
   const [color, setColor] = useState(0);
   const [size, setSize] = useState(0);
   const [variant, setVariant] = useState(0);
+  const [brandIdx, setBrandIdx] = useState(0);
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState<"desc" | "specs" | "reviews">("desc");
   const [showVideo, setShowVideo] = useState(false);
@@ -40,8 +41,10 @@ export function ProductDetail({ id }: { id: number }) {
   const pack = p.packSize && p.packSize > 1 ? p.packSize : 1; // units per carton (1 = normal)
   const cartons = Math.max(1, Math.round(qty / pack));
   const variations = p.variations ?? [];
-  // price for the chosen variant (or the cheapest one) — falls back to unitPrice
-  const price = hasVariations(p) ? variantPrice(p, variant) : unitPrice(p);
+  const brandList = productBrandList(p);
+  const brandPriced = isBrandPriced(p);
+  // price: brand price if brand-priced, else variant price, else unit price
+  const price = priceFor(p, { variant, brandIdx });
   // stock: the chosen variant's stock when variants exist, else the product's
   const stock = hasVariations(p) ? (variations[variant]?.stock ?? 0) : p.stock;
   const disc = p.old ? Math.round((1 - p.price / p.old) * 100) : 0;
@@ -140,6 +143,30 @@ export function ProductDetail({ id }: { id: number }) {
             <div className="mt-1 text-[13px]" style={{ color: "var(--muted)" }}>📏 {perCmNote(p, locale)} {t.currency}</div>
           ) : null}
 
+          {/* brand selector — drives the price when brands are priced */}
+          {(brandPriced || brandList.length > 1) && (
+            <div className="mt-5">
+              <div className="mb-2 text-[13.5px] font-bold">{locale === "fa" ? "انتخاب برند" : "Choose brand"}</div>
+              <div className="flex flex-wrap gap-2">
+                {brandList.map((b, i) => {
+                  const sel = brandIdx === i;
+                  const bp = isPerCm(p) ? (b.pricePerCm && b.pricePerCm > 0 ? b.pricePerCm * (p.width && p.width > 0 ? p.width : 1) : 0) : (b.price || 0);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setBrandIdx(i)}
+                      className="cursor-pointer rounded-[10px] px-3.5 py-2 text-[13.5px] font-bold"
+                      style={{ background: sel ? "var(--accent)" : "var(--surface2)", color: sel ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}
+                    >
+                      {b.name}
+                      {brandPriced && bp > 0 && <span className="ms-1.5 text-[12px] font-extrabold" style={{ opacity: 0.85 }}>· {priceFmt(bp, locale, t.currency)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* priced variants (e.g. خشک / روغنی) */}
           {variations.length > 0 && (
             <div className="mt-5">
@@ -190,7 +217,7 @@ export function ProductDetail({ id }: { id: number }) {
           {pack > 1 && (
             <div className="mt-5 rounded-[12px] p-3.5 text-[13.5px]" style={{ background: "color-mix(in srgb, var(--accent) 9%, var(--surface))", border: "1px solid var(--border)" }}>
               📦 <b>{locale === "fa" ? `این محصول کارتنی فروخته می‌شود — هر کارتن ${num(pack, locale)} عدد.` : `Sold by the carton — ${pack} units each.`}</b>
-              <div className="mt-1" style={{ color: "var(--muted)" }}>{locale === "fa" ? `قیمت هر کارتن: ` : `Price per carton: `}<b style={{ color: "var(--accent)" }}>{priceFmt(unitPrice(p) * pack, locale, t.currency)}</b></div>
+              <div className="mt-1" style={{ color: "var(--muted)" }}>{locale === "fa" ? `قیمت هر کارتن: ` : `Price per carton: `}<b style={{ color: "var(--accent)" }}>{priceFmt(price * pack, locale, t.currency)}</b></div>
             </div>
           )}
 
@@ -201,8 +228,8 @@ export function ProductDetail({ id }: { id: number }) {
               <span className="min-w-[24px] text-center text-[15px] font-bold">{pack > 1 ? `${num(cartons, locale)} ${locale === "fa" ? "کارتن" : "carton"}` : num(qty, locale)}</span>
               <button onClick={() => setQty((q) => q + pack)} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Plus size={16} /></button>
             </div>
-            <button onClick={() => addToCart(p.id, qty, color, size, variant)} className="flex-1 cursor-pointer rounded-[12px] border-none px-6 py-3.5 text-[15px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.addToCart}</button>
-            <button onClick={() => { addToCart(p.id, qty, color, size, variant); router.push(`/${locale}/cart`); }} className="cursor-pointer rounded-[12px] px-6 py-3.5 text-[15px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{t.buyNow}</button>
+            <button onClick={() => addToCart(p.id, qty, color, size, variant, brandIdx)} className="flex-1 cursor-pointer rounded-[12px] border-none px-6 py-3.5 text-[15px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.addToCart}</button>
+            <button onClick={() => { addToCart(p.id, qty, color, size, variant, brandIdx); router.push(`/${locale}/cart`); }} className="cursor-pointer rounded-[12px] px-6 py-3.5 text-[15px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{t.buyNow}</button>
             <button onClick={() => toggleWish(p.id)} aria-label={t.addToWishlist} className="flex h-[50px] w-[50px] cursor-pointer items-center justify-center rounded-[12px]" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: wished ? "#e11d48" : "var(--muted)" }}><Heart size={20} fill={wished ? "#e11d48" : "none"} /></button>
           </div>
 

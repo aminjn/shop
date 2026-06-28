@@ -2,7 +2,7 @@
 
 import type { Product } from "@/lib/types";
 import { useShop } from "@/lib/store";
-import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations, productBrands } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, hasVariations, productBrands, isBrandPriced, priceFor } from "@/lib/format";
 import { LocaleLink } from "./LocaleLink";
 import { Heart } from "./Icons";
 
@@ -125,10 +125,10 @@ export function ProductCard({
         </div>
         <div className="mb-1 mt-1.5 flex items-center gap-2">
           <span className="text-[16px] font-extrabold" style={{ color: "var(--accent)" }}>
-            {hasVariations(p) && <span className="text-[12px] font-bold" style={{ color: "var(--muted)" }}>{locale === "fa" ? "از " : "from "}</span>}
+            {(hasVariations(p) || isBrandPriced(p)) && <span className="text-[12px] font-bold" style={{ color: "var(--muted)" }}>{locale === "fa" ? "از " : "from "}</span>}
             {priceFmt(
-              hasVariations(p)
-                ? variantPrice(p)
+              hasVariations(p) || isBrandPriced(p)
+                ? priceFor(p)
                 : p.packSize && p.packSize > 1
                   ? unitPrice(p) * p.packSize
                   : unitPrice(p),
@@ -136,7 +136,7 @@ export function ProductCard({
               t.currency,
             )}
           </span>
-          {p.old && !(p.packSize && p.packSize > 1) && !isPerCm(p) && !hasVariations(p) && (
+          {p.old && !(p.packSize && p.packSize > 1) && !isPerCm(p) && !hasVariations(p) && !isBrandPriced(p) && (
             <span className="text-[13px] line-through" style={{ color: "var(--muted)" }}>
               {num(p.old, locale)}
             </span>

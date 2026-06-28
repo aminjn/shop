@@ -18,9 +18,15 @@ function sanitize(input: Record<string, unknown>, id: number): Product {
     en: String(input.en || input.fa || "").slice(0, 120),
     cat: String(input.cat || "tech"),
     sub: input.sub ? String(input.sub) : undefined,
-    brand: String(input.brand || (Array.isArray(input.brands) && input.brands[0]) || ""),
+    brand: String(input.brand || "") || (Array.isArray(input.brands) && input.brands[0] ? (typeof input.brands[0] === "string" ? input.brands[0] : (input.brands[0] as { name?: string }).name || "") : ""),
     brands: Array.isArray(input.brands) && input.brands.length
-      ? (input.brands as unknown[]).map((b) => String(b || "").trim()).filter(Boolean)
+      ? (input.brands as unknown[]).map((b) => {
+          if (typeof b === "string") return { name: b.trim() };
+          const o = (b || {}) as Record<string, unknown>;
+          const price = Number(o.price) || 0;
+          const pricePerCm = Number(o.pricePerCm) || 0;
+          return { name: String(o.name || "").trim(), ...(price > 0 ? { price } : {}), ...(pricePerCm > 0 ? { pricePerCm } : {}) };
+        }).filter((b) => b.name)
       : undefined,
     featured: input.featured === true || input.featured === "true" ? true : undefined,
     packSize: n(input.packSize) > 1 ? n(input.packSize) : undefined,

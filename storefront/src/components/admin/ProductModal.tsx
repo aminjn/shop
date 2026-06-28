@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useShop } from "@/lib/store";
 import { CATEGORIES as SEED_CATS, BRANDS } from "@/data/categories";
-import type { Product, Variation } from "@/lib/types";
+import type { Product, Variation, ProductBrand } from "@/lib/types";
 import { Plus, Trash, Close, Play } from "@/components/Icons";
 import { UploadButton } from "@/components/UploadButton";
 import { translateOne } from "@/lib/aitranslate";
@@ -34,14 +34,17 @@ export function ProductModal({
   const [sub, setSub] = useState(initial?.sub ?? "");
   const curCat = CATEGORIES.find((c) => c.id === cat);
   const subOptions = curCat?.subs ?? [];
-  const [brands, setBrands] = useState<string[]>(
+  const [brands, setBrands] = useState<ProductBrand[]>(
     initial?.brands && initial.brands.length
-      ? initial.brands
+      ? initial.brands.map((b) => (typeof b === "string" ? { name: b } : b))
       : initial?.brand
-        ? [initial.brand]
+        ? [{ name: initial.brand }]
         : [],
   );
-  const toggleBrand = (b: string) => setBrands((cur) => (cur.includes(b) ? cur.filter((x) => x !== b) : [...cur, b]));
+  const hasBrand = (n: string) => brands.some((b) => b.name === n);
+  const toggleBrand = (n: string) => setBrands((cur) => (cur.some((b) => b.name === n) ? cur.filter((b) => b.name !== n) : [...cur, { name: n }]));
+  const setBrandPrice = (n: string, field: "price" | "pricePerCm", val: number | undefined) =>
+    setBrands((cur) => cur.map((b) => (b.name === n ? { ...b, [field]: val } : b)));
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [price, setPrice] = useState(String(initial?.price ?? ""));
   const [old, setOld] = useState(String(initial?.old ?? ""));
@@ -125,8 +128,10 @@ export function ProductModal({
       en: en.trim() || fa.trim(),
       cat,
       sub: sub || undefined,
-      brand: brands[0] || "",
-      brands: brands.length ? brands : undefined,
+      brand: brands[0]?.name || "",
+      brands: brands.length
+        ? brands.map((b) => ({ name: b.name, ...(b.price ? { price: b.price } : {}), ...(b.pricePerCm ? { pricePerCm: b.pricePerCm } : {}) }))
+        : undefined,
       featured: featured || undefined,
       packSize: packMode && Number(packSize) > 1 ? Number(packSize) : undefined,
       price: Number(price) || 0,
@@ -220,21 +225,46 @@ export function ProductModal({
           </div>
           <div>
             {lbl(locale === "fa" ? `${t.brand} (می‌توانی چند برند انتخاب کنی)` : `${t.brand} (multiple allowed)`)}
-            <div className="flex flex-wrap gap-1.5 rounded-[10px] p-2" style={{ ...inputStyle }}>
-              {[...new Set([...brands, ...BRAND_NAMES])].map((b) => {
-                const on = brands.includes(b);
-                return (
-                  <button
-                    key={b}
-                    type="button"
-                    onClick={() => toggleBrand(b)}
-                    className="cursor-pointer rounded-full px-3 py-1.5 text-[12.5px] font-bold"
-                    style={{ background: on ? "var(--accent)" : "var(--surface)", color: on ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}
-                  >
-                    {on ? "✓ " : ""}{b}
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-2 rounded-[10px] p-2" style={{ ...inputStyle }}>
+              <div className="flex flex-wrap gap-1.5">
+                {[...new Set([...brands.map((b) => b.name), ...BRAND_NAMES])].map((n) => {
+                  const on = hasBrand(n);
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => toggleBrand(n)}
+                      className="cursor-pointer rounded-full px-3 py-1.5 text-[12.5px] font-bold"
+                      style={{ background: on ? "var(--accent)" : "var(--surface)", color: on ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}
+                    >
+                      {on ? "✓ " : ""}{n}
+                    </button>
+                  );
+                })}
+              </div>
+              {brands.length > 0 && (
+                <div className="flex flex-col gap-1.5 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+                  <div className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>
+                    {perCm
+                      ? (locale === "fa" ? "قیمت هر سانت برای هر برند (خالی = قیمت پایه)" : "Per-cm price per brand (blank = base)")
+                      : (locale === "fa" ? "قیمت هر برند (خالی = قیمت پایه)" : "Price per brand (blank = base)")}
+                  </div>
+                  {brands.map((b) => (
+                    <div key={b.name} className="flex items-center gap-2">
+                      <span className="w-[110px] flex-none truncate text-[12.5px] font-bold">{b.name}</span>
+                      <input
+                        inputMode="numeric"
+                        dir="ltr"
+                        placeholder={perCm ? (locale === "fa" ? "قیمت هر سانت" : "per-cm") : (locale === "fa" ? "قیمت (تومان)" : "price")}
+                        value={grp(String((perCm ? b.pricePerCm : b.price) ?? ""))}
+                        onChange={(e) => setBrandPrice(b.name, perCm ? "pricePerCm" : "price", Number(digits(e.target.value)) || undefined)}
+                        className="flex-1 rounded-[8px] px-2.5 py-1.5 text-[12.5px] outline-none"
+                        style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             {brands.length === 0 && <div className="mt-1 text-[11.5px]" style={{ color: "#e11d48" }}>{locale === "fa" ? "حداقل یک برند انتخاب کن" : "Pick at least one brand"}</div>}
           </div>

@@ -18,6 +18,14 @@ export interface Brand {
   featured?: boolean; // show on homepage
 }
 
+/** A brand a product is sold under. Each brand may carry its own price; for
+ *  per-cm products it carries its own pricePerCm. Empty = use the base price. */
+export interface ProductBrand {
+  name: string;
+  price?: number;
+  pricePerCm?: number;
+}
+
 export interface Variation {
   type: string;
   value: string;
@@ -33,7 +41,7 @@ export interface Product {
   cat: string;
   sub?: string; // subcategory slug (the subcategory's English/slug value)
   brand: string; // primary brand (kept for compatibility; equals brands[0])
-  brands?: string[]; // a product may carry several brands
+  brands?: ProductBrand[]; // a product may carry several brands, each priced
   featured?: boolean; // highlighted product (special)
   price: number;
   old?: number;
@@ -68,6 +76,7 @@ export interface CartLine {
   color: number;
   size: number;
   variant?: number;
+  brandIdx?: number;
 }
 
 export interface Coupon {

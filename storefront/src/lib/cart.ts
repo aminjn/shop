@@ -1,5 +1,5 @@
 import { productById as seedById } from "@/data/products";
-import { variantPrice } from "./format";
+import { priceFor } from "./format";
 import type { CartLine, Coupon, Product } from "./types";
 
 export interface TotalsConfig {
@@ -33,7 +33,7 @@ export function computeTotals(
 
   const subtotal = cart.reduce((s, l) => {
     const p = lookup(l.id);
-    return s + (p ? variantPrice(p, l.variant) * l.qty : 0);
+    return s + (p ? priceFor(p, { variant: l.variant, brandIdx: l.brandIdx }) * l.qty : 0);
   }, 0);
 
   let discount = 0;

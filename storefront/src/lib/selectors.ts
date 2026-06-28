@@ -1,5 +1,6 @@
 import { PRODUCTS } from "@/data/products";
 import type { Product } from "./types";
+import { productBrands } from "./format";
 
 type List = Product[];
 const seed = () => PRODUCTS;
@@ -25,7 +26,7 @@ export const smartPicks = (list: List = seed()): Product[] =>
 export const dealOfDay = (list: List = seed()): Product => onSale(list)[0] ?? list[0];
 
 export const topBrands = (list: List = seed()): string[] => [
-  ...new Set(list.flatMap((p) => (p.brands && p.brands.length ? p.brands : [p.brand]))),
+  ...new Set(list.flatMap((p) => productBrands(p))),
 ];
 
 export const related = (p: Product, list: List = seed()): Product[] =>

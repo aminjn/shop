@@ -4,7 +4,7 @@ import { getCatalog, getProduct } from "@/lib/catalog";
 import { findCoupon } from "@/lib/coupons";
 import { readStore, readLoyalty, tierFor } from "@/lib/settings";
 import { computeTotals } from "@/lib/cart";
-import { variantPrice } from "@/lib/format";
+import { priceFor, productBrands } from "@/lib/format";
 import { updateUser, uid, nowIso, notify, type Order, type OrderItem } from "@/lib/userstore";
 import type { CartLine } from "@/lib/types";
 
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const store = readStore();
   const subtotalForCoupon = lines.reduce((sum, l) => {
     const p = getProduct(l.id);
-    return sum + (p ? variantPrice(p, l.variant) * l.qty : 0);
+    return sum + (p ? priceFor(p, { variant: l.variant, brandIdx: l.brandIdx }) * l.qty : 0);
   }, 0);
   const coupon = b.coupon ? findCoupon(String(b.coupon), subtotalForCoupon) : null;
 
@@ -45,7 +45,9 @@ export async function POST(req: Request) {
     const p = getProduct(l.id)!;
     const v = p.variations && typeof l.variant === "number" ? p.variations[l.variant] : undefined;
     const vName = v ? ` (${v.type || v.value})` : "";
-    return { id: p.id, name: p.fa + vName, qty: l.qty, price: variantPrice(p, l.variant) };
+    const bn = productBrands(p);
+    const bName = bn.length > 1 && typeof l.brandIdx === "number" && bn[l.brandIdx] ? ` — ${bn[l.brandIdx]}` : "";
+    return { id: p.id, name: p.fa + bName + vName, qty: l.qty, price: priceFor(p, { variant: l.variant, brandIdx: l.brandIdx }) };
   });
 
   const loy = readLoyalty();

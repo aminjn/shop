@@ -18,10 +18,53 @@ export function isPerCm(p: Pick<Product, "pricingType">): boolean {
 export function hasVariations(p: Pick<Product, "variations">): boolean {
   return !!(p.variations && p.variations.length);
 }
-/** All brands of a product (falls back to the single legacy `brand`). */
+/** Normalized brand list (accepts legacy string[] data and the single `brand`). */
+export function productBrandList(p: Pick<Product, "brand" | "brands">): { name: string; price?: number; pricePerCm?: number }[] {
+  const bs = p.brands as unknown[] | undefined;
+  if (bs && bs.length) {
+    return bs
+      .map((b) => (typeof b === "string" ? { name: b } : (b as { name: string; price?: number; pricePerCm?: number })))
+      .filter((b) => b && b.name);
+  }
+  return p.brand ? [{ name: p.brand }] : [];
+}
+/** All brand names of a product. */
 export function productBrands(p: Pick<Product, "brand" | "brands">): string[] {
-  if (p.brands && p.brands.length) return p.brands.filter(Boolean);
-  return p.brand ? [p.brand] : [];
+  return productBrandList(p).map((b) => b.name);
+}
+/** True when at least one brand carries its own price. */
+export function isBrandPriced(p: Pick<Product, "brand" | "brands" | "pricingType">): boolean {
+  const perCm = p.pricingType === "per_cm";
+  return productBrandList(p).some((b) => (perCm ? (b.pricePerCm || 0) > 0 : (b.price || 0) > 0));
+}
+/** Unit price for a chosen brand (or the cheapest priced brand). Per-cm aware. */
+export function brandUnitPrice(
+  p: Pick<Product, "brand" | "brands" | "price" | "pricingType" | "pricePerCm" | "width">,
+  idx?: number,
+): number {
+  const list = productBrandList(p);
+  const perCm = p.pricingType === "per_cm";
+  const size = p.width && p.width > 0 ? p.width : 1;
+  const priceOf = (b?: { price?: number; pricePerCm?: number }) => {
+    if (!b) return 0;
+    if (perCm) return (b.pricePerCm || 0) > 0 ? b.pricePerCm! * size : 0;
+    return b.price || 0;
+  };
+  const chosen = typeof idx === "number" ? list[idx] : undefined;
+  const direct = priceOf(chosen);
+  if (direct > 0) return direct;
+  // no specific choice (or chosen brand has no own price): cheapest priced brand
+  const priced = list.map(priceOf).filter((n) => n > 0);
+  return priced.length ? Math.min(...priced) : unitPrice(p);
+}
+/** The single source of truth for a line/display price: brand price if the
+ *  product is brand-priced, else the variant price, else the base unit price. */
+export function priceFor(
+  p: Pick<Product, "brand" | "brands" | "price" | "pricingType" | "pricePerCm" | "width" | "variations">,
+  opts?: { brandIdx?: number; variant?: number },
+): number {
+  if (isBrandPriced(p)) return brandUnitPrice(p, opts?.brandIdx);
+  return variantPrice(p, opts?.variant);
 }
 /** Effective stock. For variant products the base stock is usually 0 and the
  *  real stock lives on each variant, so sum the variants. */
