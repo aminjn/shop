@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useShop } from "@/lib/store";
 import { User, ArrowBack, Check } from "@/components/Icons";
 import { LocaleLink } from "@/components/LocaleLink";
@@ -18,6 +18,9 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+  const yRef = useRef<HTMLInputElement>(null);
+  const mRef = useRef<HTMLInputElement>(null);
+  const dRef = useRef<HTMLInputElement>(null);
 
   const tr = (f: string, e: string) => (fa ? f : e);
 
@@ -93,12 +96,12 @@ export default function LoginPage() {
 
         {step === "shahkar" && (
           <div className="mt-6 flex flex-col gap-3">
-            <input value={nid} onChange={(e) => setNid(onlyDigits(e.target.value).slice(0, 10))} inputMode="numeric" dir="ltr" placeholder={tr("کد ملی (۱۰ رقم)", "National code (10 digits)")} className="rounded-[12px] px-4 py-3.5 text-center text-[16px] tracking-wider outline-none" style={fieldStyle} />
+            <input value={nid} onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 10); setNid(v); if (v.length === 10) yRef.current?.focus(); }} inputMode="numeric" dir="ltr" placeholder={tr("کد ملی (۱۰ رقم)", "National code (10 digits)")} className="rounded-[12px] px-4 py-3.5 text-center text-[16px] tracking-wider outline-none" style={fieldStyle} />
             <div className="text-[12.5px] font-bold" style={{ color: "var(--muted)" }}>{tr("تاریخ تولد (شمسی)", "Birth date (Jalali)")}</div>
             <div className="grid grid-cols-3 gap-2" dir="ltr">
-              <input value={by} onChange={(e) => setBy(onlyDigits(e.target.value).slice(0, 4))} inputMode="numeric" placeholder={tr("سال ۱۳۷۰", "Year")} className="rounded-[12px] px-2 py-3 text-center text-[15px] outline-none" style={fieldStyle} />
-              <input value={bm} onChange={(e) => setBm(onlyDigits(e.target.value).slice(0, 2))} inputMode="numeric" placeholder={tr("ماه", "Month")} className="rounded-[12px] px-2 py-3 text-center text-[15px] outline-none" style={fieldStyle} />
-              <input value={bd} onChange={(e) => setBd(onlyDigits(e.target.value).slice(0, 2))} inputMode="numeric" placeholder={tr("روز", "Day")} className="rounded-[12px] px-2 py-3 text-center text-[15px] outline-none" style={fieldStyle} />
+              <input ref={yRef} value={by} onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 4); setBy(v); if (v.length === 4) mRef.current?.focus(); }} inputMode="numeric" placeholder={tr("سال ۱۳۷۰", "Year")} className="rounded-[12px] px-2 py-3 text-center text-[15px] outline-none" style={fieldStyle} />
+              <input ref={mRef} value={bm} onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 2); setBm(v); if (v.length === 2) dRef.current?.focus(); }} inputMode="numeric" placeholder={tr("ماه", "Month")} className="rounded-[12px] px-2 py-3 text-center text-[15px] outline-none" style={fieldStyle} />
+              <input ref={dRef} value={bd} onChange={(e) => setBd(onlyDigits(e.target.value).slice(0, 2))} onKeyDown={(e) => e.key === "Enter" && shahkar()} inputMode="numeric" placeholder={tr("روز", "Day")} className="rounded-[12px] px-2 py-3 text-center text-[15px] outline-none" style={fieldStyle} />
             </div>
             <button onClick={shahkar} disabled={loading} className="cursor-pointer rounded-[12px] border-none py-3.5 text-[15px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
               {loading ? tr("در حال استعلام…", "Verifying…") : tr("تأیید هویت و دریافت کد", "Verify & get code")}
