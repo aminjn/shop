@@ -223,13 +223,19 @@ export function ProductDetail({ id }: { id: number }) {
 
           {/* qty + actions */}
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-3 rounded-[12px] px-2 py-1.5" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-              <button onClick={() => setQty((q) => Math.max(pack, q - pack))} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Minus size={16} /></button>
-              <span className="min-w-[24px] text-center text-[15px] font-bold">{pack > 1 ? `${num(cartons, locale)} ${locale === "fa" ? "کارتن" : "carton"}` : num(qty, locale)}</span>
-              <button onClick={() => setQty((q) => q + pack)} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Plus size={16} /></button>
-            </div>
-            <button onClick={() => addToCart(p.id, qty, color, size, variant, brandIdx)} className="flex-1 cursor-pointer rounded-[12px] border-none px-6 py-3.5 text-[15px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.addToCart}</button>
-            <button onClick={() => { addToCart(p.id, qty, color, size, variant, brandIdx); router.push(`/${locale}/cart`); }} className="cursor-pointer rounded-[12px] px-6 py-3.5 text-[15px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{t.buyNow}</button>
+            {stock > 0 ? (
+              <>
+                <div className="flex items-center gap-3 rounded-[12px] px-2 py-1.5" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                  <button onClick={() => setQty((q) => Math.max(pack, q - pack))} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Minus size={16} /></button>
+                  <span className="min-w-[24px] text-center text-[15px] font-bold">{pack > 1 ? `${num(cartons, locale)} ${locale === "fa" ? "کارتن" : "carton"}` : num(qty, locale)}</span>
+                  <button onClick={() => setQty((q) => q + pack)} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border-none" style={{ background: "var(--surface)", color: "var(--text)" }}><Plus size={16} /></button>
+                </div>
+                <button onClick={() => addToCart(p.id, qty, color, size, variant, brandIdx)} className="flex-1 cursor-pointer rounded-[12px] border-none px-6 py-3.5 text-[15px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.addToCart}</button>
+                <button onClick={() => { addToCart(p.id, qty, color, size, variant, brandIdx); router.push(`/${locale}/cart`); }} className="cursor-pointer rounded-[12px] px-6 py-3.5 text-[15px] font-extrabold" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" }}>{t.buyNow}</button>
+              </>
+            ) : (
+              <button disabled className="flex-1 cursor-not-allowed rounded-[12px] border-none px-6 py-3.5 text-[15px] font-extrabold" style={{ background: "var(--surface2)", color: "var(--muted)" }}>{t.outStock}</button>
+            )}
             <button onClick={() => toggleWish(p.id)} aria-label={t.addToWishlist} className="flex h-[50px] w-[50px] cursor-pointer items-center justify-center rounded-[12px]" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: wished ? "#e11d48" : "var(--muted)" }}><Heart size={20} fill={wished ? "#e11d48" : "none"} /></button>
           </div>
 

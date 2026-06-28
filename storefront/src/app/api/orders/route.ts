@@ -4,7 +4,7 @@ import { getCatalog, getProduct } from "@/lib/catalog";
 import { findCoupon } from "@/lib/coupons";
 import { readStore, readLoyalty, tierFor } from "@/lib/settings";
 import { computeTotals } from "@/lib/cart";
-import { priceFor, productBrands } from "@/lib/format";
+import { priceFor, productBrands, totalStock } from "@/lib/format";
 import { updateUser, uid, nowIso, notify, type Order, type OrderItem } from "@/lib/userstore";
 import type { CartLine } from "@/lib/types";
 
@@ -14,11 +14,11 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
 
   const products = getCatalog();
-  const rawItems: { id: number; qty: number }[] = Array.isArray(b.items) ? b.items : [];
+  const rawItems: { id: number; qty: number; variant?: number; brandIdx?: number }[] = Array.isArray(b.items) ? b.items : [];
   const lines: CartLine[] = rawItems
-    .map((it) => ({ key: String(it.id), id: Number(it.id), qty: Math.max(1, Number(it.qty) || 1), color: 0, size: 0 }))
-    .filter((l) => getProduct(l.id));
-  if (!lines.length) return NextResponse.json({ ok: false, error: "empty-cart" }, { status: 400 });
+    .map((it) => ({ key: String(it.id), id: Number(it.id), qty: Math.max(1, Number(it.qty) || 1), color: 0, size: 0, variant: Number(it.variant) || 0, brandIdx: Number(it.brandIdx) || 0 }))
+    .filter((l) => { const p = getProduct(l.id); return p && totalStock(p) > 0; });
+  if (!lines.length) return NextResponse.json({ ok: false, error: "out-of-stock" }, { status: 400 });
 
   const store = readStore();
   const subtotalForCoupon = lines.reduce((sum, l) => {

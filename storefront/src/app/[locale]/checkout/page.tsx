@@ -73,7 +73,7 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          items: cart.map((c) => ({ id: c.id, qty: c.qty })),
+          items: cart.map((c) => ({ id: c.id, qty: c.qty, variant: c.variant, brandIdx: c.brandIdx })),
           payment: pay,
           shipping: ship,
           coupon: coupon?.code,

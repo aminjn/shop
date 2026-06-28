@@ -2,7 +2,7 @@
 
 import type { Product } from "@/lib/types";
 import { useShop } from "@/lib/store";
-import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, hasVariations, productBrands, isBrandPriced, priceFor } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, hasVariations, productBrands, isBrandPriced, priceFor, totalStock } from "@/lib/format";
 import { LocaleLink } from "./LocaleLink";
 import { Heart } from "./Icons";
 
@@ -146,13 +146,19 @@ export function ProductCard({
           {isPerCm(p) && <span>📏 {perCmNote(p, locale)}</span>}
           {p.packSize && p.packSize > 1 ? <span>📦 {locale === "fa" ? `کارتن ${num(p.packSize, locale)} عددی` : `Carton of ${p.packSize}`}</span> : null}
         </div>
-        <button
-          onClick={() => addToCart(p.id, p.packSize && p.packSize > 1 ? p.packSize : 1)}
-          className="add-btn mt-auto w-full cursor-pointer rounded-[10px] border p-2.5 text-[13px] font-bold transition"
-          style={{ background: "var(--surface2)", color: "var(--text)", borderColor: "var(--border)" }}
-        >
-          {p.packSize && p.packSize > 1 ? (locale === "fa" ? "افزودن کارتن" : "Add carton") : t.addToCart}
-        </button>
+        {totalStock(p) > 0 ? (
+          <button
+            onClick={() => addToCart(p.id, p.packSize && p.packSize > 1 ? p.packSize : 1)}
+            className="add-btn mt-auto w-full cursor-pointer rounded-[10px] border p-2.5 text-[13px] font-bold transition"
+            style={{ background: "var(--surface2)", color: "var(--text)", borderColor: "var(--border)" }}
+          >
+            {p.packSize && p.packSize > 1 ? (locale === "fa" ? "افزودن کارتن" : "Add carton") : t.addToCart}
+          </button>
+        ) : (
+          <button disabled className="mt-auto w-full cursor-not-allowed rounded-[10px] border p-2.5 text-[13px] font-bold" style={{ background: "var(--surface2)", color: "var(--muted)", borderColor: "var(--border)" }}>
+            {t.outStock}
+          </button>
+        )}
       </div>
     </div>
   );
