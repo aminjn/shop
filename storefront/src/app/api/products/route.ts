@@ -18,7 +18,10 @@ function sanitize(input: Record<string, unknown>, id: number): Product {
     en: String(input.en || input.fa || "").slice(0, 120),
     cat: String(input.cat || "tech"),
     sub: input.sub ? String(input.sub) : undefined,
-    brand: String(input.brand || ""),
+    brand: String(input.brand || (Array.isArray(input.brands) && input.brands[0]) || ""),
+    brands: Array.isArray(input.brands) && input.brands.length
+      ? (input.brands as unknown[]).map((b) => String(b || "").trim()).filter(Boolean)
+      : undefined,
     featured: input.featured === true || input.featured === "true" ? true : undefined,
     packSize: n(input.packSize) > 1 ? n(input.packSize) : undefined,
     price: n(input.price),

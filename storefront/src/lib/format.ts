@@ -18,6 +18,11 @@ export function isPerCm(p: Pick<Product, "pricingType">): boolean {
 export function hasVariations(p: Pick<Product, "variations">): boolean {
   return !!(p.variations && p.variations.length);
 }
+/** All brands of a product (falls back to the single legacy `brand`). */
+export function productBrands(p: Pick<Product, "brand" | "brands">): string[] {
+  if (p.brands && p.brands.length) return p.brands.filter(Boolean);
+  return p.brand ? [p.brand] : [];
+}
 /** Effective stock. For variant products the base stock is usually 0 and the
  *  real stock lives on each variant, so sum the variants. */
 export function totalStock(p: Pick<Product, "stock" | "variations">): number {

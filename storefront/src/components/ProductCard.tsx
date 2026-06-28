@@ -2,7 +2,7 @@
 
 import type { Product } from "@/lib/types";
 import { useShop } from "@/lib/store";
-import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations, productBrands } from "@/lib/format";
 import { LocaleLink } from "./LocaleLink";
 import { Heart } from "./Icons";
 
@@ -104,7 +104,7 @@ export function ProductCard({
           </div>
         )}
         <div className="text-[12px]" style={{ color: "var(--accent)" }}>
-          {p.brand}
+          {productBrands(p).join(" • ")}
         </div>
         <LocaleLink
           href={`/product/${p.id}`}

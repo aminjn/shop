@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ProductDetail } from "@/components/ProductDetail";
 import { getProduct } from "@/lib/catalog";
-import { variantPrice } from "@/lib/format";
+import { variantPrice, productBrands } from "@/lib/format";
 import { siteOrigin, getSeo } from "@/lib/seo";
 import { readStore } from "@/lib/settings";
 import { getDict } from "@/i18n/dictionaries";
@@ -61,7 +61,7 @@ export default async function ProductPage({
             sku: p.sku || `SKU-${1000 + p.id}`,
             ...(p.images?.length ? { image: p.images.map((i) => (i.startsWith("http") ? i : origin + i)) } : {}),
             description: (loc === "fa" ? p.shortFa : p.shortEn) || `${name} — ${p.brand}`,
-            brand: { "@type": "Brand", name: p.brand },
+            brand: productBrands(p).map((name) => ({ "@type": "Brand", name })),
             ...(p.country ? { countryOfOrigin: p.country } : {}),
             ...(p.reviews > 0
               ? { aggregateRating: { "@type": "AggregateRating", ratingValue: p.rating, reviewCount: p.reviews, bestRating: 5 } }

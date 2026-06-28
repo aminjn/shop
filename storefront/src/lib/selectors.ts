@@ -25,7 +25,7 @@ export const smartPicks = (list: List = seed()): Product[] =>
 export const dealOfDay = (list: List = seed()): Product => onSale(list)[0] ?? list[0];
 
 export const topBrands = (list: List = seed()): string[] => [
-  ...new Set(list.map((p) => p.brand)),
+  ...new Set(list.flatMap((p) => (p.brands && p.brands.length ? p.brands : [p.brand]))),
 ];
 
 export const related = (p: Product, list: List = seed()): Product[] =>

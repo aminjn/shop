@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useShop, usePageTitle } from "@/lib/store";
 import { CATEGORIES } from "@/data/categories";
-import { num } from "@/lib/format";
+import { num, productBrands } from "@/lib/format";
 import { ProductCard } from "@/components/ProductCard";
 import { BlockCanvas } from "@/components/BlockCanvas";
 import { Grid, List, Sparkle, Close } from "@/components/Icons";
@@ -93,7 +93,7 @@ function ShopContent() {
     return products.filter((p) => (activeCat === "all" || p.cat === activeCat) && (!activeSub || p.sub === activeSub));
   }, [products, aiIds, activeCat, activeSub]);
 
-  const facetBrands = useMemo(() => [...new Set(scope.map((p) => p.brand).filter(Boolean))], [scope]);
+  const facetBrands = useMemo(() => [...new Set(scope.flatMap((p) => productBrands(p)))], [scope]);
   const facetColors = useMemo(() => {
     const m = new Map<string, string>();
     scope.forEach((p) => (p.colors || []).forEach(([name, hex]) => { if (name && !m.has(name)) m.set(name, hex); }));
@@ -120,7 +120,7 @@ function ShopContent() {
       if (activeCat !== "all" && p.cat !== activeCat) return false;
       if (activeSub && p.sub !== activeSub) return false;
       if (p.price > priceMax) return false;
-      if (brandFilter.length && !brandFilter.includes(p.brand)) return false;
+      if (brandFilter.length && !productBrands(p).some((b) => brandFilter.includes(b))) return false;
       if (ratingMin && p.rating < ratingMin) return false;
       if (inStockOnly && p.stock <= 0) return false;
       if (colorFilter.length) {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
-import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations, totalStock } from "@/lib/format";
+import { grad, priceFmt, num, unitPrice, isPerCm, perCmNote, variantPrice, hasVariations, totalStock, productBrands } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
@@ -51,14 +51,14 @@ export function ProductDetail({ id }: { id: number }) {
   const base: ([string, string] | null)[] =
     locale === "fa"
       ? [
-          ["برند", p.brand],
+          [productBrands(p).length > 1 ? "برندها" : "برند", productBrands(p).join("، ")],
           p.country ? ["کشور سازنده", p.country] : null,
           hasWarranty ? ["گارانتی", p.warranty] : null,
           ["کد کالا", p.sku || `SKU-${1000 + p.id}`],
           ["وضعیت", stock > 0 ? "موجود" : "ناموجود"],
         ]
       : [
-          ["Brand", p.brand],
+          [productBrands(p).length > 1 ? "Brands" : "Brand", productBrands(p).join(", ")],
           p.country ? ["Origin", p.country] : null,
           hasWarranty ? ["Warranty", p.warranty] : null,
           ["SKU", p.sku || `SKU-${1000 + p.id}`],

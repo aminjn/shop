@@ -32,7 +32,8 @@ export interface Product {
   en: string;
   cat: string;
   sub?: string; // subcategory slug (the subcategory's English/slug value)
-  brand: string;
+  brand: string; // primary brand (kept for compatibility; equals brands[0])
+  brands?: string[]; // a product may carry several brands
   featured?: boolean; // highlighted product (special)
   price: number;
   old?: number;

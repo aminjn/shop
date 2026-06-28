@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
-import { grad, priceFmt, num } from "@/lib/format";
+import { grad, priceFmt, num, productBrands } from "@/lib/format";
 import { LocaleLink } from "./LocaleLink";
 import {
   Search,
@@ -70,12 +70,12 @@ export function Header() {
       (p) =>
         p.fa.toLowerCase().includes(q) ||
         p.en.toLowerCase().includes(q) ||
-        p.brand.toLowerCase().includes(q),
+        productBrands(p).some((b) => b.toLowerCase().includes(q)),
     ).slice(0, 5);
     const cats = CATEGORIES.filter(
       (c) => c.fa.includes(q) || c.en.toLowerCase().includes(q),
     ).slice(0, 3);
-    const brands = [...new Set(products.map((p) => p.brand))]
+    const brands = [...new Set(products.flatMap((p) => productBrands(p)))]
       .filter((b) => b.toLowerCase().includes(q))
       .slice(0, 3);
     return { prods, cats, brands };

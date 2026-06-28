@@ -34,7 +34,14 @@ export function ProductModal({
   const [sub, setSub] = useState(initial?.sub ?? "");
   const curCat = CATEGORIES.find((c) => c.id === cat);
   const subOptions = curCat?.subs ?? [];
-  const [brand, setBrand] = useState(initial?.brand ?? BRAND_NAMES[0] ?? "");
+  const [brands, setBrands] = useState<string[]>(
+    initial?.brands && initial.brands.length
+      ? initial.brands
+      : initial?.brand
+        ? [initial.brand]
+        : [],
+  );
+  const toggleBrand = (b: string) => setBrands((cur) => (cur.includes(b) ? cur.filter((x) => x !== b) : [...cur, b]));
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [price, setPrice] = useState(String(initial?.price ?? ""));
   const [old, setOld] = useState(String(initial?.old ?? ""));
@@ -118,7 +125,8 @@ export function ProductModal({
       en: en.trim() || fa.trim(),
       cat,
       sub: sub || undefined,
-      brand,
+      brand: brands[0] || "",
+      brands: brands.length ? brands : undefined,
       featured: featured || undefined,
       packSize: packMode && Number(packSize) > 1 ? Number(packSize) : undefined,
       price: Number(price) || 0,
@@ -211,15 +219,24 @@ export function ProductModal({
             </select>
           </div>
           <div>
-            {lbl(t.brand)}
-            <select className={inputCls} style={inputStyle} value={brand} onChange={(e) => setBrand(e.target.value)}>
-              {brand && !BRAND_NAMES.includes(brand) && <option value={brand}>{brand}</option>}
-              {BRAND_NAMES.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
+            {lbl(locale === "fa" ? `${t.brand} (می‌توانی چند برند انتخاب کنی)` : `${t.brand} (multiple allowed)`)}
+            <div className="flex flex-wrap gap-1.5 rounded-[10px] p-2" style={{ ...inputStyle }}>
+              {[...new Set([...brands, ...BRAND_NAMES])].map((b) => {
+                const on = brands.includes(b);
+                return (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => toggleBrand(b)}
+                    className="cursor-pointer rounded-full px-3 py-1.5 text-[12.5px] font-bold"
+                    style={{ background: on ? "var(--accent)" : "var(--surface)", color: on ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}
+                  >
+                    {on ? "✓ " : ""}{b}
+                  </button>
+                );
+              })}
+            </div>
+            {brands.length === 0 && <div className="mt-1 text-[11.5px]" style={{ color: "#e11d48" }}>{locale === "fa" ? "حداقل یک برند انتخاب کن" : "Pick at least one brand"}</div>}
           </div>
           <div>
             {lbl(t.sku)}
