@@ -1936,9 +1936,13 @@ function PagesAdmin() {
     if (!form.titleFa.trim() && !form.bodyFa.trim()) { toast(fa ? "اول محتوای فارسی را بنویس" : "Write Persian first"); return; }
     setBusy(true);
     try {
-      const r = await translateWithStatus([form.titleFa, form.bodyFa]);
-      if (!r.ok) { toast(fa ? "ترجمه ناموفق — اعتبار سرویس را بررسی کن" : "Translate failed"); return; }
-      setForm((f) => ({ ...f, titleEn: r.results[0] || f.titleEn, bodyEn: r.results[1] || f.bodyEn }));
+      // title as a short label, body as a full faithful translation
+      const [tr, br] = await Promise.all([
+        translateWithStatus([form.titleFa]),
+        translateWithStatus([form.bodyFa], false, true),
+      ]);
+      if (!tr.ok && !br.ok) { toast(fa ? "ترجمه ناموفق — اعتبار سرویس را بررسی کن" : "Translate failed"); return; }
+      setForm((f) => ({ ...f, titleEn: tr.results[0] || f.titleEn, bodyEn: br.results[0] || f.bodyEn }));
       toast(fa ? "ترجمه شد ✓" : "Translated ✓");
     } catch { toast(fa ? "خطای شبکه" : "Error"); } finally { setBusy(false); }
   };

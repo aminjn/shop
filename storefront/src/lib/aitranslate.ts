@@ -3,12 +3,12 @@
 /** Auto-translate Persian admin inputs to English via the AI endpoint. */
 export interface TranslateResult { ok: boolean; results: (string | null)[]; error?: string; detail?: string }
 
-export async function translateWithStatus(texts: string[], slug = false): Promise<TranslateResult> {
+export async function translateWithStatus(texts: string[], slug = false, long = false): Promise<TranslateResult> {
   try {
     const r = await fetch("/api/ai/translate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ texts, slug }),
+      body: JSON.stringify({ texts, slug, long }),
     });
     const d = await r.json().catch(() => ({}));
     if (d.ok && Array.isArray(d.results)) return { ok: true, results: d.results.map((x: unknown) => (x ? String(x) : null)) };
@@ -18,13 +18,15 @@ export async function translateWithStatus(texts: string[], slug = false): Promis
   }
 }
 
-export async function translateBatch(texts: string[], slug = false): Promise<(string | null)[]> {
-  return (await translateWithStatus(texts, slug)).results;
+export async function translateBatch(texts: string[], slug = false, long = false): Promise<(string | null)[]> {
+  return (await translateWithStatus(texts, slug, long)).results;
 }
 
-export async function translateOne(text: string): Promise<string | null> {
+/** Translate one item. Pass long=true for full descriptions/paragraphs (a
+ *  faithful complete translation) instead of a short Title-Case label. */
+export async function translateOne(text: string, long = false): Promise<string | null> {
   if (!text.trim()) return null;
-  return (await translateBatch([text]))[0];
+  return (await translateBatch([text], false, long))[0];
 }
 
 /** Local Persian→latin slug fallback when AI is unavailable. */

@@ -160,7 +160,7 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
     const Tag = (area ? "textarea" : "input") as React.ElementType;
     return <Tag value={String(blocks[i][key] ?? "")} placeholder={ph} dir={ltr ? "ltr" : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => upd(i, { [key]: e.target.value })} className="w-full rounded-[8px] px-2.5 py-1.5 text-[12.5px] outline-none" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} />;
   };
-  const aiTr = async (i: number, src: keyof HomeBlock, dst: keyof HomeBlock) => { const v = String(blocks[i][src] || "").trim(); if (!v) return; const r = await translateOne(v); if (r) upd(i, { [dst]: r } as Partial<HomeBlock>); };
+  const aiTr = async (i: number, src: keyof HomeBlock, dst: keyof HomeBlock, long = false) => { const v = String(blocks[i][src] || "").trim(); if (!v) return; const r = await translateOne(v, long); if (r) upd(i, { [dst]: r } as Partial<HomeBlock>); };
 
   const settings = (b: HomeBlock, i: number) => (
     <div className="mt-2 rounded-[12px] p-3" style={{ background: "color-mix(in srgb, var(--accent) 7%, var(--surface))", border: "1.5px dashed rgba(99,102,241,.6)" }}>
@@ -218,7 +218,7 @@ export function BlockEditor({ blocks, editing, onChange }: { blocks: HomeBlock[]
               <option value="center">{fa ? "وسط" : "Center"}</option>
             </select>
           </label>
-          <button onClick={() => { aiTr(i, "titleFa", "titleEn"); aiTr(i, "textFa", "textEn"); aiTr(i, "btnFa", "btnEn"); }} className="cursor-pointer rounded-[8px] px-2.5 py-1 text-[12px] font-bold" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--accent)" }}>✨ {fa ? "ترجمه" : "Translate"}</button>
+          <button onClick={() => { aiTr(i, "titleFa", "titleEn"); aiTr(i, "textFa", "textEn", true); aiTr(i, "btnFa", "btnEn"); }} className="cursor-pointer rounded-[8px] px-2.5 py-1 text-[12px] font-bold" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--accent)" }}>✨ {fa ? "ترجمه" : "Translate"}</button>
         </div>
       )}
     </div>

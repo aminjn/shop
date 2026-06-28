@@ -94,7 +94,7 @@ export function ProductModal({
       if (!d.ok || !d.result) { toast(locale === "fa" ? "هوش مصنوعی پاسخی نداد — اعتبار سرویس را بررسی کن" : "AI unavailable — check account credit"); return; }
       const res = d.result as { shortDesc?: string; longDesc?: string; specs?: { k: string; v: string }[] };
       const desc = (res.longDesc || res.shortDesc || "").trim();
-      if (desc) { setShortFa(desc); const en = await translateOne(desc); if (en) setShortEn(en); }
+      if (desc) { setShortFa(desc); const en = await translateOne(desc, true); if (en) setShortEn(en); }
       if (Array.isArray(res.specs) && res.specs.length)
         setSpecs(res.specs.filter((s) => s && s.k && s.v).map((s) => [String(s.k), String(s.v)] as [string, string]));
       toast(locale === "fa" ? "توضیحات و مشخصات با هوش مصنوعی پر شد ✓" : "Filled with AI ✓");
