@@ -267,8 +267,8 @@ export function ProductModal({
                           dir="ltr"
                           title={locale === "fa" ? "تعداد در کارتن این برند" : "Units per carton for this brand"}
                           placeholder={locale === "fa" ? "کارتن" : "carton"}
-                          value={b.packSize && b.packSize > 1 ? String(b.packSize) : ""}
-                          onChange={(e) => { const v = Number(digits(e.target.value)) || 0; setBrandPrice(b.name, "packSize", v > 1 ? v : undefined); }}
+                          value={b.packSize ? String(b.packSize) : ""}
+                          onChange={(e) => setBrandPrice(b.name, "packSize", Number(digits(e.target.value)) || undefined)}
                           className="w-[74px] flex-none rounded-[8px] px-2.5 py-1.5 text-[12.5px] outline-none"
                           style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
                         />
