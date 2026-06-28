@@ -140,8 +140,15 @@ export function PwaInstall() {
   const [iosHint, setIosHint] = useState(false);
 
   useEffect(() => {
+    // The old service worker cached JS cache-first and broke navigation, so we
+    // no longer register one. Existing registrations auto-update to the
+    // self-destructing /sw.js kill switch on their next load; also proactively
+    // unregister any that are still around.
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister())).catch(() => {});
+    }
+    if (typeof caches !== "undefined" && caches.keys) {
+      caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
     }
     const dismissed = localStorage.getItem("pwa_dismissed");
     const standalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as unknown as { standalone?: boolean }).standalone;
