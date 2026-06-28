@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useShop } from "@/lib/store";
 import { catById } from "@/data/categories";
 import { related } from "@/lib/selectors";
-import { grad, priceFmt, num, isPerCm, perCmNote, hasVariations, totalStock, productBrands, productBrandList, isBrandPriced, priceFor } from "@/lib/format";
+import { grad, priceFmt, num, isPerCm, perCmNote, hasVariations, totalStock, productBrands, productBrandList, isBrandPriced, priceFor, packFor } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 import { ProductReviews } from "./ProductReviews";
 import { LocaleLink } from "./LocaleLink";
@@ -23,8 +23,8 @@ export function ProductDetail({ id }: { id: number }) {
   const [qty, setQty] = useState(1);
   const [tab, setTab] = useState<"desc" | "specs" | "reviews">("desc");
   const [showVideo, setShowVideo] = useState(false);
-  // pack/carton products start at one full carton
-  const packInit = p?.packSize && p.packSize > 1 ? p.packSize : 1;
+  // pack/carton products start at one full carton (per the selected brand)
+  const packInit = p ? packFor(p, brandIdx) : 1;
   useEffect(() => { setQty(packInit); }, [packInit]);
 
   if (!p) {
@@ -38,7 +38,7 @@ export function ProductDetail({ id }: { id: number }) {
 
   const name = locale === "fa" ? p.fa : p.en;
   const cat = catById(p.cat);
-  const pack = p.packSize && p.packSize > 1 ? p.packSize : 1; // units per carton (1 = normal)
+  const pack = packFor(p, brandIdx); // units per carton for the chosen brand (1 = normal)
   const cartons = Math.max(1, Math.round(qty / pack));
   const variations = p.variations ?? [];
   const brandList = productBrandList(p);

@@ -43,7 +43,7 @@ export function ProductModal({
   );
   const hasBrand = (n: string) => brands.some((b) => b.name === n);
   const toggleBrand = (n: string) => setBrands((cur) => (cur.some((b) => b.name === n) ? cur.filter((b) => b.name !== n) : [...cur, { name: n }]));
-  const setBrandPrice = (n: string, field: "price" | "pricePerCm", val: number | undefined) =>
+  const setBrandPrice = (n: string, field: "price" | "pricePerCm" | "packSize", val: number | undefined) =>
     setBrands((cur) => cur.map((b) => (b.name === n ? { ...b, [field]: val } : b)));
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [price, setPrice] = useState(String(initial?.price ?? ""));
@@ -130,7 +130,7 @@ export function ProductModal({
       sub: sub || undefined,
       brand: brands[0]?.name || "",
       brands: brands.length
-        ? brands.map((b) => ({ name: b.name, ...(b.price ? { price: b.price } : {}), ...(b.pricePerCm ? { pricePerCm: b.pricePerCm } : {}) }))
+        ? brands.map((b) => ({ name: b.name, ...(b.price ? { price: b.price } : {}), ...(b.pricePerCm ? { pricePerCm: b.pricePerCm } : {}), ...(b.packSize && b.packSize > 1 ? { packSize: b.packSize } : {}) }))
         : undefined,
       featured: featured || undefined,
       packSize: packMode && Number(packSize) > 1 ? Number(packSize) : undefined,
@@ -251,7 +251,7 @@ export function ProductModal({
                   </div>
                   {brands.map((b) => (
                     <div key={b.name} className="flex items-center gap-2">
-                      <span className="w-[110px] flex-none truncate text-[12.5px] font-bold">{b.name}</span>
+                      <span className="w-[100px] flex-none truncate text-[12.5px] font-bold">{b.name}</span>
                       <input
                         inputMode="numeric"
                         dir="ltr"
@@ -261,8 +261,21 @@ export function ProductModal({
                         className="flex-1 rounded-[8px] px-2.5 py-1.5 text-[12.5px] outline-none"
                         style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
                       />
+                      {packMode && (
+                        <input
+                          inputMode="numeric"
+                          dir="ltr"
+                          title={locale === "fa" ? "تعداد در کارتن این برند" : "Units per carton for this brand"}
+                          placeholder={locale === "fa" ? "کارتن" : "carton"}
+                          value={b.packSize && b.packSize > 1 ? String(b.packSize) : ""}
+                          onChange={(e) => { const v = Number(digits(e.target.value)) || 0; setBrandPrice(b.name, "packSize", v > 1 ? v : undefined); }}
+                          className="w-[74px] flex-none rounded-[8px] px-2.5 py-1.5 text-[12.5px] outline-none"
+                          style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                        />
+                      )}
                     </div>
                   ))}
+                  {packMode && <div className="text-[11px]" style={{ color: "var(--muted)" }}>{locale === "fa" ? "ستون دوم: تعداد در کارتن هر برند (خالی = تعداد پایهٔ کارتن)" : "2nd column: units per carton per brand (blank = base)"}</div>}
                 </div>
               )}
             </div>

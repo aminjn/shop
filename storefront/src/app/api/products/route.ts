@@ -25,7 +25,8 @@ function sanitize(input: Record<string, unknown>, id: number): Product {
           const o = (b || {}) as Record<string, unknown>;
           const price = Number(o.price) || 0;
           const pricePerCm = Number(o.pricePerCm) || 0;
-          return { name: String(o.name || "").trim(), ...(price > 0 ? { price } : {}), ...(pricePerCm > 0 ? { pricePerCm } : {}) };
+          const packSize = Number(o.packSize) || 0;
+          return { name: String(o.name || "").trim(), ...(price > 0 ? { price } : {}), ...(pricePerCm > 0 ? { pricePerCm } : {}), ...(packSize > 1 ? { packSize } : {}) };
         }).filter((b) => b.name)
       : undefined,
     featured: input.featured === true || input.featured === "true" ? true : undefined,

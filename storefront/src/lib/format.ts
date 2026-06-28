@@ -19,11 +19,11 @@ export function hasVariations(p: Pick<Product, "variations">): boolean {
   return !!(p.variations && p.variations.length);
 }
 /** Normalized brand list (accepts legacy string[] data and the single `brand`). */
-export function productBrandList(p: Pick<Product, "brand" | "brands">): { name: string; price?: number; pricePerCm?: number }[] {
+export function productBrandList(p: Pick<Product, "brand" | "brands">): { name: string; price?: number; pricePerCm?: number; packSize?: number }[] {
   const bs = p.brands as unknown[] | undefined;
   if (bs && bs.length) {
     return bs
-      .map((b) => (typeof b === "string" ? { name: b } : (b as { name: string; price?: number; pricePerCm?: number })))
+      .map((b) => (typeof b === "string" ? { name: b } : (b as { name: string; price?: number; pricePerCm?: number; packSize?: number })))
       .filter((b) => b && b.name);
   }
   return p.brand ? [{ name: p.brand }] : [];
@@ -56,6 +56,17 @@ export function brandUnitPrice(
   // no specific choice (or chosen brand has no own price): cheapest priced brand
   const priced = list.map(priceOf).filter((n) => n > 0);
   return priced.length ? Math.min(...priced) : unitPrice(p);
+}
+/** Units per carton for the chosen brand (falls back to the product packSize).
+ *  Returns 1 for non-carton products. */
+export function packFor(
+  p: Pick<Product, "packSize" | "brand" | "brands">,
+  brandIdx?: number,
+): number {
+  const list = productBrandList(p);
+  const b = typeof brandIdx === "number" ? list[brandIdx] : undefined;
+  if (b?.packSize && b.packSize > 1) return b.packSize;
+  return p.packSize && p.packSize > 1 ? p.packSize : 1;
 }
 /** The single source of truth for a line/display price: brand price if the
  *  product is brand-priced, else the variant price, else the base unit price. */

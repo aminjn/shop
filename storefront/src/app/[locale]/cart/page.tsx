@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useShop, usePageTitle } from "@/lib/store";
 import { computeTotals } from "@/lib/cart";
-import { grad, priceFmt, num, isPerCm, perCmNote, priceFor, hasVariations, productBrands } from "@/lib/format";
+import { grad, priceFmt, num, isPerCm, perCmNote, priceFor, hasVariations, productBrands, packFor } from "@/lib/format";
 import { LocaleLink } from "@/components/LocaleLink";
 import { Plus, Minus, Trash, Cart as CartIcon, ArrowBack } from "@/components/Icons";
 
@@ -72,7 +72,7 @@ export default function CartPage() {
             const lineBrands = productBrands(p);
             const lineBrand = lineBrands.length > 1 && typeof line.brandIdx === "number" ? lineBrands[line.brandIdx] : undefined;
             const lineUnit = priceFor(p, { variant: line.variant, brandIdx: line.brandIdx });
-            const pack = p.packSize && p.packSize > 1 ? p.packSize : 1;
+            const pack = packFor(p, line.brandIdx);
             const dec = () => { if (line.qty - pack < pack) removeLine(line.key); else changeLine(line.key, -pack); };
             return (
               <div key={line.key} className="flex items-center gap-4 rounded-[16px] p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>

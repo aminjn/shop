@@ -24,6 +24,7 @@ export interface ProductBrand {
   name: string;
   price?: number;
   pricePerCm?: number;
+  packSize?: number; // units per carton for this brand (overrides product packSize)
 }
 
 export interface Variation {
