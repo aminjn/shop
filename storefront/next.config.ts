@@ -15,6 +15,15 @@ const nextConfig: NextConfig = {
           { key: "Vary", value: "Cookie" },
         ],
       },
+      {
+        // Never cache the service worker, so the self-destruct kill switch always
+        // reaches browsers (both the browser and Arvan must always revalidate it).
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+        ],
+      },
     ];
   },
 };
