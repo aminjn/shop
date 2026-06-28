@@ -29,6 +29,10 @@ export async function POST(req: Request) {
   }
 
   const superAdmin = isSuperAdmin(mobile);
+  // Blocked accounts cannot sign in.
+  if (!superAdmin && userExists(mobile) && getUser(mobile).status === "blocked") {
+    return NextResponse.json({ ok: false, error: "blocked" }, { status: 403 });
+  }
   // New customer (no account yet): require a Shahkar-verified pending record,
   // then create the account with the official identity (immutable).
   if (!superAdmin && !userExists(mobile)) {

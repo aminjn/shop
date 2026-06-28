@@ -62,6 +62,7 @@ export default function LoginPage() {
       if (!d.ok) {
         setMsg(d.error === "expired" ? tr("کد منقضی شده؛ دوباره تلاش کن", "Code expired")
           : d.error === "needs-identity" ? tr("ابتدا هویتت را با شاهکار تأیید کن", "Verify your identity first")
+          : d.error === "blocked" ? tr("حساب شما مسدود شده است؛ با پشتیبانی تماس بگیرید", "Your account is blocked; contact support")
           : tr("کد وارد شده اشتباه است", "Incorrect code"));
         return;
       }

@@ -84,6 +84,7 @@ export interface UserIdentity {
 }
 export interface UserData {
   mobile: string;
+  status?: "active" | "blocked";
   profile: { firstName: string; lastName: string; email: string; avatar?: string };
   identity?: UserIdentity;
   addresses: Address[];
@@ -162,6 +163,11 @@ export function setPending(p: PendingRegistration): void {
 }
 export function deletePending(mobile: string): void {
   try { fs.unlinkSync(pendingFile(mobile)); } catch { /* ignore */ }
+}
+
+/** Permanently remove a customer account file. */
+export function deleteUser(mobile: string): void {
+  try { fs.unlinkSync(fileFor(mobile)); } catch { /* ignore */ }
 }
 
 export function getUser(mobile: string): UserData {

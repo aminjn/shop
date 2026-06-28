@@ -64,11 +64,14 @@ type AdminCustomer = {
   mobile: string;
   name: string;
   email: string;
+  status: "active" | "blocked";
   orders: number;
   spent: number;
   points: number;
   wallet: number;
+  addresses: number;
   joined: string;
+  lastOrder: string;
   role: string;
   identity?: AdminIdentity | null;
 };
@@ -162,7 +165,7 @@ export default function AdminPage() {
     { id: "brands", label: fa ? "برندها" : "Brands" },
     { id: "pages", label: fa ? "صفحات" : "Pages" },
     { id: "orders", label: t.aOrders },
-    { id: "customers", label: t.aCustomers },
+    { id: "customers", label: fa ? "کاربران" : "Users" },
     { id: "discounts", label: t.aDiscounts },
     { id: "reviews", label: t.aReviews },
     { id: "blog", label: fa ? "مقالات" : "Articles" },
@@ -936,97 +939,379 @@ function Orders() {
 
 /* ---------- customers ---------- */
 
+type BulkAction = "points" | "wallet" | "notify" | "status" | "delete";
+
 function Customers() {
-  const { locale, t } = useShop();
+  const { locale, t, toast } = useShop();
   const fa = locale === "fa";
 
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<"all" | "active" | "blocked" | "verified">("all");
+  const [busy, setBusy] = useState(false);
+  const [detail, setDetail] = useState<AdminCustomer | null>(null);
+  // bulk dialog: which action + its amount/text
+  const [dlg, setDlg] = useState<BulkAction | null>(null);
+  const [amount, setAmount] = useState("");
+  const [text, setText] = useState("");
 
-  useEffect(() => {
+  const load = () =>
     fetch("/api/admin/customers")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => Array.isArray(d?.customers) && setCustomers(d.customers))
       .catch(() => {});
-  }, []);
+
+  useEffect(() => { load(); }, []);
 
   const roleBadge = (role: string) =>
     role === "admin"
       ? { label: fa ? "مدیر" : "Admin", color: "#7c3aed" }
       : { label: fa ? "مشتری" : "Customer", color: "#2a6fdb" };
 
+  const genderLabel = (g?: string) =>
+    g === "male" ? (fa ? "مرد" : "Male") : g === "female" ? (fa ? "زن" : "Female") : g || "";
+
+  // client-side search + filter
+  const shown = customers.filter((c) => {
+    if (filter === "active" && c.status === "blocked") return false;
+    if (filter === "blocked" && c.status !== "blocked") return false;
+    if (filter === "verified" && !c.identity) return false;
+    if (!q.trim()) return true;
+    const needle = q.trim().toLowerCase();
+    return (
+      c.mobile.includes(needle) ||
+      (c.name || "").toLowerCase().includes(needle) ||
+      (c.email || "").toLowerCase().includes(needle) ||
+      (c.identity?.nationalId || "").includes(needle)
+    );
+  });
+
+  const allShownSelected = shown.length > 0 && shown.every((c) => sel.has(c.mobile));
+  const toggleAll = () => {
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (allShownSelected) shown.forEach((c) => next.delete(c.mobile));
+      else shown.forEach((c) => next.add(c.mobile));
+      return next;
+    });
+  };
+  const toggle = (m: string) =>
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(m)) next.delete(m); else next.add(m);
+      return next;
+    });
+
+  const openDlg = (a: BulkAction) => {
+    if (!sel.size) { toast(fa ? "ابتدا کاربرانی را انتخاب کن" : "Select users first"); return; }
+    setAmount(""); setText(""); setDlg(a);
+  };
+
+  const runBulk = async (action: BulkAction, extra: Record<string, unknown> = {}) => {
+    const mobiles = [...sel];
+    if (!mobiles.length) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/customers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, mobiles, ...extra }),
+      });
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.customers)) {
+        setCustomers(d.customers);
+        setSel(new Set());
+        setDlg(null);
+        toast(fa ? `${num(d.affected || 0, locale)} کاربر به‌روزرسانی شد ✓` : `${d.affected || 0} users updated ✓`);
+      } else {
+        toast(fa ? "عملیات ناموفق بود" : "Operation failed");
+      }
+    } catch {
+      toast(fa ? "خطای شبکه" : "Network error");
+    } finally { setBusy(false); }
+  };
+
+  const submitDlg = () => {
+    if (dlg === "points") runBulk("points", { amount: Number(amount) || 0, text });
+    else if (dlg === "wallet") runBulk("wallet", { amount: Number(amount) || 0, text });
+    else if (dlg === "notify") { if (!text.trim()) { toast(fa ? "متن اعلان را بنویس" : "Write a message"); return; } runBulk("notify", { text }); }
+  };
+
+  // full CSV report (every Shahkar field + account stats)
+  const exportCsv = () => {
+    const headers = [
+      "mobile", "name", "email", "status", "role",
+      "nationalId", "firstName", "lastName", "fatherName", "gender", "birthDate", "birthPlace", "verifiedAt",
+      "orders", "lastOrder", "spent", "points", "wallet", "addresses", "joined",
+    ];
+    const esc = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = customers.map((c) => [
+      c.mobile, c.name, c.email, c.status, c.role,
+      c.identity?.nationalId || "", c.identity?.firstName || "", c.identity?.lastName || "",
+      c.identity?.fatherName || "", c.identity?.gender || "", c.identity?.birthDate || "",
+      c.identity?.birthPlace || "", c.identity?.verifiedAt || "",
+      c.orders, c.lastOrder, c.spent, c.points, c.wallet, c.addresses, c.joined,
+    ].map(esc).join(","));
+    const csv = "﻿" + [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const tableInput = { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)" } as const;
+
+  const verifiedCount = customers.filter((c) => c.identity).length;
+  const blockedCount = customers.filter((c) => c.status === "blocked").length;
+
   return (
     <>
-      <H1>{t.aCustomers}</H1>
-      {customers.length === 0 ? (
-        <Empty text={fa ? "هنوز مشتری‌ای ثبت نشده است." : "No customers yet."} />
-      ) : (
-        <Table
-          head={[
-            fa ? "مشتری" : "Customer",
-            t.ordersCount,
-            fa ? "مجموع خرید" : "Total spent",
-            fa ? "امتیاز" : "Points",
-            fa ? "کیف پول" : "Wallet",
-            fa ? "تاریخ عضویت" : "Joined",
-            fa ? "نقش" : "Role",
-          ]}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <H1>{fa ? "کاربران" : "Users"}</H1>
+        <button
+          onClick={exportCsv}
+          disabled={!customers.length}
+          className="cursor-pointer rounded-[10px] border-none px-4 py-2 text-[13px] font-bold text-white disabled:opacity-50"
+          style={{ background: "var(--accent)" }}
         >
-          {customers.map((c) => {
-            const nm = c.name || c.mobile;
-            const rb = roleBadge(c.role);
-            return (
-              <tr key={c.mobile} style={{ borderTop: "1px solid var(--border)" }}>
-                <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[14px] font-extrabold text-white"
-                      style={{ background: "var(--accent)" }}
-                    >
-                      {nm.charAt(0).toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 text-[13px] font-bold">
-                        {nm}
-                        {c.identity && <span className="rounded-full px-1.5 text-[10px] font-bold" style={{ background: "rgba(31,138,91,.14)", color: "#1f8a5b" }}>✓ {fa ? "احراز شده" : "verified"}</span>}
+          {fa ? "گزارش کامل (CSV)" : "Full report (CSV)"}
+        </button>
+      </div>
+
+      {/* quick stats */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: fa ? "کل کاربران" : "Total", value: customers.length, color: "#2a6fdb" },
+          { label: fa ? "احراز هویت‌شده" : "Verified", value: verifiedCount, color: "#1f8a5b" },
+          { label: fa ? "مسدود" : "Blocked", value: blockedCount, color: "#e11d48" },
+          { label: fa ? "انتخاب‌شده" : "Selected", value: sel.size, color: "#7c3aed" },
+        ].map((s, i) => (
+          <Card key={i} className="p-3.5">
+            <div className="text-[11.5px] font-bold" style={{ color: "var(--muted)" }}>{s.label}</div>
+            <div className="mt-1 text-[20px] font-extrabold" style={{ color: s.color }}>{num(s.value, locale)}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* search + filter */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={fa ? "جستجو نام، موبایل، کد ملی…" : "Search name, mobile, NID…"}
+          className="min-w-[200px] flex-1 rounded-[10px] px-3.5 py-2.5 text-[13px] outline-none"
+          style={tableInput}
+        />
+        {([
+          ["all", fa ? "همه" : "All"],
+          ["active", fa ? "فعال" : "Active"],
+          ["blocked", fa ? "مسدود" : "Blocked"],
+          ["verified", fa ? "احراز‌شده" : "Verified"],
+        ] as const).map(([k, lbl]) => (
+          <button
+            key={k}
+            onClick={() => setFilter(k)}
+            className="cursor-pointer rounded-[10px] border-none px-3 py-2 text-[12.5px] font-bold"
+            style={{ background: filter === k ? "var(--accent)" : "var(--surface2)", color: filter === k ? "#fff" : "var(--text)" }}
+          >
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {/* bulk action bar */}
+      {sel.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[12px] p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          <span className="text-[12.5px] font-bold">{fa ? `${num(sel.size, locale)} کاربر انتخاب شد` : `${sel.size} selected`}</span>
+          <div className="flex flex-wrap gap-1.5">
+            <BulkBtn onClick={() => openDlg("points")} color="#1f8a5b">{fa ? "افزودن امتیاز" : "Add points"}</BulkBtn>
+            <BulkBtn onClick={() => openDlg("wallet")} color="#2a6fdb">{fa ? "شارژ کیف پول" : "Credit wallet"}</BulkBtn>
+            <BulkBtn onClick={() => openDlg("notify")} color="#7c3aed">{fa ? "ارسال اعلان" : "Notify"}</BulkBtn>
+            <BulkBtn onClick={() => runBulk("status", { status: "blocked" })} color="#d97706">{fa ? "مسدودسازی" : "Block"}</BulkBtn>
+            <BulkBtn onClick={() => runBulk("status", { status: "active" })} color="#1f8a5b">{fa ? "رفع مسدودی" : "Unblock"}</BulkBtn>
+            <BulkBtn onClick={() => { if (confirm(fa ? "کاربران انتخاب‌شده حذف شوند؟" : "Delete selected users?")) runBulk("delete"); }} color="#e11d48">{fa ? "حذف" : "Delete"}</BulkBtn>
+          </div>
+        </div>
+      )}
+
+      {shown.length === 0 ? (
+        <Empty text={fa ? "کاربری یافت نشد." : "No users found."} />
+      ) : (
+        <div className="overflow-x-auto rounded-[16px] scrollthin" style={cardStyle}>
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                <th className="px-3 py-3.5" style={{ textAlign: "start" }}>
+                  <input type="checkbox" checked={allShownSelected} onChange={toggleAll} className="h-4 w-4 cursor-pointer" />
+                </th>
+                {[
+                  fa ? "کاربر" : "User",
+                  fa ? "هویت (شاهکار)" : "Identity",
+                  fa ? "سفارش‌ها" : "Orders",
+                  fa ? "مجموع خرید" : "Spent",
+                  fa ? "امتیاز" : "Points",
+                  fa ? "کیف پول" : "Wallet",
+                  fa ? "وضعیت" : "Status",
+                  fa ? "نقش" : "Role",
+                  "",
+                ].map((h, i) => (
+                  <th key={i} className="px-4 py-3.5 font-bold" style={{ textAlign: "start", color: "var(--muted)" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((c) => {
+                const nm = c.name || c.mobile;
+                const rb = roleBadge(c.role);
+                const checked = sel.has(c.mobile);
+                return (
+                  <tr key={c.mobile} style={{ borderTop: "1px solid var(--border)", background: checked ? "var(--surface2)" : undefined }}>
+                    <td className="px-3 py-3" style={{ textAlign: "start" }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggle(c.mobile)} className="h-4 w-4 cursor-pointer" />
+                    </td>
+                    <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>
+                          {nm.charAt(0).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[13px] font-bold">
+                            {nm}
+                            {c.identity && <span className="rounded-full px-1.5 text-[10px] font-bold" style={{ background: "rgba(31,138,91,.14)", color: "#1f8a5b" }}>✓</span>}
+                          </div>
+                          <div className="text-[11.5px]" style={{ color: "var(--muted)" }} dir="ltr">{c.mobile}</div>
+                          {c.email && <div className="text-[11px]" style={{ color: "var(--muted)" }} dir="ltr">{c.email}</div>}
+                        </div>
                       </div>
-                      <div className="text-[11.5px]" style={{ color: "var(--muted)" }} dir="ltr">
-                        {c.mobile}
-                      </div>
-                      {c.identity && (
-                        <div className="mt-1 text-[11px] leading-relaxed" style={{ color: "var(--muted)" }}>
-                          <div>{fa ? "کد ملی: " : "NID: "}<span dir="ltr">{c.identity.nationalId}</span></div>
+                    </td>
+                    <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                      {c.identity ? (
+                        <div className="text-[11.5px] leading-relaxed" style={{ color: "var(--muted)" }}>
+                          <div>{fa ? "کد ملی: " : "NID: "}<span dir="ltr" className="font-bold" style={{ color: "var(--text)" }}>{c.identity.nationalId}</span></div>
                           {c.identity.fatherName && <div>{fa ? "نام پدر: " : "Father: "}{c.identity.fatherName}</div>}
-                          {(c.identity.gender || c.identity.birthDate) && <div>{[c.identity.gender === "male" ? (fa ? "مرد" : "M") : c.identity.gender === "female" ? (fa ? "زن" : "F") : c.identity.gender, c.identity.birthDate].filter(Boolean).join(" • ")}</div>}
+                          {(c.identity.gender || c.identity.birthDate) && <div>{[genderLabel(c.identity.gender), c.identity.birthDate].filter(Boolean).join(" • ")}</div>}
                           {c.identity.birthPlace && <div>{fa ? "محل تولد: " : "Birthplace: "}{c.identity.birthPlace}</div>}
                         </div>
+                      ) : (
+                        <span className="text-[11.5px]" style={{ color: "var(--muted)" }}>{fa ? "—" : "—"}</span>
                       )}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                  {num(c.orders, locale)}
-                </td>
-                <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>
-                  {priceFmt(c.spent, locale, t.currency)}
-                </td>
-                <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                  {num(c.points, locale)}
-                </td>
-                <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                  {priceFmt(c.wallet, locale, t.currency)}
-                </td>
-                <td className="px-4 py-3" style={{ textAlign: "start", color: "var(--muted)" }}>
-                  {fmtDate(c.joined, fa)}
-                </td>
-                <td className="px-4 py-3" style={{ textAlign: "start" }}>
-                  <Badge label={rb.label} color={rb.color} />
-                </td>
-              </tr>
-            );
-          })}
-        </Table>
+                    </td>
+                    <td className="px-4 py-3" style={{ textAlign: "start" }}>{num(c.orders, locale)}</td>
+                    <td className="px-4 py-3 font-bold" style={{ textAlign: "start" }}>{priceFmt(c.spent, locale, t.currency)}</td>
+                    <td className="px-4 py-3" style={{ textAlign: "start" }}>{num(c.points, locale)}</td>
+                    <td className="px-4 py-3" style={{ textAlign: "start" }}>{priceFmt(c.wallet, locale, t.currency)}</td>
+                    <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                      <Badge label={c.status === "blocked" ? (fa ? "مسدود" : "Blocked") : (fa ? "فعال" : "Active")} color={c.status === "blocked" ? "#e11d48" : "#1f8a5b"} />
+                    </td>
+                    <td className="px-4 py-3" style={{ textAlign: "start" }}><Badge label={rb.label} color={rb.color} /></td>
+                    <td className="px-4 py-3" style={{ textAlign: "start" }}>
+                      <button onClick={() => setDetail(c)} className="cursor-pointer rounded-[8px] border-none px-2.5 py-1.5 text-[12px] font-bold" style={{ background: "var(--surface2)", color: "var(--accent)" }}>
+                        {fa ? "جزئیات" : "Details"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* bulk amount/text dialog */}
+      {dlg && (dlg === "points" || dlg === "wallet" || dlg === "notify") && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.5)" }} onClick={() => setDlg(null)}>
+          <div className="w-full max-w-[420px] rounded-[16px] p-6" style={cardStyle} onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 text-[16px] font-extrabold">
+              {dlg === "points" ? (fa ? "افزودن امتیاز" : "Add points") : dlg === "wallet" ? (fa ? "شارژ کیف پول" : "Credit wallet") : (fa ? "ارسال اعلان" : "Send notification")}
+              <span className="ms-1 text-[12px] font-bold" style={{ color: "var(--muted)" }}> ({num(sel.size, locale)} {fa ? "کاربر" : "users"})</span>
+            </h3>
+            {dlg !== "notify" && (
+              <input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(/[^\d-]/g, ""))}
+                inputMode="numeric"
+                dir="ltr"
+                placeholder={dlg === "wallet" ? (fa ? "مبلغ (تومان) – منفی برای کسر" : "Amount (negative to deduct)") : (fa ? "تعداد امتیاز – منفی برای کسر" : "Points (negative to deduct)")}
+                className="mb-3 w-full rounded-[10px] px-3.5 py-2.5 text-[14px] outline-none"
+                style={tableInput}
+              />
+            )}
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={3}
+              placeholder={dlg === "notify" ? (fa ? "متن اعلان…" : "Message…") : (fa ? "پیام اختیاری برای کاربر…" : "Optional message…")}
+              className="mb-4 w-full rounded-[10px] px-3.5 py-2.5 text-[13px] outline-none"
+              style={tableInput}
+            />
+            <div className="flex gap-2">
+              <button onClick={submitDlg} disabled={busy} className="flex-1 cursor-pointer rounded-[10px] border-none py-2.5 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+                {busy ? (fa ? "در حال انجام…" : "Working…") : (fa ? "اعمال" : "Apply")}
+              </button>
+              <button onClick={() => setDlg(null)} className="cursor-pointer rounded-[10px] px-4 py-2.5 text-[14px] font-bold" style={{ background: "var(--surface2)", color: "var(--text)" }}>
+                {fa ? "انصراف" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* per-user detail drawer */}
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.5)" }} onClick={() => setDetail(null)}>
+          <div className="max-h-[88vh] w-full max-w-[520px] overflow-y-auto rounded-[16px] p-6 scrollthin" style={cardStyle} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[18px] font-extrabold">{detail.name || detail.mobile}</h3>
+              <button onClick={() => setDetail(null)} className="cursor-pointer rounded-full border-none px-3 py-1 text-[18px] font-bold" style={{ background: "var(--surface2)", color: "var(--text)" }}>×</button>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <Field label={fa ? "موبایل" : "Mobile"} value={detail.mobile} />
+              <Field label={fa ? "ایمیل" : "Email"} value={detail.email || "—"} />
+              <Field label={fa ? "وضعیت" : "Status"} value={detail.status === "blocked" ? (fa ? "مسدود" : "Blocked") : (fa ? "فعال" : "Active")} />
+              <Field label={fa ? "نقش" : "Role"} value={detail.role === "admin" ? (fa ? "مدیر" : "Admin") : (fa ? "مشتری" : "Customer")} />
+              <Field label={fa ? "تعداد سفارش" : "Orders"} value={num(detail.orders, locale)} />
+              <Field label={fa ? "مجموع خرید" : "Total spent"} value={priceFmt(detail.spent, locale, t.currency)} />
+              <Field label={fa ? "امتیاز" : "Points"} value={num(detail.points, locale)} />
+              <Field label={fa ? "کیف پول" : "Wallet"} value={priceFmt(detail.wallet, locale, t.currency)} />
+              <Field label={fa ? "آدرس‌ها" : "Addresses"} value={num(detail.addresses, locale)} />
+              <Field label={fa ? "آخرین سفارش" : "Last order"} value={detail.lastOrder ? fmtDate(detail.lastOrder, fa) : "—"} />
+              <Field label={fa ? "تاریخ عضویت" : "Joined"} value={fmtDate(detail.joined, fa)} />
+            </div>
+            <div className="my-4 h-px" style={{ background: "var(--border)" }} />
+            <div className="mb-2 text-[13px] font-extrabold">{fa ? "هویت شاهکار" : "Shahkar identity"}</div>
+            {detail.identity ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <Field label={fa ? "کد ملی" : "National ID"} value={detail.identity.nationalId} />
+                <Field label={fa ? "نام" : "First name"} value={detail.identity.firstName || "—"} />
+                <Field label={fa ? "نام خانوادگی" : "Last name"} value={detail.identity.lastName || "—"} />
+                <Field label={fa ? "نام پدر" : "Father's name"} value={detail.identity.fatherName || "—"} />
+                <Field label={fa ? "جنسیت" : "Gender"} value={genderLabel(detail.identity.gender) || "—"} />
+                <Field label={fa ? "تاریخ تولد" : "Birth date"} value={detail.identity.birthDate || "—"} />
+                <Field label={fa ? "محل تولد" : "Birthplace"} value={detail.identity.birthPlace || "—"} />
+                <Field label={fa ? "تأیید در" : "Verified at"} value={detail.identity.verifiedAt ? fmtDate(detail.identity.verifiedAt, fa) : "—"} />
+              </div>
+            ) : (
+              <p className="text-[12.5px]" style={{ color: "var(--muted)" }}>{fa ? "این کاربر احراز هویت شاهکار ندارد." : "No Shahkar identity for this user."}</p>
+            )}
+          </div>
+        </div>
       )}
     </>
+  );
+}
+
+function BulkBtn({ onClick, color, children }: { onClick: () => void; color: string; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} className="cursor-pointer rounded-[8px] border-none px-2.5 py-1.5 text-[12px] font-bold text-white" style={{ background: color }}>
+      {children}
+    </button>
   );
 }
 
