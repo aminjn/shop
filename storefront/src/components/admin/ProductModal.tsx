@@ -92,9 +92,15 @@ export function ProductModal({
       const r = await fetch("/api/ai/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: fa.trim(), category: cat }) });
       const d = await r.json().catch(() => ({}));
       if (!d.ok || !d.result) { toast(locale === "fa" ? "هوش مصنوعی پاسخی نداد — اعتبار سرویس را بررسی کن" : "AI unavailable — check account credit"); return; }
-      const res = d.result as { shortDesc?: string; longDesc?: string; specs?: { k: string; v: string }[] };
+      const res = d.result as { shortDesc?: string; longDesc?: string; longDescEn?: string; shortDescEn?: string; specs?: { k: string; v: string }[] };
       const desc = (res.longDesc || res.shortDesc || "").trim();
-      if (desc) { setShortFa(desc); const en = await translateOne(desc, true); if (en) setShortEn(en); }
+      if (desc) {
+        setShortFa(desc);
+        // prefer the English the model wrote directly; only translate as a fallback
+        const enDirect = (res.longDescEn || res.shortDescEn || "").trim();
+        const en = enDirect || (await translateOne(desc, true)) || "";
+        if (en) setShortEn(en);
+      }
       if (Array.isArray(res.specs) && res.specs.length)
         setSpecs(res.specs.filter((s) => s && s.k && s.v).map((s) => [String(s.k), String(s.v)] as [string, string]));
       toast(locale === "fa" ? "توضیحات و مشخصات با هوش مصنوعی پر شد ✓" : "Filled with AI ✓");
