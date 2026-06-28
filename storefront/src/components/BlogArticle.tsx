@@ -255,10 +255,15 @@ export function BlogArticle({ slug }: { slug: string }) {
               >
                 <LocaleLink
                   href={`/blog/${r.slug}`}
-                  className="flex h-[120px] items-center justify-center text-[44px] font-extrabold no-underline"
+                  className="flex h-[120px] items-center justify-center overflow-hidden text-[44px] font-extrabold no-underline"
                   style={{ background: grad(r.hue, dark), color: "rgba(255,255,255,.5)" }}
                 >
-                  {rTitle.charAt(0)}
+                  {r.cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.cover} alt={rTitle} className="h-full w-full object-cover" />
+                  ) : (
+                    rTitle.charAt(0)
+                  )}
                 </LocaleLink>
                 <div className="flex flex-1 flex-col gap-2 p-4">
                   <span className="w-fit rounded-full px-2.5 py-1 text-[11.5px] font-bold" style={{ background: "var(--surface2)", color: "var(--accent)", border: "1px solid var(--border)" }}>
