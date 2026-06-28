@@ -59,6 +59,7 @@ type AdminOrder = {
   customer: string;
 };
 
+type AdminIdentity = { nationalId: string; firstName: string; lastName: string; fatherName?: string; gender?: string; birthDate?: string; birthPlace?: string; verifiedAt?: string };
 type AdminCustomer = {
   mobile: string;
   name: string;
@@ -69,6 +70,7 @@ type AdminCustomer = {
   wallet: number;
   joined: string;
   role: string;
+  identity?: AdminIdentity | null;
 };
 
 type AdminCoupon = {
@@ -983,10 +985,21 @@ function Customers() {
                       {nm.charAt(0).toUpperCase()}
                     </span>
                     <div className="min-w-0">
-                      <div className="text-[13px] font-bold">{nm}</div>
+                      <div className="flex items-center gap-1.5 text-[13px] font-bold">
+                        {nm}
+                        {c.identity && <span className="rounded-full px-1.5 text-[10px] font-bold" style={{ background: "rgba(31,138,91,.14)", color: "#1f8a5b" }}>✓ {fa ? "احراز شده" : "verified"}</span>}
+                      </div>
                       <div className="text-[11.5px]" style={{ color: "var(--muted)" }} dir="ltr">
                         {c.mobile}
                       </div>
+                      {c.identity && (
+                        <div className="mt-1 text-[11px] leading-relaxed" style={{ color: "var(--muted)" }}>
+                          <div>{fa ? "کد ملی: " : "NID: "}<span dir="ltr">{c.identity.nationalId}</span></div>
+                          {c.identity.fatherName && <div>{fa ? "نام پدر: " : "Father: "}{c.identity.fatherName}</div>}
+                          {(c.identity.gender || c.identity.birthDate) && <div>{[c.identity.gender === "male" ? (fa ? "مرد" : "M") : c.identity.gender === "female" ? (fa ? "زن" : "F") : c.identity.gender, c.identity.birthDate].filter(Boolean).join(" • ")}</div>}
+                          {c.identity.birthPlace && <div>{fa ? "محل تولد: " : "Birthplace: "}{c.identity.birthPlace}</div>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -2720,6 +2733,65 @@ function LoyaltyAdmin() {
   );
 }
 
+/* ---------- identity verification (Shahkar / Podium) ---------- */
+
+function PodiumSettings() {
+  const { locale, t, toast } = useShop();
+  const fa = locale === "fa";
+  const [pub, setPub] = useState<{ configured: boolean; missing: string[]; url: string; idProduct: string; matchProduct: string; tokenMasked: string; idKeyMasked: string; matchKeyMasked: string } | null>(null);
+  const [form, setForm] = useState({ token: "", idKey: "", matchKey: "", url: "", idProduct: "", matchProduct: "" });
+  const [saving, setSaving] = useState(false);
+
+  const load = () => fetch("/api/settings/podium", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => d?.podium && setPub(d.podium)).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch("/api/settings/podium", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(form) });
+      const d = await r.json();
+      if (d.ok) { setPub(d.podium); setForm({ token: "", idKey: "", matchKey: "", url: "", idProduct: "", matchProduct: "" }); toast(t.saved); }
+      else toast(fa ? "ذخیره ناموفق بود" : "Save failed");
+    } catch { toast(fa ? "خطای شبکه" : "Network error"); } finally { setSaving(false); }
+  };
+
+  const field = (key: keyof typeof form, label: string, placeholder: string) => (
+    <div>
+      {lbl(label)}
+      <input className={inputCls} style={inputStyle} dir="ltr" value={form[key]} placeholder={placeholder} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
+    </div>
+  );
+
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[15px] font-extrabold">🪪 {fa ? "احراز هویت (شاهکار / پادیوم)" : "Identity (Shahkar / Podium)"}</h2>
+        <span className="rounded-full px-3 py-1 text-[11.5px] font-extrabold" style={{ background: pub?.configured ? "rgba(31,138,91,.15)" : "rgba(225,29,72,.12)", color: pub?.configured ? "#1f8a5b" : "#e11d48" }}>
+          {pub?.configured ? (fa ? "متصل و فعال" : "Connected") : fa ? "تنظیم نشده" : "Not configured"}
+        </span>
+      </div>
+      <p className="mb-3 text-[12.5px]" style={{ color: "var(--muted)" }}>
+        {fa ? "با ثبت این کلیدها، ثبت‌نام کاربرانِ جدید فقط پس از تأیید هویت (استعلام ثبت‌احوال + تطبیق شاهکارِ موبایل با کد ملی) انجام می‌شود. کلیدها روی سرور (در حجم داده) ذخیره می‌شوند، نه در کد." : "Once set, new sign-ups require Shahkar identity verification. Keys are stored on the server's data volume, not in code."}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {field("token", "PODIUM_TOKEN", pub?.tokenMasked || "توکن پادیوم")}
+        {field("idKey", "GET_IDENTITY_INFO_API_KEY", pub?.idKeyMasked || "کلید استعلام هویت")}
+        {field("matchKey", "MATCH_..._PHONE_NUMBER_API_KEY", pub?.matchKeyMasked || "کلید تطبیق شاهکار")}
+        {field("url", "PODIUM_URL", pub?.url || "https://api.pod.ir/...")}
+        {field("idProduct", "POD_IDENTITY_PRODUCT_ID", pub?.idProduct || "46659320")}
+        {field("matchProduct", "POD_MATCH_PRODUCT_ID", pub?.matchProduct || "46645324")}
+      </div>
+      {pub && !pub.configured && pub.missing.length > 0 && (
+        <div className="mt-2 text-[12px] font-bold" style={{ color: "#e11d48" }}>{fa ? "ناقص: " : "Missing: "}{pub.missing.join("، ")}</div>
+      )}
+      <div className="mt-1 text-[11.5px]" style={{ color: "var(--muted)" }}>{fa ? "فیلدهای خالی تغییری نمی‌کنند (مقدار قبلی حفظ می‌شود)." : "Empty fields keep their previous value."}</div>
+      <button onClick={save} disabled={saving} className="mt-3 cursor-pointer rounded-[12px] border-none py-3 px-6 text-[14px] font-extrabold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+        {saving ? (fa ? "در حال ذخیره…" : "Saving…") : fa ? "ذخیرهٔ کلیدهای احراز هویت" : "Save identity keys"}
+      </button>
+    </Card>
+  );
+}
+
 /* ---------- settings ---------- */
 
 function Settings() {
@@ -3191,6 +3263,8 @@ function Settings() {
             </button>
           </div>
         </Card>
+
+        <PodiumSettings />
 
         {/* SEO moved to its own dedicated section */}
 

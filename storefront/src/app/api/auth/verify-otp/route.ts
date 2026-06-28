@@ -9,11 +9,14 @@ import {
   OTP_COOKIE,
   type OtpChallenge,
 } from "@/lib/auth";
+import { userExists, getPending, deletePending, getUser, saveUser, notify } from "@/lib/userstore";
+
+const faToEn = (v: string) => (v || "").replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const mobile = normalizeMobile(body?.mobile || "");
-  const code = String(body?.code || "").trim();
+  const code = faToEn(String(body?.code || "")).trim();
   if (!mobile || !code) return NextResponse.json({ ok: false, error: "invalid" }, { status: 400 });
 
   const store = await cookies();
@@ -25,7 +28,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "wrong-code" }, { status: 401 });
   }
 
-  const role = isSuperAdmin(mobile) ? "super_admin" : "customer";
+  const superAdmin = isSuperAdmin(mobile);
+  // New customer (no account yet): require a Shahkar-verified pending record,
+  // then create the account with the official identity (immutable).
+  if (!superAdmin && !userExists(mobile)) {
+    const pending = getPending(mobile);
+    if (!pending || !pending.matched) {
+      return NextResponse.json({ ok: false, error: "needs-identity" }, { status: 403 });
+    }
+    const u = getUser(mobile); // default skeleton
+    u.identity = pending.identity;
+    u.profile = {
+      ...u.profile,
+      firstName: pending.identity.firstName || u.profile.firstName,
+      lastName: pending.identity.lastName || u.profile.lastName,
+    };
+    notify(u, `هویت شما با موفقیت تأیید شد ✓ به جمع ما خوش آمدید، ${pending.identity.firstName} عزیز.`);
+    saveUser(u);
+    deletePending(mobile);
+  }
+
+  const role = superAdmin ? "super_admin" : "customer";
   await setSession(mobile, role);
   store.delete(OTP_COOKIE);
   return NextResponse.json({ ok: true, role });

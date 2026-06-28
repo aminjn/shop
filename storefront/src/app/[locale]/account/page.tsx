@@ -18,9 +18,11 @@ interface OrderItem { id: number; name: string; qty: number; price: number }
 interface Order { id: string; date: string; status: string; total: number; items: OrderItem[]; payment: string; shipping: string }
 interface Ticket { id: string; subject: string; body: string; status: string; date: string; replies: { from: string; body: string; date: string }[] }
 interface Notif { id: string; text: string; date: string; read: boolean }
+interface Identity { nationalId: string; firstName: string; lastName: string; fatherName?: string; verifiedAt?: string }
 interface UserData {
   mobile: string;
   profile: { firstName: string; lastName: string; email: string; avatar?: string };
+  identity?: Identity;
   addresses: Address[];
   wallet: { balance: number; txns: Txn[] };
   orders: Order[];
@@ -599,13 +601,32 @@ export default function AccountPage() {
             </div>
             <UploadButton accept="image/*" label={fa ? "تغییر عکس" : "Change photo"} onUploaded={(url) => post("/api/account/profile", { ...f, avatar: url }, t.saved)} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام" : "First name"}<input value={f.firstName} onChange={set("firstName")} className={inputCls} style={inputStyle} /></label>
-            <label className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام خانوادگی" : "Last name"}<input value={f.lastName} onChange={set("lastName")} className={inputCls} style={inputStyle} /></label>
-            <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.emailLabel}<input value={f.email} onChange={set("email")} className={inputCls} style={inputStyle} dir="ltr" /></label>
-            <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.phone}<input value={data!.mobile} readOnly className={inputCls} style={{ ...inputStyle, opacity: 0.7 }} dir="ltr" /></label>
-          </div>
-          <button onClick={() => post("/api/account/profile", f, t.saved)} className="mt-4 cursor-pointer rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.saveChanges}</button>
+          {data!.identity ? (
+            <>
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold" style={{ background: "rgba(31,138,91,.12)", color: "#1f8a5b" }}>
+                <Check size={13} /> {fa ? "هویت تأییدشده (شاهکار)" : "Identity verified (Shahkar)"}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام" : "First name"}<input value={data!.identity.firstName} readOnly className={inputCls} style={{ ...inputStyle, opacity: 0.85 }} /></div>
+                <div className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام خانوادگی" : "Last name"}<input value={data!.identity.lastName} readOnly className={inputCls} style={{ ...inputStyle, opacity: 0.85 }} /></div>
+                <div className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام پدر" : "Father's name"}<input value={data!.identity.fatherName || "—"} readOnly className={inputCls} style={{ ...inputStyle, opacity: 0.85 }} /></div>
+                <div className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "کد ملی" : "National code"}<input value={data!.identity.nationalId} readOnly dir="ltr" className={inputCls} style={{ ...inputStyle, opacity: 0.85 }} /></div>
+                <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.emailLabel}<input value={f.email} onChange={set("email")} className={inputCls} style={inputStyle} dir="ltr" /></label>
+                <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.phone}<input value={data!.mobile} readOnly className={inputCls} style={{ ...inputStyle, opacity: 0.7 }} dir="ltr" /></label>
+              </div>
+              <button onClick={() => post("/api/account/profile", { email: f.email }, t.saved)} className="mt-4 cursor-pointer rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.saveChanges}</button>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام" : "First name"}<input value={f.firstName} onChange={set("firstName")} className={inputCls} style={inputStyle} /></label>
+                <label className="flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{fa ? "نام خانوادگی" : "Last name"}<input value={f.lastName} onChange={set("lastName")} className={inputCls} style={inputStyle} /></label>
+                <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.emailLabel}<input value={f.email} onChange={set("email")} className={inputCls} style={inputStyle} dir="ltr" /></label>
+                <label className="col-span-2 flex flex-col gap-1 text-[12.5px] font-semibold" style={{ color: "var(--muted)" }}>{t.phone}<input value={data!.mobile} readOnly className={inputCls} style={{ ...inputStyle, opacity: 0.7 }} dir="ltr" /></label>
+              </div>
+              <button onClick={() => post("/api/account/profile", f, t.saved)} className="mt-4 cursor-pointer rounded-[12px] border-none px-6 py-3 text-[14px] font-extrabold text-white" style={{ background: "var(--accent)" }}>{t.saveChanges}</button>
+            </>
+          )}
         </div>
       </>
     );

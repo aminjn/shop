@@ -20,6 +20,8 @@ export async function GET() {
       wallet: u.wallet.balance,
       joined: u.createdAt,
       role: u.mobile === admin ? "admin" : "customer",
+      // full verified identity (Shahkar) — super admin only
+      identity: u.identity || null,
     };
   });
   customers.sort((a, b) => (a.joined < b.joined ? 1 : -1));

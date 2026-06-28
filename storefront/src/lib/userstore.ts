@@ -69,15 +69,37 @@ export interface AppNotification {
   date: string;
   read: boolean;
 }
+/** Official identity from Shahkar / civil registry — written ONCE at sign-up,
+ *  immutable afterwards (the customer can never edit it). */
+export interface UserIdentity {
+  nationalId: string;
+  firstName: string;
+  lastName: string;
+  fatherName?: string;
+  gender?: string;
+  birthDate?: string;
+  birthPlace?: string;
+  raw?: Record<string, unknown>;
+  verifiedAt: string;
+}
 export interface UserData {
   mobile: string;
   profile: { firstName: string; lastName: string; email: string; avatar?: string };
+  identity?: UserIdentity;
   addresses: Address[];
   wallet: { balance: number; txns: Txn[] };
   orders: Order[];
   tickets: Ticket[];
   notifications: AppNotification[];
   points: number;
+  createdAt: string;
+}
+
+/** A half-finished registration awaiting OTP, after Shahkar verification. */
+export interface PendingRegistration {
+  mobile: string;
+  identity: UserIdentity;
+  matched: boolean;
   createdAt: string;
 }
 
@@ -110,6 +132,36 @@ function defaultUser(mobile: string): UserData {
     points: signupBonus(),
     createdAt: nowIso(),
   };
+}
+
+/** Whether a real account file already exists for this mobile. */
+export function userExists(mobile: string): boolean {
+  try {
+    return fs.existsSync(fileFor(mobile.replace(/[^0-9]/g, "")));
+  } catch {
+    return false;
+  }
+}
+
+const PENDING_DIR = path.join(DATA_DIR, "pending");
+function pendingFile(mobile: string) {
+  return path.join(PENDING_DIR, `${mobile.replace(/[^0-9]/g, "")}.json`);
+}
+export function getPending(mobile: string): PendingRegistration | null {
+  try {
+    return JSON.parse(fs.readFileSync(pendingFile(mobile), "utf8")) as PendingRegistration;
+  } catch {
+    return null;
+  }
+}
+export function setPending(p: PendingRegistration): void {
+  fs.mkdirSync(PENDING_DIR, { recursive: true });
+  const tmp = pendingFile(p.mobile) + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(p, null, 2), "utf8");
+  fs.renameSync(tmp, pendingFile(p.mobile));
+}
+export function deletePending(mobile: string): void {
+  try { fs.unlinkSync(pendingFile(mobile)); } catch { /* ignore */ }
 }
 
 export function getUser(mobile: string): UserData {
